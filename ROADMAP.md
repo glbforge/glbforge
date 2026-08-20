@@ -39,7 +39,7 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [ ] npm publish (`glbforge` bin via npx; check scope availability — @xui may be taken, decide name once)
 - [ ] Per-package READMEs, docs site or GitHub README gallery with before/after numbers and screenshots
 - [ ] Submit MCP server to registries / awesome-mcp lists; Meshy community (Discord) showcase
-- [ ] **GitHub Action** (`glbforge-action`): PR comment with report-card diff when 3D assets change — the "Lighthouse CI" wedge into teams
+- [x] **GitHub Action** (`uses: glbforge/glbforge@main`): analyzes changed GLB/glTF in PRs, posts a sticky report-card comment, gates on budget. Live-tested on PR #1 — score table + findings + fix hint posted by the bot
 - [ ] Launch content: the numbers sell it (89MB→5.5MB, 40KB beveled logo). three.js forum, r/threejs, X creative-coding
 
 ## v1.0 — Product bets (choose after usage data)
