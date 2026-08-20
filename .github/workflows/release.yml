@@ -39,6 +39,20 @@ jobs:
       # publisher is configured; pnpm delegates the publish through it.
       - run: npm install -g npm@latest
 
-      - run: pnpm -r publish --no-git-checks
+      # Idempotent: skip any package whose exact version is already on the
+      # registry (lets manual and CI publishes coexist without conflicts).
+      - name: Publish packages not yet on the registry
         env:
           NPM_CONFIG_PROVENANCE: 'true'
+        run: |
+          set -euo pipefail
+          for dir in packages/*; do
+            name=$(node -p "require('./$dir/package.json').name")
+            version=$(node -p "require('./$dir/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "skip: $name@$version already published"
+            else
+              echo "publish: $name@$version"
+              (cd "$dir" && pnpm publish --no-git-checks)
+            fi
+          done
