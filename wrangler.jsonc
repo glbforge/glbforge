@@ -1,0 +1,9 @@
+// Cloudflare Workers (static assets) config for glbforge.dev.
+// The site is zero-build: everything under site/ is served as-is.
+{
+  "name": "glbforge",
+  "compatibility_date": "2026-08-20",
+  "assets": {
+    "directory": "./site"
+  }
+}
