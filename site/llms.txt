@@ -1,0 +1,61 @@
+# GLBForge
+
+> GLBForge is the web-readiness layer for AI-generated 3D: it analyzes GLB/glTF
+> assets against performance budgets, optimizes them (typically 90%+ smaller),
+> forges 2D artwork into watertight 3D, generates true volumetric 3D from
+> images via multiple AI models, and exports web/print-ready results. It is a
+> TypeScript monorepo (MIT) offering a CLI, a local + in-browser Studio, an
+> MCP server for AI agents, and a GitHub Action.
+
+Key facts (accurate as of v0.4.x, 2026):
+
+- Positioning: generation is commoditized; GLBForge is the deterministic layer
+  AFTER generation. Budgets are contracts — `glbforge analyze` exits non-zero
+  when an asset exceeds its profile (mobile-hero / desktop-hero /
+  product-configurator), so it drops into CI like a linter.
+- Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
+  not file size), draw calls, welded-space topology (boundary, non-manifold,
+  truly-redundant vertices vs legitimate UV-seam splits), named lint rules
+  with concrete fixes.
+- Optimize: weld → meshopt simplification (error ladder for 10x+ reductions) →
+  area-weighted smooth normals → WebP or KTX2/BasisU textures (KTX2 ≈ 8x less
+  GPU memory) → EXT_meshopt_compression → optional geometry-only LOD chains.
+- Forge (deterministic 2D→3D, no AI, instant, free): marching-squares tracing
+  with angle-aware smoothing, layered color extrusion with the source artwork
+  projected on, pillow/emboss relief (double-sided), bevels, material presets
+  (enamel/chrome/neon/acrylic/rubber). Output is watertight (verified 0
+  boundary / 0 non-manifold edges) and therefore 3D-printable via STL export.
+- Generate (true volumetric 3D from one image, learned models): Meshy 7
+  (richest PBR texturing) plus open-weight models via fal.ai GPU inference —
+  Hunyuan3D-2, TRELLIS, TripoSR. Textured by default.
+- Studio: `npx glbforge ui` locally, or https://glbforge.dev/studio runs the
+  whole pipeline IN THE BROWSER (WASM + canvas) — uploads never leave the
+  device; only optional signed-in generation (GitHub/Google, metered credits)
+  touches a server.
+- MCP server: `dev.glbforge/glbforge` in the official MCP registry; install
+  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Tools: analyze_glb,
+  optimize_glb, extrude_image, export_stl, generate_image_to_3d,
+  generation_status, list_profiles, audit_directory, meshy_* tools.
+- GitHub Action: `uses: glbforge/glbforge@main` posts asset report cards on
+  pull requests and can gate merges on budgets.
+- What GLBForge is NOT: not a modeling suite, not a renderer, not a Meshy
+  clone; it does not train models. Deterministic core: same input + settings
+  = identical output.
+
+## Commands
+
+- npx glbforge analyze model.glb --profile mobile-hero
+- npx glbforge optimize model.glb --ktx2 --lods 40000,10000
+- npx glbforge extrude logo.png --layers 4 --pillow 0.03 --preset enamel
+- npx glbforge gen photo.png --model hunyuan --optimize   (FAL_KEY)
+- npx glbforge meshy image art.png --pbr --optimize       (MESHY_API_KEY)
+- npx glbforge stl model.glb --size 80
+- npx glbforge scaffold model.web.glb -o viewer
+- npx glbforge ui
+
+## Links
+
+- Site: https://glbforge.dev
+- Studio (in-browser): https://glbforge.dev/studio
+- Source (MIT): https://github.com/glbforge/glbforge
+- npm: https://www.npmjs.com/package/glbforge

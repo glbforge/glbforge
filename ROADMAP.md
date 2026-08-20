@@ -62,6 +62,26 @@ commodity; the gap between "generated" and "shipped" is the product.
   quota ledger, balance kill-switch via getBalance). Check Meshy ToS re: resale — an
   affiliate/volume arrangement may be the better structure
 
+## Agent experience (from external product review, 2026-08-20)
+
+- [x] `llms.txt` at glbforge.dev — accurate machine-readable scope so AI assistants describe the project correctly
+- [x] MCP prompts (guided workflows): web-ready-mobile-hero, logo-keychain, audit-and-fix-folder
+- [x] `audit_directory` tool — session-style multi-file analysis ("optimize everything failing in ./exports")
+- [x] Machine-actionable findings: analyze_glb returns `nextActions` (concrete follow-up tool calls)
+- [ ] Progress streaming for long tools (MCP progress notifications); polling tools cover generation today
+- [ ] MCP resources for intermediate artifacts (reports, LODs, previews)
+- [ ] `render_preview` (multi-angle PNGs) — needs headless GL; evaluate `gl`/puppeteer cost
+- [ ] Documented composition patterns with filesystem/image-gen/Blender MCP servers
+- [ ] Studio: "copy MCP command for this asset" (npx mode)
+
+## Pipeline depth (review-sourced)
+
+- [ ] Fixture zoo + per-generator rules for Hunyuan/TRELLIS/TripoSR/Tripo/Rodin (we now generate these in-house — self-feeding corpus)
+- [ ] Animation/skinning: preserve + intelligently simplify skinned meshes (current focus is static)
+- [ ] Scene-level budgets: analyze a set of GLBs against a shared budget
+- [ ] UV unwrap / retopo / normal baking as optional pluggable backends (keep pure-Node default)
+- [ ] Studio: metrics overlay on the compare slider; recipe presets mirroring MCP prompts
+
 ## v1.0 — Product bets (choose after usage data)
 
 - [ ] Hosted drag-and-drop: GLB in → report + optimized asset out (free tier = lead gen)

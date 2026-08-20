@@ -11,7 +11,8 @@
  * - Tool results are compact JSON strings (findings, budgets, diffs) meant
  *   to be read by a model, not a human terminal.
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { join as joinPath } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -65,6 +66,14 @@ function summarize(r: AnalysisResult) {
     bounds: r.geometry.bounds?.size ?? null,
     topology: r.geometry.topology,
     findings: r.findings,
+    // Machine-actionable: the tool calls that would resolve the findings.
+    nextActions: r.passed ? [] : [
+      {
+        tool: 'optimize_glb',
+        args: { path: r.file.path, profile: r.profile.name },
+        resolves: r.findings.filter((f) => f.severity === 'error').map((f) => f.ruleId),
+      },
+    ],
   };
 }
 
@@ -72,7 +81,7 @@ const json = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
 });
 
-const server = new McpServer({ name: 'glbforge', version: '0.4.0' });
+const server = new McpServer({ name: 'glbforge', version: '0.4.1' });
 
 server.registerTool(
   'list_profiles',
@@ -108,6 +117,59 @@ server.registerTool(
       fileBytes: bytes.byteLength,
     });
     return json(summarize(result));
+  },
+);
+
+server.registerTool(
+  'audit_directory',
+  {
+    description:
+      'Analyze every GLB in a directory against a budget profile in one call. ' +
+      'Returns a per-file score table plus the failing list — then call ' +
+      'optimize_glb on each failure (or ask before bulk-optimizing).',
+    inputSchema: {
+      dir: z.string().describe('Absolute directory path'),
+      profile: PROFILE_ENUM.default('mobile-hero'),
+      recursive: z.boolean().default(false),
+    },
+  },
+  async ({ dir, profile, recursive }) => {
+    const prof = getProfile(profile);
+    const io = await createNodeIO();
+    const files: string[] = [];
+    const walk = async (d: string, depth: number): Promise<void> => {
+      for (const entry of await readdir(d, { withFileTypes: true })) {
+        const full = joinPath(d, entry.name);
+        if (entry.isDirectory() && recursive && depth < 4 && entry.name !== 'node_modules') {
+          await walk(full, depth + 1);
+        } else if (/\.glb$/i.test(entry.name) && !/\.web(\.lod\d+)?\.glb$/i.test(entry.name)) {
+          files.push(full);
+        }
+      }
+    };
+    await walk(dir, 0);
+
+    const results = [];
+    for (const file of files.slice(0, 50)) {
+      try {
+        const bytes = await readFile(file);
+        const doc = await io.readBinary(new Uint8Array(bytes));
+        const r = analyze(doc, { profile: prof, topology: false, filePath: file, fileBytes: bytes.byteLength });
+        results.push({
+          path: file, score: r.score, passed: r.passed,
+          triangles: r.geometry.triangles, bytes: bytes.byteLength,
+          topFinding: r.findings[0]?.ruleId ?? null,
+        });
+      } catch (err) {
+        results.push({ path: file, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    const failing = results.filter((r) => 'passed' in r && !r.passed).map((r) => r.path);
+    return json({
+      profile, scanned: results.length,
+      truncated: files.length > 50 ? files.length - 50 : 0,
+      failing, results,
+    });
   },
 );
 
@@ -400,6 +462,71 @@ server.registerTool(
     await writeFile(out, bytes);
     return json({ out, bytes: bytes.byteLength });
   },
+);
+
+// --- Guided workflows (MCP prompts) ---------------------------------------
+server.registerPrompt(
+  'web-ready-mobile-hero',
+  {
+    description: 'Take any 3D asset (or a source image) to a mobile-hero web asset with proof.',
+    argsSchema: { input: z.string().describe('Path to a .glb, or an image to generate/forge from') },
+  },
+  ({ input }) => ({
+    messages: [{
+      role: 'user',
+      content: {
+        type: 'text',
+        text: `Make ${input} web-ready for a mobile hero section using glbforge tools. ` +
+          'If it is an image: flat artwork (logo/wordmark/icon) goes to extrude_image; ' +
+          'photographic or dimensional subjects go to generate_image_to_3d (hunyuan) or meshy. ' +
+          'Then analyze_glb with profile mobile-hero, optimize_glb until it passes, and ' +
+          'report the before/after numbers (triangles, file size, GPU memory) as the proof.',
+      },
+    }],
+  }),
+);
+
+server.registerPrompt(
+  'logo-keychain',
+  {
+    description: 'Turn a logo image into a printable keychain STL.',
+    argsSchema: { image: z.string().describe('Path to the logo (PNG/SVG/JPEG/WebP)') },
+  },
+  ({ image }) => ({
+    messages: [{
+      role: 'user',
+      content: {
+        type: 'text',
+        text: `Forge ${image} into a printable keychain: extrude_image with layers 4, ` +
+          'pillow ~0.03 and a fitting preset, verify watertightness via analyze_glb ' +
+          '(boundary and non-manifold edges must be 0), then export_stl at 70mm. ' +
+          'If not watertight, retry without layers before reporting failure.',
+      },
+    }],
+  }),
+);
+
+server.registerPrompt(
+  'audit-and-fix-folder',
+  {
+    description: 'Audit every GLB in a folder against a budget; optimize the failures.',
+    argsSchema: {
+      dir: z.string().describe('Directory containing GLBs'),
+      profile: z.string().optional().describe('Budget profile (default mobile-hero)'),
+    },
+  },
+  ({ dir, profile }) => ({
+    messages: [{
+      role: 'user',
+      content: {
+        type: 'text',
+        text: `Run audit_directory on ${dir} with profile ${profile ?? 'mobile-hero'}. ` +
+          'List the failures with their top finding, then optimize_glb each failing file ' +
+          '(writing alongside the original) and re-audit to confirm everything passes. ' +
+          'Summarize total bytes saved.',
+      },
+    }],
+  }),
 );
 
 const transport = new StdioServerTransport();
