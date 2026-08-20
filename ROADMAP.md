@@ -51,7 +51,7 @@ commodity; the gap between "generated" and "shipped" is the product.
   draw-call budget. Verified: plushqlty logo → 4 layers, 41k tris, score 95
 - [x] **Pillow relief** (`--pillow <m>`, studio toggle): exact EDT → `H·sqrt(min(D,R)/R)` dome on a ring-edge-aware subdivided front cap (T-junction-free by construction; watertight verified). Composes with layers = embroidered-patch look. Deferred: luminance emboss
 - [x] **Material presets** (`--preset`, studio dropdown): enamel, chrome, neon (emissive from cluster colors / glows the artwork when textured), acrylic (KHR_materials_transmission), rubber
-- [ ] glbforge.dev landing page + docs (Cloudflare Pages; CTA = `npx glbforge ui`)
+- [x] glbforge.dev landing page (`site/`, zero-build static): live `<model-viewer>` embeds of forged assets (meshopt decoder wired), stats strip, pipeline grid, npx CTAs, MCP + Action snippets. Deploy = connect repo to Cloudflare Pages, output dir `site`
 - [ ] Hosted demo, phase 2: moat features account-free (size caps + rate limits);
   generation via BYOK **and** purchased credits (GitHub OAuth + Stripe, quota ledger,
   balance kill-switch via getBalance). Check Meshy ToS re: resale — an affiliate/volume

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GLBForge — the web-readiness layer for AI-generated 3D</title>
+  <meta name="description" content="AI generates 3D models. GLBForge makes them shippable: analyze against performance budgets, optimize 90%+, forge logos into 3D, export STL — CLI, Studio, MCP server, and GitHub Action." />
+  <meta property="og:title" content="GLBForge" />
+  <meta property="og:description" content="Raw AI mesh in, shipped asset out. npx glbforge ui" />
+  <meta property="og:url" content="https://glbforge.dev" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬢</text></svg>" />
+  <script type="module">
+    import { ModelViewerElement } from 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
+    // Our GLBs use EXT_meshopt_compression; point model-viewer at the decoder.
+    ModelViewerElement.meshoptDecoderLocation =
+      'https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_decoder.js';
+  </script>
+  <style>
+    :root {
+      --bg: #0e0f12; --panel: #16181d; --panel-2: #1c1f26; --line: #262a33;
+      --text: #e8eaf0; --dim: #8b91a0; --accent: #ff8a3d; --accent-2: #ffb547;
+      --good: #4ade80;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg); color: var(--text);
+      font: 16px/1.65 -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    a { color: var(--accent-2); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap { max-width: 1060px; margin: 0 auto; padding: 0 22px; }
+
+    nav { display: flex; align-items: center; gap: 22px; padding: 18px 0; }
+    .brand { font-weight: 800; font-size: 18px; color: var(--text); }
+    .brand span { color: var(--accent); }
+    nav .links { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
+
+    .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; padding: 48px 0 30px; }
+    @media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+    h1 { font-size: clamp(30px, 4.6vw, 46px); line-height: 1.12; letter-spacing: -0.5px; }
+    h1 em { color: var(--accent); font-style: normal; }
+    .sub { color: var(--dim); margin: 16px 0 24px; font-size: 18px; max-width: 46ch; }
+
+    .cmd {
+      display: flex; align-items: center; gap: 10px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 10px; padding: 13px 16px;
+      font: 15px ui-monospace, 'SF Mono', Menlo, monospace; width: fit-content; max-width: 100%;
+    }
+    .cmd .dollar { color: var(--dim); }
+    .cmd button {
+      background: var(--accent); border: 0; border-radius: 6px; color: #1a1206;
+      font-weight: 700; padding: 5px 11px; cursor: pointer; font-size: 13px;
+    }
+    .cmd button:hover { background: var(--accent-2); }
+    .hero-note { color: var(--dim); font-size: 13px; margin-top: 10px; }
+
+    model-viewer {
+      width: 100%; height: 340px; background: radial-gradient(ellipse at 50% 40%, #191c22 0%, var(--bg) 78%);
+      border: 1px solid var(--line); border-radius: 14px; --poster-color: transparent;
+    }
+    .mv-caption { color: var(--dim); font-size: 13px; margin-top: 8px; text-align: center; }
+    .mv-caption code { color: var(--accent-2); }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 26px 0 8px; }
+    @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; text-align: center; }
+    .stat .n { font-size: 26px; font-weight: 800; color: var(--good); }
+    .stat .l { color: var(--dim); font-size: 13px; margin-top: 2px; }
+
+    section { padding: 44px 0 8px; }
+    h2 { font-size: 27px; letter-spacing: -0.3px; margin-bottom: 8px; }
+    .lede { color: var(--dim); max-width: 62ch; margin-bottom: 24px; }
+
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+    .card h3 { font-size: 16px; margin-bottom: 6px; }
+    .card h3 .ico { color: var(--accent); margin-right: 6px; }
+    .card p { color: var(--dim); font-size: 14px; }
+    .card code { color: var(--accent-2); font-size: 12.5px; }
+
+    .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 760px) { .duo { grid-template-columns: 1fr; } }
+
+    pre {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      padding: 16px 18px; overflow-x: auto; font: 13.5px ui-monospace, 'SF Mono', Menlo, monospace;
+      line-height: 1.7; color: #cdd3e0;
+    }
+    pre .c { color: #5b6170; } pre .a { color: var(--accent-2); } pre .g { color: var(--good); }
+
+    footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 26px 0 40px; color: var(--dim); font-size: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
+    footer .spacer { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <div class="brand"><span>⬢</span> GLBForge</div>
+      <div class="links">
+        <a href="https://github.com/glbforge/glbforge">GitHub</a>
+        <a href="https://www.npmjs.com/package/glbforge">npm</a>
+        <a href="#studio">Studio</a>
+        <a href="#agents">Agents &amp; CI</a>
+      </div>
+    </nav>
+
+    <div class="hero">
+      <div>
+        <h1>AI generates 3D models.<br /><em>GLBForge ships them.</em></h1>
+        <p class="sub">
+          Raw AI meshes are 90MB, two million triangles, and wrong for the web.
+          GLBForge analyzes them against real performance budgets, optimizes them
+          90%+ smaller, forges logos into 3D for free, and hands you a viewer —
+          one command, on your machine.
+        </p>
+        <div class="cmd">
+          <span class="dollar">$</span>
+          <span id="npx">npx glbforge ui</span>
+          <button onclick="navigator.clipboard.writeText('npx glbforge ui');this.textContent='copied';setTimeout(()=>this.textContent='copy',1200)">copy</button>
+        </div>
+        <p class="hero-note">Node 20+ · MIT · runs locally, nothing uploaded</p>
+      </div>
+      <div>
+        <model-viewer src="/models/plush.glb" camera-controls auto-rotate auto-rotate-delay="0"
+          shadow-intensity="0.6" exposure="1.1" interaction-prompt="none"></model-viewer>
+        <div class="mv-caption">a PNG logo, forged to layered 3D in one second — <code>glbforge extrude --layers 4 --pillow</code> · drag to orbit</div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><div class="n">−94%</div><div class="l">89MB Meshy export → 5.5MB, in 7s</div></div>
+      <div class="stat"><div class="n">4×</div><div class="l">less GPU memory with KTX2 textures</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">credits to forge a logo into 3D</div></div>
+      <div class="stat"><div class="n">100%</div><div class="l">local — your assets stay on your machine</div></div>
+    </div>
+
+    <section>
+      <h2>The pipeline, not the hype</h2>
+      <p class="lede">Generation is a commodity. The gap between "generated" and "shipped" is where projects die — GLBForge closes it with deterministic tooling: same input, same output, every time.</p>
+      <div class="grid">
+        <div class="card"><h3><span class="ico">▦</span>Analyze</h3><p>Lighthouse-style report card: triangle/file/texture/GPU-memory budgets, topology defects, named lint rules with fixes. Exits non-zero over budget — it drops into CI like a linter.</p></div>
+        <div class="card"><h3><span class="ico">⚒</span>Optimize</h3><p>Weld → simplify to budget → smooth normals → WebP or KTX2 textures → meshopt compression → LOD chains. Typically 90%+ smaller with no visible loss.</p></div>
+        <div class="card"><h3><span class="ico">◆</span>Forge</h3><p>Logos, wordmarks, SVGs → watertight 3D. Layered colors, puffy-sticker relief, enamel/chrome/neon/acrylic presets. Instant, free, exact silhouette.</p></div>
+        <div class="card"><h3><span class="ico">⎔</span>Generate</h3><p>Meshy image/text-to-3D built in — every generation lands already analyzed and one click from web-ready. Bring your own key.</p></div>
+        <div class="card"><h3><span class="ico">⬇</span>Export</h3><p>Web-ready GLB, print-ready STL (mm-scaled, watertightness verdict), React Three Fiber viewer scaffold with LOD switching.</p></div>
+        <div class="card"><h3><span class="ico">✓</span>Budgets as contracts</h3><p><code>mobile-hero</code>, <code>desktop-hero</code>, <code>product-configurator</code> — opinionated caps that describe what ships comfortably, not what merely loads.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Forge: 2D artwork → real 3D, free</h2>
+      <p class="lede">Image-to-3D models produce mush from flat graphics. GLBForge traces the silhouette exactly, stacks the colors in layered depth, pillows the surface, and hands you a watertight mesh you can ship — or print.</p>
+      <div class="duo">
+        <div>
+          <model-viewer src="/models/neon.glb" camera-controls auto-rotate interaction-prompt="none"
+            shadow-intensity="0.5" exposure="1.05" loading="lazy"></model-viewer>
+          <div class="mv-caption">neon preset — layers glow in their own colors</div>
+        </div>
+        <div>
+          <model-viewer src="/models/cat.glb" camera-controls auto-rotate interaction-prompt="none"
+            shadow-intensity="0.6" exposure="1.1" loading="lazy"></model-viewer>
+          <div class="mv-caption">Meshy generation: 73MB raw → this 3.2MB web asset, one flag</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="studio">
+      <h2>GLBForge Studio</h2>
+      <p class="lede">A local web app for the whole pipeline: drag in assets, read the report card, optimize with one click, and inspect original-vs-optimized with a split slider in the viewport. Zero hosting, zero upload — it runs on your machine.</p>
+      <pre><span class="c"># the whole studio, no install:</span>
+<span class="a">npx glbforge ui</span>
+
+<span class="c"># or the CLI, piece by piece:</span>
+<span class="a">npx glbforge analyze</span> model.glb --profile mobile-hero
+<span class="a">npx glbforge optimize</span> model.glb --ktx2 --lods 40000,10000
+<span class="a">npx glbforge extrude</span> logo.png --layers 4 --pillow 0.03 --preset enamel
+<span class="a">npx glbforge stl</span> model.glb --size 80
+<span class="a">npx glbforge scaffold</span> model.web.glb -o viewer</pre>
+    </section>
+
+    <section id="agents">
+      <h2>Built for agents and CI, not just humans</h2>
+      <p class="lede">The same pipeline is an MCP server — Claude Code, Cursor, and friends can take an asset from generation to web-ready inside one conversation — and a GitHub Action that posts report cards on pull requests.</p>
+      <div class="duo">
+        <pre><span class="c"># MCP server (Claude Code):</span>
+<span class="a">claude mcp add glbforge</span> -- npx -y @glbforge/mcp
+
+<span class="c"># then just ask:</span>
+<span class="c">"make logo.png into a web-ready</span>
+<span class="c"> 3D asset under the mobile budget"</span></pre>
+        <pre><span class="c"># .github/workflows/assets.yml</span>
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0, lfs: true }
+- uses: <span class="a">glbforge/glbforge@main</span>
+  with:
+    profile: <span class="g">mobile-hero</span>
+<span class="c"># → report card comment on every PR</span></pre>
+      </div>
+    </section>
+
+    <footer>
+      <span>⬢ GLBForge · MIT</span>
+      <span class="spacer"></span>
+      <a href="https://github.com/glbforge/glbforge">GitHub</a>
+      <a href="https://www.npmjs.com/package/glbforge">npm</a>
+      <a href="https://github.com/glbforge/glbforge/blob/main/ROADMAP.md">Roadmap</a>
+    </footer>
+  </div>
+</body>
+</html>
