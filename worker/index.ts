@@ -404,7 +404,7 @@ export default {
         if (!owned) return json({ error: 'no such task' }, 404);
 
         if (owned.kind.startsWith('fal:')) {
-          const model = owned.kind.slice(4);
+          const model = owned.kind.slice(4).split('/').slice(0, 2).join('/');
           if (!taskMatch[2]) {
             const st = (await (await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}/status`)).json()) as
               { status: string; queue_position?: number };

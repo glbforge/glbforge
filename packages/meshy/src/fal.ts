@@ -19,6 +19,12 @@ export const FAL_MODELS = {
 
 export type FalModelKey = keyof typeof FAL_MODELS;
 
+/** Queue routes use the root app id: 'fal-ai/hunyuan3d/v2' submits on the
+ *  full path but polls on 'fal-ai/hunyuan3d'. */
+export function rootAppId(model: string): string {
+  return model.split('/').slice(0, 2).join('/');
+}
+
 export class FalError extends Error {
   constructor(message: string, public readonly status?: number) {
     super(message);
@@ -112,14 +118,14 @@ export class FalClient {
     queuePosition: number | null;
   }> {
     const res = await this.request<{ status: string; queue_position?: number }>(
-      'GET', `/${model}/requests/${requestId}/status`,
+      'GET', `/${rootAppId(model)}/requests/${requestId}/status`,
     );
     return { status: res.status, queuePosition: res.queue_position ?? null };
   }
 
   /** Fetch the finished result and extract its GLB URL. */
   async resultGlbUrl(model: string, requestId: string): Promise<string> {
-    const res = await this.request<unknown>('GET', `/${model}/requests/${requestId}`);
+    const res = await this.request<unknown>('GET', `/${rootAppId(model)}/requests/${requestId}`);
     const url = findGlbUrl(res);
     if (!url) {
       throw new FalError(
