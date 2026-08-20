@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, detectBackend, getBackend, type AssetDetail, type AssetSummary } from './api';
+import { api, cloud, detectBackend, getBackend, type AssetDetail, type AssetSummary, type CloudUser } from './api';
 import { AssetRail } from './components/AssetRail';
 import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
@@ -22,10 +22,20 @@ export default function App() {
   }, []);
 
   const [mode, setMode] = useState<'remote' | 'local' | null>(null);
+  const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
+  const refreshCloud = useCallback(() => cloud.me().then(setCloudAuth).catch(() => {}), []);
   useEffect(() => {
     detectBackend().then(async (detected) => {
       setMode(detected);
-      api.meshyAvailable().then((m) => setMeshy(m.available)).catch(() => {});
+      if (detected === 'remote') {
+        api.meshyAvailable().then((m) => setMeshy(m.available)).catch(() => {});
+      } else {
+        // Hosted studio: generation is available when the edge API is up
+        // (sign-in gates the actual spend).
+        const auth = await cloud.me();
+        setCloudAuth(auth);
+        setMeshy(auth.available);
+      }
       await refresh();
       const list = await api.list();
       if (list.length > 0) setSelected(await api.get(list[0].id));
@@ -39,12 +49,18 @@ export default function App() {
       for (const task of tasksRef.current) {
         if (task.status !== 'PENDING' && task.status !== 'IN_PROGRESS') continue;
         try {
-          const st = await api.meshyTask(task.kind, task.taskId);
+          const localMode = getBackend() === 'local';
+          const st = localMode
+            ? await cloud.genTask(task.taskId)
+            : await api.meshyTask(task.kind, task.taskId);
           if (st.status === 'SUCCEEDED') {
             setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: 'IMPORTING', progress: 100 } : t));
-            const asset = await api.meshyImport(task.kind, task.taskId);
+            const asset = localMode
+              ? await api.upload(`meshy-${task.taskId.slice(0, 8)}.glb`, await cloud.genFileBytes(task.taskId), 'mobile-hero')
+              : await api.meshyImport(task.kind, task.taskId);
             setTasks((prev) => prev.filter((t) => t.taskId !== task.taskId));
             await refresh(asset.id);
+            if (localMode) void refreshCloud();
           } else if (st.status === 'FAILED' || st.status === 'CANCELED') {
             setTasks((prev) => prev.map((t) => t.taskId === task.taskId ? { ...t, status: 'FAILED', error: st.error ?? 'failed' } : t));
           } else {
@@ -59,12 +75,22 @@ export default function App() {
   const generate = useCallback(async (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean) => {
     setError(null);
     try {
-      const { taskId, kind } = await api.meshyImage(bytes, mime, pbr);
-      setTasks((prev) => [...prev, { taskId, kind, name, progress: 0, status: 'PENDING' }]);
+      if (getBackend() === 'local') {
+        if (!cloudAuth.user) {
+          location.href = cloud.loginUrl;
+          return;
+        }
+        const { taskId, kind } = await cloud.genImage(bytes, mime, pbr);
+        setTasks((prev) => [...prev, { taskId, kind, name, progress: 0, status: 'PENDING' }]);
+        void refreshCloud();
+      } else {
+        const { taskId, kind } = await api.meshyImage(bytes, mime, pbr);
+        setTasks((prev) => [...prev, { taskId, kind, name, progress: 0, status: 'PENDING' }]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [cloudAuth.user, refreshCloud]);
 
   const select = useCallback(async (id: string) => {
     setSelected(await api.get(id));
@@ -97,9 +123,21 @@ export default function App() {
           <span className="brand-mark">⬢</span> GLBForge <span className="brand-sub">Studio</span>
         </div>
         {mode === 'local' && (
-          <div className="mode-badge" title="The whole pipeline runs in your browser — assets never leave your device. For Meshy generation and KTX2, run: npx glbforge ui">
+          <div className="mode-badge" title="Analyze, forge, optimize and STL all run in your browser — those assets never leave your device. Only Meshy generation (sign-in) touches a server.">
             ⚡ in-browser · private
           </div>
+        )}
+        {mode === 'local' && cloudAuth.available && (
+          cloudAuth.user ? (
+            <div className="account">
+              <span className="acct-login">{cloudAuth.user.login}</span>
+              <span className="acct-credits">{cloudAuth.user.credits} credits</span>
+              <button className="acct-btn" onClick={() => void cloud.checkout('starter').catch((e) => setError(String(e.message ?? e)))}>buy</button>
+              <button className="acct-btn" onClick={() => void cloud.logout().then(refreshCloud)}>out</button>
+            </div>
+          ) : (
+            <a className="acct-signin" href={cloud.loginUrl}>Sign in with GitHub to generate</a>
+          )
         )}
         {busy && <div className="busy">⚙ {busy}…</div>}
         {error && <div className="error" onClick={() => setError(null)}>{error} ✕</div>}

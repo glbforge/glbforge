@@ -156,3 +156,43 @@ function triggerDownload(blob: Blob, filename: string): void {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
+
+// ---------------------------------------------------------------------------
+// Cloud client (hosted studio only): auth + metered generation + billing on
+// the glbforge.dev edge worker. Independent from the local/remote pipeline —
+// generated models are downloaded and ingested into the in-browser engine.
+export interface CloudUser { login: string; credits: number }
+
+export const cloud = {
+  loginUrl: '/api/auth/login',
+  me: async (): Promise<{ available: boolean; user: CloudUser | null }> => {
+    try {
+      const res = await fetch('/api/auth/me', { signal: AbortSignal.timeout(4000) });
+      if (!res.ok) return { available: false, user: null };
+      const data = (await res.json()) as { user: CloudUser | null };
+      return { available: true, user: data.user };
+    } catch {
+      return { available: false, user: null };
+    }
+  },
+  logout: () => fetch('/api/auth/logout', { method: 'POST' }).then(() => undefined),
+  genImage: (bytes: ArrayBuffer, mime: string, pbr: boolean) =>
+    fetch(`/api/gen/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}`, {
+      method: 'POST', body: bytes, headers: OCTET,
+    }).then((r) => check<{ taskId: string; kind: string }>(r)),
+  genTask: (id: string) =>
+    fetch(`/api/gen/tasks/${id}`).then((r) => check<{ status: string; progress: number; error: string | null }>(r)),
+  genFileBytes: async (id: string): Promise<ArrayBuffer> => {
+    const res = await fetch(`/api/gen/tasks/${id}/file`);
+    if (!res.ok) throw new Error('model download failed');
+    return res.arrayBuffer();
+  },
+  checkout: async (pack: string): Promise<void> => {
+    const { url } = await fetch('/api/billing/checkout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pack }),
+    }).then((r) => check<{ url: string }>(r));
+    location.href = url;
+  },
+};

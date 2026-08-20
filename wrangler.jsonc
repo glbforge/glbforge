@@ -1,9 +1,14 @@
-// Cloudflare Workers (static assets) config for glbforge.dev.
-// The site is zero-build: everything under site/ is served as-is.
+// Cloudflare Worker for glbforge.dev: static site + edge API (auth,
+// metered Meshy generation, Stripe billing). The D1 binding is added once
+// the database exists — see README "hosted credits" section.
 {
   "name": "glbforge",
   "compatibility_date": "2026-08-20",
+  "main": "worker/index.ts",
   "assets": {
-    "directory": "./site"
-  }
+    "directory": "./site",
+    "binding": "ASSETS"
+  },
+  "workers_dev": false,
+  "preview_urls": false
 }
