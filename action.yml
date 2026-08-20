@@ -1,0 +1,104 @@
+name: 'GLBForge Report'
+description: >-
+  Analyze GLB/glTF assets changed in a pull request against a web performance
+  budget and post a report card comment. Lighthouse-style CI for 3D assets.
+branding:
+  icon: 'box'
+  color: 'orange'
+
+inputs:
+  profile:
+    description: 'Budget profile: mobile-hero | desktop-hero | product-configurator'
+    default: 'mobile-hero'
+  fail-on-budget:
+    description: 'Fail the check when any changed asset is over budget'
+    default: 'true'
+  version:
+    description: 'glbforge CLI version/dist-tag to install from npm'
+    default: 'latest'
+  use-local:
+    description: 'Build the CLI from this repository instead of npm (GLBForge self-test)'
+    default: 'false'
+  token:
+    description: 'Token used to post the PR comment'
+    default: ${{ github.token }}
+
+runs:
+  using: composite
+  steps:
+    - id: cli
+      shell: bash
+      run: |
+        if [ "${{ inputs.use-local }}" = "true" ]; then
+          pnpm install --frozen-lockfile
+          pnpm -r build
+          echo "bin=node $GITHUB_WORKSPACE/packages/cli/dist/index.js" >> "$GITHUB_OUTPUT"
+        else
+          npm install -g "glbforge@${{ inputs.version }}"
+          echo "bin=glbforge" >> "$GITHUB_OUTPUT"
+        fi
+
+    - id: analyze
+      shell: bash
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PROFILE: ${{ inputs.profile }}
+        CLI: ${{ steps.cli.outputs.bin }}
+      run: |
+        set -euo pipefail
+        REPORT_DIR="$(mktemp -d)"
+        echo "dir=$REPORT_DIR" >> "$GITHUB_OUTPUT"
+
+        git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
+        FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD -- '*.glb' '*.gltf' '*.GLB' || true)
+        COUNT=0; FAILED=0
+        for f in $FILES; do
+          [ -f "$f" ] || continue
+          COUNT=$((COUNT + 1))
+          SAFE=$(echo "$f" | tr '/' '_')
+          # LFS pointer files are ~130 bytes of text, not glTF.
+          if head -c 40 "$f" | grep -q 'version https://git-lfs'; then
+            echo "{\"file\":{\"path\":\"$f\"},\"lfsPointer\":true}" > "$REPORT_DIR/$SAFE.json"
+            continue
+          fi
+          if $CLI analyze "$f" --profile "$PROFILE" --json > "$REPORT_DIR/$SAFE.json" 2>"$REPORT_DIR/$SAFE.err"; then
+            :
+          else
+            if [ -s "$REPORT_DIR/$SAFE.json" ]; then
+              FAILED=$((FAILED + 1))   # analyzed fine, over budget (exit 1 by contract)
+            else
+              echo "{\"file\":{\"path\":\"$f\"},\"error\":$(node -e "console.log(JSON.stringify(require('fs').readFileSync('$REPORT_DIR/$SAFE.err','utf8').trim()))")}" > "$REPORT_DIR/$SAFE.json"
+            fi
+          fi
+        done
+        echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+        echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+        if [ "$COUNT" -gt 0 ]; then
+          node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" > "$REPORT_DIR/comment.md"
+        fi
+
+    - if: steps.analyze.outputs.count > 0
+      uses: actions/github-script@v7
+      env:
+        REPORT_DIR: ${{ steps.analyze.outputs.dir }}
+      with:
+        github-token: ${{ inputs.token }}
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- glbforge-report -->';
+          const body = marker + '\n' + fs.readFileSync(process.env.REPORT_DIR + '/comment.md', 'utf8');
+          const { owner, repo } = context.repo;
+          const issue_number = context.payload.pull_request.number;
+          const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
+          const existing = comments.data.find((c) => c.body && c.body.startsWith(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - if: inputs.fail-on-budget == 'true' && steps.analyze.outputs.failed > 0
+      shell: bash
+      run: |
+        echo "::error::${{ steps.analyze.outputs.failed }} asset(s) over the '${{ inputs.profile }}' budget."
+        exit 1
