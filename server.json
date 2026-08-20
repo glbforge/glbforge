@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.glbforge/glbforge",
+  "description": "Make AI-generated 3D assets web-ready: analyze against performance budgets, optimize 90%+ (WebP/KTX2, LODs), forge logos into layered 3D, export STL, drive Meshy generation — the shipping layer for AI 3D.",
+  "repository": {
+    "url": "https://github.com/glbforge/glbforge",
+    "source": "github"
+  },
+  "version": "0.3.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@glbforge/mcp",
+      "version": "0.3.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "MESHY_API_KEY",
+          "description": "Optional Meshy API key enabling the meshy_* generation tools",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
