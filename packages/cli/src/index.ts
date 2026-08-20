@@ -35,6 +35,7 @@ async function optimizeFile(
   profileName: string,
   extra: {
     target?: number; textures?: boolean; compress?: boolean; lods?: string;
+    json?: boolean;
   } = {},
 ): Promise<boolean> {
   const profile = getProfile(profileName);
@@ -50,7 +51,7 @@ async function optimizeFile(
     targetTriangles: extra.target,
     textures: extra.textures,
     compress: extra.compress,
-    log: (msg) => console.log('  ' + msg),
+    log: extra.json ? undefined : (msg) => console.log('  ' + msg),
   });
 
   const outBytes = await io.writeBinary(doc);
@@ -60,7 +61,17 @@ async function optimizeFile(
   const after = analyze(await io.readBinary(outBytes), {
     profile, topology: false, filePath: output, fileBytes: outBytes.byteLength,
   });
-  printDiff(before, after, summary.steps);
+  if (extra.json) {
+    console.log(JSON.stringify({
+      outPath: output,
+      steps: summary.steps,
+      before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
+      after,
+      savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
+    }, null, 2));
+  } else {
+    printDiff(before, after, summary.steps);
+  }
 
   // Optional LOD chain: simplify further from the already-optimized doc.
   if (extra.lods) {
@@ -75,7 +86,7 @@ async function optimizeFile(
       const lodPath = output.replace(/\.glb$/i, `.lod${i + 1}.glb`);
       const lodBytes = await io.writeBinary(lodDoc);
       await writeFile(lodPath, lodBytes);
-      console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, target ${targets[i].toLocaleString()} tris)`);
+      if (!extra.json) console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, target ${targets[i].toLocaleString()} tris)`);
     }
   }
   return after.passed;
@@ -126,14 +137,15 @@ program
   .option('--lods <targets>', 'extra LOD files, comma-separated triangle counts (e.g. 50000,15000)')
   .option('--no-textures', 'skip texture resize/re-encode')
   .option('--no-compress', 'skip meshopt compression')
+  .option('--json', 'emit JSON instead of the diff table')
   .action(async (file: string, opts: {
     profile: string; out?: string; target?: number; lods?: string;
-    textures: boolean; compress: boolean;
+    textures: boolean; compress: boolean; json?: boolean;
   }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.web.glb';
     const passed = await optimizeFile(file, outPath, opts.profile, {
       target: opts.target, textures: opts.textures,
-      compress: opts.compress, lods: opts.lods,
+      compress: opts.compress, lods: opts.lods, json: opts.json,
     });
     process.exitCode = passed ? 0 : 1;
   });
@@ -154,11 +166,12 @@ program
   .option('--color <hex>', 'base color when --no-texture, e.g. #ff2266')
   .option('--metallic <n>', 'metallic factor 0-1', parseFloat, 0)
   .option('--roughness <n>', 'roughness factor 0-1', parseFloat, 0.6)
+  .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
     out?: string; mode?: 'alpha' | 'luma'; threshold?: number; depth?: number;
     bevel: number; bevelSegments: number;
     width: number; simplify: number; texture: boolean; color?: string;
-    metallic: number; roughness: number;
+    metallic: number; roughness: number; json?: boolean;
   }) => {
     const outPath = opts.out ?? image.replace(/\.[a-z0-9]+$/i, '') + '.glb';
     const bytes = await readFile(image);
@@ -177,11 +190,15 @@ program
     const io = await createIO();
     const outBytes = await io.writeBinary(doc);
     await writeFile(outPath, outBytes);
-    console.log(
-      `  ${outPath} (${(outBytes.byteLength / 1048576).toFixed(1)}MB)  ` +
-      `${stats.outerLoops} shape(s), ${stats.holes} hole(s), ` +
-      `${stats.triangles.toLocaleString()} tris  [mode=${stats.mode}]`,
-    );
+    if (opts.json) {
+      console.log(JSON.stringify({ outPath, bytes: outBytes.byteLength, ...stats }, null, 2));
+    } else {
+      console.log(
+        `  ${outPath} (${(outBytes.byteLength / 1048576).toFixed(1)}MB)  ` +
+        `${stats.outerLoops} shape(s), ${stats.holes} hole(s), ` +
+        `${stats.triangles.toLocaleString()} tris  [mode=${stats.mode}]`,
+      );
+    }
   });
 
 program
@@ -199,6 +216,11 @@ registerMeshyCommands(program, (input, output, profileName) =>
   optimizeFile(input, output, profileName));
 
 program.parseAsync().catch((err) => {
-  console.error(err instanceof Error ? err.message : err);
+  const e = err as NodeJS.ErrnoException;
+  if (e?.code === 'ENOENT' && e.path) {
+    console.error(`File not found: ${e.path}`);
+  } else {
+    console.error(err instanceof Error ? err.message : err);
+  }
   process.exit(1);
 });

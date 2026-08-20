@@ -1,6 +1,9 @@
 import { Document } from '@gltf-transform/core';
 import {
   dedup,
+  flatten,
+  join,
+  palette,
   prune,
   simplify,
   textureCompress,
@@ -66,6 +69,21 @@ export async function optimize(
 
   await doc.transform(dedup(), prune());
   steps.push('dedup+prune');
+
+  // Multi-primitive assets (one material per submesh is a common AI-export
+  // pattern) cost one draw call per primitive. Palette solid-color materials,
+  // flatten the node hierarchy, then join primitives that share a material.
+  const primCount = () =>
+    doc.getRoot().listMeshes().reduce((n, m) => n + m.listPrimitives().length, 0);
+  const primsBefore = primCount();
+  if (primsBefore > 1) {
+    await doc.transform(palette({ min: 5 }), flatten(), join());
+    const primsAfter = primCount();
+    if (primsAfter < primsBefore) {
+      steps.push(`join ${primsBefore}->${primsAfter} prims`);
+      log(`joined: ${primsBefore} -> ${primsAfter} draw calls`);
+    }
+  }
 
   await doc.transform(weld());
   steps.push('weld');

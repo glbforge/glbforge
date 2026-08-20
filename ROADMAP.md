@@ -18,10 +18,10 @@ commodity; the gap between "generated" and "shipped" is the product.
 
 - [x] `git init` + **git LFS for fixtures** (they're 34–93MB — plain git will choke), MIT license
 - [x] GitHub Actions CI: build + tests + CLI dogfood (extrude → analyze, exit-code enforced); fixture specs self-skip on LFS pointer files
-- [ ] `--json` output for `optimize` and `extrude` (parity with `analyze`; agents/CI need it)
-- [ ] Multi-material asset support in optimize: `dedup materials` → `palette` → `join` (draw-call reduction; our fixtures were all single-prim — assets from other generators won't be)
-- [ ] Rule expansion: normal-map Y-convention check, alpha-mode heuristic (decode alpha channel), KTX2-awareness
-- [ ] Error-message pass: every failure tells the user the fix
+- [x] `--json` output for `optimize` and `extrude` (parity with `analyze`; agents/CI need it)
+- [x] Multi-material asset support in optimize: `palette` → `flatten` → `join` (draw-call reduction; tested 2 prims → 1)
+- [x] Rule expansion: `mat/blend-without-alpha` (byte-level alpha sniffing, no decode), `tex/vram-estimate` (GPU memory vs budget, KTX2-aware). Deferred: normal-map Y-convention (needs pixel statistics, low signal)
+- [x] Error-message pass: friendly ENOENT, photo-detection guidance in extrude, Meshy errors carry API messages
 - [ ] Fixture zoo: collect GLBs from other generators (Tripo, Rodin, TRELLIS-class) — the per-generator rule corpus is the moat
 
 ## v0.3 — Features (make it more valuable)

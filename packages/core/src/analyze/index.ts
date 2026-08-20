@@ -15,7 +15,7 @@ export interface AnalyzeOptions {
 export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
   const root = doc.getRoot();
   const geometry = analyzeGeometry(doc, { topology: opts.topology !== false });
-  const { materials, duplicateMaterialGroups, textures, textureBytesTotal } =
+  const { materials, duplicateMaterialGroups, textures, textureBytesTotal, textureVramTotal } =
     analyzeMaterials(doc);
 
   const result: AnalysisResult = {
@@ -35,6 +35,7 @@ export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
     duplicateMaterialGroups,
     textures,
     textureBytesTotal,
+    textureVramTotal,
     profile: opts.profile,
     findings: [],
     score: 100,

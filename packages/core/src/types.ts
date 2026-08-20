@@ -20,6 +20,8 @@ export interface Profile {
   maxTextureSize: number;
   /** Max total compressed image payload (bytes). */
   maxTextureBytes: number;
+  /** Max estimated GPU memory for textures once uploaded (bytes). */
+  maxTextureVramBytes: number;
   maxFileBytes: number;
   maxMaterials: number;
 }
@@ -68,6 +70,10 @@ export interface TextureStats {
   width: number | null;
   height: number | null;
   bytes: number;
+  /** Whether the encoded image carries an alpha channel (null = unknown format). */
+  hasAlpha: boolean | null;
+  /** Estimated GPU memory once decoded/uploaded, incl. mips. */
+  vramBytes: number;
   /** Material slots referencing this texture, e.g. "Hair/baseColor". */
   slots: string[];
 }
@@ -89,6 +95,8 @@ export interface AnalysisResult {
   duplicateMaterialGroups: string[][];
   textures: TextureStats[];
   textureBytesTotal: number;
+  /** Estimated total GPU memory for all textures (decoded RGBA or KTX2-compressed). */
+  textureVramTotal: number;
   profile: Profile;
   findings: Finding[];
   /** 0-100. Errors -15, warnings -5. */

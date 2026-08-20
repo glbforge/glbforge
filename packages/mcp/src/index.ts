@@ -56,8 +56,10 @@ function summarize(r: AnalysisResult) {
     materials: r.materials.length,
     textures: r.textures.map((t) => ({
       name: t.name, size: `${t.width}x${t.height}`, mime: t.mimeType, bytes: t.bytes,
+      hasAlpha: t.hasAlpha, vramBytes: t.vramBytes,
     })),
     textureBytesTotal: r.textureBytesTotal,
+    textureVramTotal: r.textureVramTotal,
     bounds: r.geometry.bounds?.size ?? null,
     topology: r.geometry.topology,
     findings: r.findings,

@@ -174,3 +174,62 @@ describe('extrudeImage', () => {
     expect(bevelResult.geometry.topology!.nonManifoldEdges).toBe(0);
   });
 });
+
+describe('multi-material optimize', () => {
+  it('joins primitives sharing a material into one draw call', async () => {
+    const doc = makeDirtyQuad();
+    const mesh = doc.getRoot().listMeshes()[0];
+    const buffer = doc.getRoot().listBuffers()[0];
+    const material = doc.createMaterial('shared');
+    // Second primitive, different geometry, same material as the first.
+    const positions = new Float32Array([2, 0, 0, 3, 0, 0, 2, 1, 0]);
+    const indices = new Uint16Array([0, 1, 2]);
+    const prim2 = doc
+      .createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(positions).setBuffer(buffer))
+      .setIndices(doc.createAccessor().setType('SCALAR').setArray(indices).setBuffer(buffer))
+      .setMaterial(material);
+    mesh.listPrimitives()[0].setMaterial(material);
+    mesh.addPrimitive(prim2);
+
+    const before = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    expect(before.geometry.drawCallEstimate).toBe(2);
+
+    await optimize(doc, { profile: getProfile('mobile-hero'), compress: false, textures: false });
+    const after = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    expect(after.geometry.drawCallEstimate).toBe(1);
+    expect(after.geometry.triangles).toBe(3);
+  });
+});
+
+describe('alpha sniffing', () => {
+  it('detects missing alpha channels and flags pointless BLEND', async () => {
+    const sharp = (await import('sharp')).default;
+    const { imageHasAlpha } = await import('../src/analyze/materials.js');
+
+    const rgb = Buffer.alloc(16 * 16 * 3, 128);
+    const opaquePng = await sharp(rgb, { raw: { width: 16, height: 16, channels: 3 } }).png().toBuffer();
+    const rgba = Buffer.alloc(16 * 16 * 4, 128);
+    const alphaPng = await sharp(rgba, { raw: { width: 16, height: 16, channels: 4 } }).png().toBuffer();
+    const opaqueWebp = await sharp(rgb, { raw: { width: 16, height: 16, channels: 3 } }).webp().toBuffer();
+    const alphaWebp = await sharp(rgba, { raw: { width: 16, height: 16, channels: 4 } }).webp().toBuffer();
+    const jpeg = await sharp(rgb, { raw: { width: 16, height: 16, channels: 3 } }).jpeg().toBuffer();
+
+    expect(imageHasAlpha(new Uint8Array(opaquePng), 'image/png')).toBe(false);
+    expect(imageHasAlpha(new Uint8Array(alphaPng), 'image/png')).toBe(true);
+    expect(imageHasAlpha(new Uint8Array(opaqueWebp), 'image/webp')).toBe(false);
+    expect(imageHasAlpha(new Uint8Array(alphaWebp), 'image/webp')).toBe(true);
+    expect(imageHasAlpha(new Uint8Array(jpeg), 'image/jpeg')).toBe(false);
+
+    // Material set to BLEND with a provably alpha-free baseColor -> warn.
+    const doc = makeDirtyQuad();
+    const texture = doc.createTexture('base').setImage(new Uint8Array(opaquePng)).setMimeType('image/png');
+    const material = doc.createMaterial('glass?').setAlphaMode('BLEND').setBaseColorTexture(texture);
+    doc.getRoot().listMeshes()[0].listPrimitives()[0].setMaterial(material);
+
+    const result = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    const ids = result.findings.map((f) => f.ruleId);
+    expect(ids).toContain('mat/blend-without-alpha');
+    expect(ids).not.toContain('mat/blend-alpha');
+  });
+});

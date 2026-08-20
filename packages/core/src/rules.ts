@@ -134,12 +134,47 @@ const RULES: Record<string, Rule> = {
   'mat/blend-alpha': (r) => {
     const blended = r.materials.filter((m) => m.alphaMode === 'BLEND');
     if (blended.length === 0) return null;
+    // Split into provably-pointless blending (baseColor image has no alpha
+    // channel at all) vs possibly-intentional blending.
+    const findings: Finding[] = [];
+    const pointless: string[] = [];
+    const maybe: string[] = [];
+    for (const mat of blended) {
+      const baseColor = r.textures.find((t) =>
+        t.slots.includes(`${mat.name}/baseColor`),
+      );
+      if (baseColor && baseColor.hasAlpha === false) pointless.push(mat.name);
+      else maybe.push(mat.name);
+    }
+    if (pointless.length) {
+      findings.push({
+        ruleId: 'mat/blend-without-alpha',
+        severity: 'warn',
+        message: `Material(s) set to alpha BLEND but their baseColor image has NO alpha channel: ${pointless.join(', ')}. This buys sorting artifacts and disabled depth-write for nothing.`,
+        suggestion: 'Switch alphaMode to OPAQUE — provably safe here.',
+        data: { materials: pointless },
+      });
+    }
+    if (maybe.length) {
+      findings.push({
+        ruleId: 'mat/blend-alpha',
+        severity: 'info',
+        message: `Material(s) using alpha BLEND: ${maybe.join(', ')}. Blending disables depth-write and causes sorting artifacts; AI exports often set it unintentionally.`,
+        suggestion: 'If the alpha is cutout-style, MASK renders more robustly than BLEND.',
+        data: { materials: maybe },
+      });
+    }
+    return findings;
+  },
+
+  'tex/vram-estimate': (r) => {
+    if (r.textureVramTotal <= r.profile.maxTextureVramBytes) return null;
     return {
-      ruleId: 'mat/blend-alpha',
-      severity: 'info',
-      message: `Material(s) using alpha BLEND: ${blended.map((m) => m.name).join(', ')}. Blending disables depth-write and causes sorting artifacts; AI exports often set it unintentionally.`,
-      suggestion: 'If the texture has no meaningful alpha, switch to OPAQUE; for cutout-style alpha use MASK.',
-      data: { materials: blended.map((m) => m.name) },
+      ruleId: 'tex/vram-estimate',
+      severity: 'warn',
+      message: `Textures decode to ~${mb(r.textureVramTotal)} of GPU memory (file size is not GPU size: WebP/JPEG/PNG upload as raw RGBA). Budget for ${r.profile.name} is ${mb(r.profile.maxTextureVramBytes)}.`,
+      suggestion: 'Use KTX2/BasisU (stays compressed on the GPU, ~8x less memory) or reduce texture dimensions.',
+      data: { vram: r.textureVramTotal, max: r.profile.maxTextureVramBytes },
     };
   },
 

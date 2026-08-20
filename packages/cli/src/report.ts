@@ -46,6 +46,9 @@ export function printReport(r: AnalysisResult): void {
   console.log(pc.bold('  Materials & textures'));
   console.log(`    materials      ${r.materials.length}  ${budget(r.materials.length, r.profile.maxMaterials)}`);
   console.log(`    textures       ${r.textures.length} (${mb(r.textureBytesTotal)})  ${budget(r.textureBytesTotal, r.profile.maxTextureBytes, mb)}`);
+  if (r.textureVramTotal > 0) {
+    console.log(`    est. GPU mem   ${mb(r.textureVramTotal)}  ${budget(r.textureVramTotal, r.profile.maxTextureVramBytes, mb)}`);
+  }
   for (const t of r.textures) {
     console.log(pc.dim(`      ${t.name} ${t.width}x${t.height} ${t.mimeType} ${mb(t.bytes)}`));
   }
