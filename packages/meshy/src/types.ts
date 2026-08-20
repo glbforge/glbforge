@@ -1,5 +1,5 @@
 /** Task families have different endpoint roots/versions on the Meshy API. */
-export type TaskKind = 'text-to-3d' | 'image-to-3d';
+export type TaskKind = 'text-to-3d' | 'image-to-3d' | 'remesh' | 'retexture';
 
 export type TaskStatus =
   | 'PENDING'
@@ -65,4 +65,26 @@ export interface WaitOptions {
   /** Give up after this long. Default 20 minutes. */
   timeoutMs?: number;
   onProgress?: (task: MeshyTask) => void;
+}
+
+export interface RemeshParams {
+  /** Finished task to remesh (or provide model_url). */
+  input_task_id?: string;
+  model_url?: string;
+  target_formats?: Array<'glb' | 'fbx' | 'obj' | 'usdz' | 'stl' | 'blend'>;
+  topology?: 'quad' | 'triangle';
+  target_polycount?: number;
+  resize_height?: number;
+  origin_at?: 'bottom' | 'center';
+}
+
+export interface RetextureParams {
+  /** Finished task to retexture (or provide model_url). */
+  input_task_id?: string;
+  model_url?: string;
+  /** Describe the new look, e.g. "weathered bronze statue". */
+  text_style_prompt?: string;
+  image_style_url?: string;
+  enable_original_uv?: boolean;
+  enable_pbr?: boolean;
 }

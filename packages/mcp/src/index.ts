@@ -256,20 +256,29 @@ server.registerTool(
       'pass refine_from to texture a finished preview). Returns a task id immediately; ' +
       'poll meshy_task_status (generation takes minutes).',
     inputSchema: {
-      kind: z.enum(['image-to-3d', 'text-to-3d']),
+      kind: z.enum(['image-to-3d', 'text-to-3d', 'remesh', 'retexture']),
       image: z.string().optional().describe('image-to-3d: local path or http(s) URL'),
-      prompt: z.string().optional().describe('text-to-3d: what to generate'),
+      prompt: z.string().optional().describe('text-to-3d: what to generate; retexture: the style prompt'),
       refine_from: z.string().optional()
         .describe('text-to-3d: preview task id to refine (texture stage)'),
+      input_task_id: z.string().optional()
+        .describe('remesh/retexture: the SUCCEEDED task to operate on'),
+      topology: z.enum(['quad', 'triangle']).optional().describe('remesh: output topology'),
       should_texture: z.boolean().default(true).describe('image-to-3d: run the texture stage'),
       enable_pbr: z.boolean().default(false),
       target_polycount: z.number().int().positive().optional(),
     },
   },
-  async ({ kind, image, prompt, refine_from, should_texture, enable_pbr, target_polycount }) => {
+  async ({ kind, image, prompt, refine_from, input_task_id, topology, should_texture, enable_pbr, target_polycount }) => {
     const client = new MeshyClient();
     let taskId: string;
-    if (kind === 'image-to-3d') {
+    if (kind === 'remesh') {
+      if (!input_task_id) throw new Error('remesh requires "input_task_id"');
+      taskId = await client.createRemesh({ input_task_id, topology, target_polycount });
+    } else if (kind === 'retexture') {
+      if (!input_task_id || !prompt) throw new Error('retexture requires "input_task_id" and "prompt" (the style)');
+      taskId = await client.createRetexture({ input_task_id, text_style_prompt: prompt, enable_pbr });
+    } else if (kind === 'image-to-3d') {
       if (!image) throw new Error('image-to-3d requires "image"');
       let imageUrl = image;
       if (!/^https?:\/\//.test(image)) {
@@ -298,7 +307,7 @@ server.registerTool(
   {
     description: 'Check a Meshy task: status, progress %, and (when finished) model URLs.',
     inputSchema: {
-      kind: z.enum(['image-to-3d', 'text-to-3d']),
+      kind: z.enum(['image-to-3d', 'text-to-3d', 'remesh', 'retexture']),
       taskId: z.string(),
     },
   },
@@ -317,7 +326,7 @@ server.registerTool(
   {
     description: 'Download a finished Meshy task\'s GLB to a local path.',
     inputSchema: {
-      kind: z.enum(['image-to-3d', 'text-to-3d']),
+      kind: z.enum(['image-to-3d', 'text-to-3d', 'remesh', 'retexture']),
       taskId: z.string(),
       out: z.string().describe('Absolute output path for the .glb'),
     },

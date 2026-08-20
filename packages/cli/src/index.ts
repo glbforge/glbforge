@@ -158,7 +158,7 @@ program
 program
   .command('extrude')
   .description('Deterministic logo/graphic -> extruded 3D GLB (no AI). Traces the image silhouette and projects the source image back on as texture.')
-  .argument('<image>', 'PNG/JPEG/WebP with transparent or white background')
+  .argument('<image>', 'PNG/JPEG/WebP/SVG with transparent or white background')
   .option('-o, --out <file>', 'output GLB path (default: <name>.glb)')
   .option('--mode <mode>', 'solid-pixel test: alpha | luma (auto-detected)')
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))

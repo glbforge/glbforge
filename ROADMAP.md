@@ -29,10 +29,10 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [x] **KTX2/BasisU** texture option (`--ktx2` / `textureFormat: 'ktx2'`): basisu or toktx backend, ETC1S for color / UASTC for normals, KHR_texture_basisu required, scaffold ships the transcoder + KTX2Loader wiring. Measured: 63.8MB → 16.0MB GPU memory on the lucky-cat fixture
 - [x] **Runtime LODs in scaffold**: `--lods` files are now geometry-only (lod1 4.1MB→0.7MB, lod2 3.6MB→0.3MB); scaffold auto-detects `.lodN.glb` siblings and emits a `<Detailed>` viewer that shares the primary's materials at runtime (verified: 150k/40k/10k tris, all textured)
 - [x] **STL export** (`xui stl`, MCP `export_stl`): binary STL, mm-scaled, z-up, watertightness verdict in output. Verified: beveled logo → 70mm watertight keychain; lucky cat → 60mm figurine
-- [ ] SVG input for extrude (path parsing + fill rules; raster already covers most creators)
+- [x] SVG input for extrude: sharp rasterizes at high density into the existing trace pipeline (vector fidelity is trace-grid-limited either way); verified watertight on a test SVG
 - [x] `xui watch <dir>`: drop a GLB → auto analyze/optimize (debounced, own outputs excluded); verified live
 - [x] Scaffold auto-framing via `<Bounds fit clip observe>`. Deferred: env presets, `<model-viewer>`/USDZ AR export
-- [ ] Meshy surface area: remesh + retexture endpoints, auto-rigging passthrough, account balance check
+- [x] Meshy surface area: remesh + retexture endpoints (client/CLI/MCP, mock-tested) + `xui meshy balance` (live-validated). Deferred: auto-rigging passthrough
 
 ## v0.4 — Distribution (make it findable)
 

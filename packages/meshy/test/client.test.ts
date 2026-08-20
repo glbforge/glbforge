@@ -88,3 +88,26 @@ describe('MeshyClient', () => {
     await expect(client.downloadModel(task, 'fbx')).rejects.toThrow(/available: glb/);
   });
 });
+
+describe('remesh / retexture / balance', () => {
+  it('creates a remesh task against the v1 endpoint', async () => {
+    const { client, fetch } = makeClient([json({ result: 'rm_1' })]);
+    const id = await client.createRemesh({ input_task_id: 't1', topology: 'quad', target_polycount: 30000 });
+    expect(id).toBe('rm_1');
+    expect((fetch.mock.calls[0] as [string])[0]).toBe('https://api.meshy.ai/openapi/v1/remesh');
+  });
+
+  it('creates a retexture task and polls it under the retexture kind', async () => {
+    const done = { id: 'rt_1', status: 'SUCCEEDED', progress: 100 };
+    const { client, fetch } = makeClient([json({ result: 'rt_1' }), json(done)]);
+    const id = await client.createRetexture({ input_task_id: 't1', text_style_prompt: 'bronze' });
+    const task = await client.waitForTask('retexture', id, { pollIntervalMs: 1 });
+    expect(task.status).toBe('SUCCEEDED');
+    expect((fetch.mock.calls[1] as [string])[0]).toBe('https://api.meshy.ai/openapi/v1/retexture/rt_1');
+  });
+
+  it('reads the credit balance', async () => {
+    const { client } = makeClient([json({ balance: 420 })]);
+    expect(await client.getBalance()).toBe(420);
+  });
+});

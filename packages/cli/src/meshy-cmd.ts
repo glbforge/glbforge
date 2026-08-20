@@ -129,6 +129,47 @@ export function registerMeshyCommands(
     });
 
   meshy
+    .command('remesh')
+    .description('Retopologize a finished task (quad topology, polycount target).')
+    .argument('<taskId>', 'a SUCCEEDED image-to-3d / text-to-3d task id')
+    .option('--topology <t>', 'quad | triangle', 'quad')
+    .option('--polycount <n>', 'target polycount', (v) => parseInt(v, 10))
+    .option('-o, --out <file>', 'output GLB path', 'meshy-remeshed.glb')
+    .action(async (taskId: string, opts: { topology: 'quad' | 'triangle'; polycount?: number; out: string }) => {
+      const client = new MeshyClient();
+      const id = await client.createRemesh({
+        input_task_id: taskId, topology: opts.topology, target_polycount: opts.polycount,
+      });
+      console.log(`  task ${id}`);
+      const task = await client.waitForTask('remesh', id, { onProgress: progressLine });
+      await downloadTo(client, task, opts.out);
+    });
+
+  meshy
+    .command('retexture')
+    .description('Re-texture a finished task from a style prompt.')
+    .argument('<taskId>', 'a SUCCEEDED task id')
+    .argument('<style>', 'style prompt, e.g. "weathered bronze statue"')
+    .option('--pbr', 'generate PBR maps')
+    .option('-o, --out <file>', 'output GLB path', 'meshy-retextured.glb')
+    .action(async (taskId: string, style: string, opts: { pbr?: boolean; out: string }) => {
+      const client = new MeshyClient();
+      const id = await client.createRetexture({
+        input_task_id: taskId, text_style_prompt: style, enable_pbr: opts.pbr,
+      });
+      console.log(`  task ${id}`);
+      const task = await client.waitForTask('retexture', id, { onProgress: progressLine });
+      await downloadTo(client, task, opts.out);
+    });
+
+  meshy
+    .command('balance')
+    .description('Show remaining Meshy credits.')
+    .action(async () => {
+      console.log(`  ${await new MeshyClient().getBalance()} credits`);
+    });
+
+  meshy
     .command('status')
     .description('Check a task.')
     .argument('<taskId>')

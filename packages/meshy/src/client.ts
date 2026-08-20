@@ -1,6 +1,8 @@
 import type {
   ImageTo3DParams,
   MeshyTask,
+  RemeshParams,
+  RetextureParams,
   TaskKind,
   TextTo3DPreviewParams,
   TextTo3DRefineParams,
@@ -30,6 +32,8 @@ export interface MeshyClientOptions {
 const TASK_PATHS: Record<TaskKind, string> = {
   'text-to-3d': '/openapi/v2/text-to-3d',
   'image-to-3d': '/openapi/v1/image-to-3d',
+  remesh: '/openapi/v1/remesh',
+  retexture: '/openapi/v1/retexture',
 };
 
 export class MeshyClient {
@@ -108,6 +112,24 @@ export class MeshyClient {
       params,
     );
     return res.result;
+  }
+
+  /** Retopologize a finished task's model (quad topology, polycount targets). */
+  async createRemesh(params: RemeshParams): Promise<string> {
+    const res = await this.request<{ result: string }>('POST', TASK_PATHS.remesh, params);
+    return res.result;
+  }
+
+  /** Re-texture a finished task's model from a style prompt or reference image. */
+  async createRetexture(params: RetextureParams): Promise<string> {
+    const res = await this.request<{ result: string }>('POST', TASK_PATHS.retexture, params);
+    return res.result;
+  }
+
+  /** Remaining Meshy credits. */
+  async getBalance(): Promise<number> {
+    const res = await this.request<{ balance: number }>('GET', '/openapi/v1/balance');
+    return res.balance;
   }
 
   async getTask(kind: TaskKind, id: string): Promise<MeshyTask> {

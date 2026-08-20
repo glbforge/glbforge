@@ -33,11 +33,26 @@ export interface ExtrudeResult {
 
 const TRACE_MAX = 1024; // tracing resolution cap; texture keeps up to 2048
 
-/** Turn a logo/graphic image (PNG/JPEG/WebP) into an extruded 3D GLB document. */
+/**
+ * Turn a logo/graphic image into an extruded 3D GLB document.
+ * Accepts PNG/JPEG/WebP — and SVG, which sharp rasterizes at high density
+ * before tracing (the marching-squares grid is the accuracy limit either
+ * way, so rasterized vectors lose nothing at trace resolution).
+ */
 export async function extrudeImage(
   imageBytes: Uint8Array,
   opts: ExtrudeOptions = {},
 ): Promise<ExtrudeResult> {
+  // SVG inputs get rasterized generously so the trace grid is saturated.
+  const isSvg = looksLikeSvg(imageBytes);
+  if (isSvg) {
+    imageBytes = new Uint8Array(
+      await sharp(Buffer.from(imageBytes), { density: 300 })
+        .resize(TRACE_MAX * 2, TRACE_MAX * 2, { fit: 'inside', withoutEnlargement: false })
+        .png()
+        .toBuffer(),
+    );
+  }
   const meta = await sharp(imageBytes).metadata();
   const hasAlpha = meta.hasAlpha ?? false;
   const mode = opts.mode ?? (hasAlpha ? 'alpha' : 'luma');
@@ -143,4 +158,13 @@ export async function extrudeImage(
   doc.getRoot().getAsset().generator = 'xui extrude';
 
   return { doc, stats: { ...geo.stats, mode, traceWidth: tw, traceHeight: th } };
+}
+
+/** Cheap SVG sniff: XML/SVG tag near the start of the buffer. */
+function looksLikeSvg(bytes: Uint8Array): boolean {
+  const head = new TextDecoder('utf-8', { fatal: false })
+    .decode(bytes.slice(0, 512))
+    .trimStart()
+    .toLowerCase();
+  return head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'));
 }
