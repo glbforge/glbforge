@@ -72,7 +72,7 @@ const json = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
 });
 
-const server = new McpServer({ name: 'glbforge', version: '0.2.0' });
+const server = new McpServer({ name: 'glbforge', version: '0.3.0' });
 
 server.registerTool(
   'list_profiles',
