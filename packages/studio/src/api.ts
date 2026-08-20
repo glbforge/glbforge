@@ -164,7 +164,13 @@ function triggerDownload(blob: Blob, filename: string): void {
 export interface CloudUser { login: string; credits: number }
 
 export const cloud = {
-  loginUrl: '/api/auth/login',
+  loginUrl: (provider: 'github' | 'google' = 'github') => `/api/auth/login?provider=${provider}`,
+  providers: async (): Promise<{ github: boolean; google: boolean }> => {
+    try {
+      const res = await fetch('/api/auth/providers', { signal: AbortSignal.timeout(4000) });
+      return res.ok ? res.json() : { github: false, google: false };
+    } catch { return { github: false, google: false }; }
+  },
   me: async (): Promise<{ available: boolean; user: CloudUser | null }> => {
     try {
       const res = await fetch('/api/auth/me', { signal: AbortSignal.timeout(4000) });

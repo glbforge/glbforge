@@ -23,6 +23,7 @@ export default function App() {
 
   const [mode, setMode] = useState<'remote' | 'local' | null>(null);
   const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
+  const [providers, setProviders] = useState<{ github: boolean; google: boolean }>({ github: false, google: false });
   const refreshCloud = useCallback(() => cloud.me().then(setCloudAuth).catch(() => {}), []);
   useEffect(() => {
     detectBackend().then(async (detected) => {
@@ -35,6 +36,7 @@ export default function App() {
         const auth = await cloud.me();
         setCloudAuth(auth);
         setMeshy(auth.available);
+        if (auth.available) cloud.providers().then(setProviders).catch(() => {});
       }
       await refresh();
       const list = await api.list();
@@ -77,7 +79,7 @@ export default function App() {
     try {
       if (getBackend() === 'local') {
         if (!cloudAuth.user) {
-          location.href = cloud.loginUrl;
+          location.href = cloud.loginUrl('github');
           return;
         }
         const { taskId, kind } = await cloud.genImage(bytes, mime, pbr);
@@ -136,7 +138,10 @@ export default function App() {
               <button className="acct-btn" onClick={() => void cloud.logout().then(refreshCloud)}>out</button>
             </div>
           ) : (
-            <a className="acct-signin" href={cloud.loginUrl}>Sign in with GitHub to generate</a>
+            <span className="signin-row">
+              {providers.github && <a className="acct-signin" href={cloud.loginUrl('github')}>Sign in with GitHub</a>}
+              {providers.google && <a className="acct-signin" href={cloud.loginUrl('google')}>Sign in with Google</a>}
+            </span>
           )
         )}
         {busy && <div className="busy">⚙ {busy}…</div>}

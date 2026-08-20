@@ -106,7 +106,7 @@ export function AssetRail(props: {
             <option value="rubber">rubber</option>
           </select>
           <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr); setPending(null); }}>
-            ✨ Generate with Meshy <span className="choice-sub">textured model · ~5–10 min · credits</span>
+            ✨ Generate with Meshy <span className="choice-sub">textured model · ~5–10 min · {pbr ? '3 credits (PBR)' : '2 credits'}</span>
           </button>
           <label className="check">
             <input type="checkbox" checked={pbr} onChange={(e) => setPbr(e.target.checked)} />

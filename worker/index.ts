@@ -19,6 +19,8 @@ interface Env {
   DB?: D1Database;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
   MESHY_API_KEY?: string;
   STRIPE_SECRET_KEY?: string;
@@ -35,11 +37,13 @@ interface D1Database {
   exec(sql: string): Promise<unknown>;
 }
 
-const SIGNUP_CREDITS = 3;
+const SIGNUP_CREDITS = 6;
 const MESHY_BALANCE_FLOOR = 100;
+// Generation costs in GLBForge credits, tiered by upstream cost drivers.
+const GEN_COST = { textured: 2, pbr: 3 };
 const PACKS: Record<string, { credits: number; usd: number; label: string }> = {
-  starter: { credits: 10, usd: 500, label: 'GLBForge — 10 generations' },
-  studio: { credits: 40, usd: 1500, label: 'GLBForge — 40 generations' },
+  starter: { credits: 20, usd: 500, label: 'GLBForge — 20 credits' },
+  studio: { credits: 80, usd: 1500, label: 'GLBForge — 80 credits' },
 };
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -59,23 +63,27 @@ async function hmac(secret: string, message: string): Promise<string> {
   );
 }
 
-async function makeSession(env: Env, uid: number, login: string): Promise<string> {
-  const exp = Date.now() + 30 * 24 * 3600 * 1000;
-  const body = `${uid}.${login}.${exp}`;
-  return `${body}.${await hmac(env.SESSION_SECRET!, body)}`;
+function b64url(s: string): string {
+  return btoa(s).replace(/[+/=]/g, (c) => ({ '+': '-', '/': '_', '=': '' })[c]!);
 }
 
-async function readSession(env: Env, request: Request): Promise<{ uid: number; login: string } | null> {
+async function makeSession(env: Env, uid: string, login: string): Promise<string> {
+  const payload = b64url(JSON.stringify({ uid, login, exp: Date.now() + 30 * 24 * 3600 * 1000 }));
+  return `${payload}.${await hmac(env.SESSION_SECRET!, payload)}`;
+}
+
+async function readSession(env: Env, request: Request): Promise<{ uid: string; login: string } | null> {
   if (!env.SESSION_SECRET) return null;
-  const cookie = request.headers.get('cookie') ?? '';
-  const match = /(?:^|;\s*)gf_s=([^;]+)/.exec(cookie);
+  const match = /(?:^|;\s*)gf_s=([^;]+)/.exec(request.headers.get('cookie') ?? '');
   if (!match) return null;
-  const parts = match[1].split('.');
-  if (parts.length !== 4) return null;
-  const [uid, login, exp, sig] = parts;
-  if (Number(exp) < Date.now()) return null;
-  if ((await hmac(env.SESSION_SECRET, `${uid}.${login}.${exp}`)) !== sig) return null;
-  return { uid: Number(uid), login };
+  const [payload, sig] = match[1].split('.');
+  if (!payload || !sig) return null;
+  if ((await hmac(env.SESSION_SECRET, payload)) !== sig) return null;
+  try {
+    const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { uid: string; login: string; exp: number };
+    if (data.exp < Date.now()) return null;
+    return { uid: data.uid, login: data.login };
+  } catch { return null; }
 }
 
 const sessionCookie = (value: string, maxAge: number) =>
@@ -83,10 +91,14 @@ const sessionCookie = (value: string, maxAge: number) =>
 
 // --- storage ---------------------------------------------------------------
 async function ensureSchema(db: D1Database): Promise<void> {
+  // users_v2 keys are provider-scoped strings ('gh:123', 'gg:1042...') so
+  // multiple identity providers can't collide. v1 rows migrate as GitHub.
   await db.exec(
     'CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, login TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);' +
-    'CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL, created_at INTEGER NOT NULL);' +
-    'CREATE TABLE IF NOT EXISTS purchases (session_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, credits INTEGER NOT NULL, created_at INTEGER NOT NULL);',
+    'CREATE TABLE IF NOT EXISTS users_v2 (id TEXT PRIMARY KEY, login TEXT NOT NULL, credits INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);' +
+    "INSERT OR IGNORE INTO users_v2 SELECT 'gh:' || id, login, credits, created_at FROM users;" +
+    'CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, created_at INTEGER NOT NULL);' +
+    'CREATE TABLE IF NOT EXISTS purchases (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, credits INTEGER NOT NULL, created_at INTEGER NOT NULL);',
   );
 }
 
@@ -104,7 +116,7 @@ async function meshy(env: Env, method: string, path: string, body?: unknown): Pr
 }
 
 // --- stripe (form-encoded REST; no SDK needed on workers) -------------------
-async function stripeCheckout(env: Env, uid: number, pack: string, origin: string): Promise<string> {
+async function stripeCheckout(env: Env, uid: string, pack: string, origin: string): Promise<string> {
   const p = PACKS[pack];
   const params = new URLSearchParams({
     mode: 'payment',
@@ -114,7 +126,7 @@ async function stripeCheckout(env: Env, uid: number, pack: string, origin: strin
     'line_items[0][price_data][currency]': 'usd',
     'line_items[0][price_data][unit_amount]': String(p.usd),
     'line_items[0][price_data][product_data][name]': p.label,
-    'metadata[uid]': String(uid),
+    'metadata[uid]': uid,
     'metadata[credits]': String(p.credits),
   });
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
@@ -159,57 +171,96 @@ export default {
     }
 
     try {
-      // ---- auth ----
+      // ---- auth (provider-aware: github | google) ----
+      if (path === '/api/auth/providers') {
+        return json({
+          github: !!env.GITHUB_CLIENT_ID,
+          google: !!env.GOOGLE_CLIENT_ID,
+        });
+      }
+
       if (path === '/api/auth/login') {
-        if (!env.GITHUB_CLIENT_ID) return json({ error: 'auth not configured yet' }, 503);
+        const provider = url.searchParams.get('provider') === 'google' ? 'google' : 'github';
         const state = crypto.randomUUID();
-        const target = new URL('https://github.com/login/oauth/authorize');
-        target.searchParams.set('client_id', env.GITHUB_CLIENT_ID);
+        let target: URL;
+        if (provider === 'google') {
+          if (!env.GOOGLE_CLIENT_ID) return json({ error: 'Google sign-in not configured yet' }, 503);
+          target = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+          target.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);
+          target.searchParams.set('response_type', 'code');
+          target.searchParams.set('scope', 'openid email profile');
+        } else {
+          if (!env.GITHUB_CLIENT_ID) return json({ error: 'auth not configured yet' }, 503);
+          target = new URL('https://github.com/login/oauth/authorize');
+          target.searchParams.set('client_id', env.GITHUB_CLIENT_ID);
+        }
         target.searchParams.set('redirect_uri', `${url.origin}/api/auth/callback`);
         target.searchParams.set('state', state);
         return new Response(null, {
           status: 302,
           headers: {
             location: target.toString(),
-            'set-cookie': `gf_o=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,
+            'set-cookie': `gf_o=${state}:${provider}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`,
           },
         });
       }
 
       if (path === '/api/auth/callback') {
-        if (!env.DB || !env.GITHUB_CLIENT_SECRET || !env.SESSION_SECRET) {
-          return json({ error: 'auth not configured yet' }, 503);
-        }
+        if (!env.DB || !env.SESSION_SECRET) return json({ error: 'auth not configured yet' }, 503);
         const state = url.searchParams.get('state');
-        const cookieState = /(?:^|;\s*)gf_o=([^;]+)/.exec(request.headers.get('cookie') ?? '')?.[1];
+        const cookieVal = /(?:^|;\s*)gf_o=([^;]+)/.exec(request.headers.get('cookie') ?? '')?.[1] ?? '';
+        const [cookieState, provider = 'github'] = cookieVal.split(':');
         if (!state || state !== cookieState) return json({ error: 'state mismatch — retry sign-in' }, 400);
 
-        const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-          method: 'POST',
-          headers: { accept: 'application/json', 'content-type': 'application/json' },
-          body: JSON.stringify({
-            client_id: env.GITHUB_CLIENT_ID,
-            client_secret: env.GITHUB_CLIENT_SECRET,
-            code: url.searchParams.get('code'),
-          }),
-        });
-        const token = (await tokenRes.json()) as { access_token?: string };
-        if (!token.access_token) return json({ error: 'GitHub sign-in failed' }, 401);
-        const userRes = await fetch('https://api.github.com/user', {
-          headers: { authorization: `Bearer ${token.access_token}`, 'user-agent': 'glbforge' },
-        });
-        const ghUser = (await userRes.json()) as { id: number; login: string };
+        let uid: string, login: string;
+        if (provider === 'google') {
+          const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              client_id: env.GOOGLE_CLIENT_ID!,
+              client_secret: env.GOOGLE_CLIENT_SECRET!,
+              code: url.searchParams.get('code') ?? '',
+              grant_type: 'authorization_code',
+              redirect_uri: `${url.origin}/api/auth/callback`,
+            }),
+          });
+          const token = (await tokenRes.json()) as { access_token?: string };
+          if (!token.access_token) return json({ error: 'Google sign-in failed' }, 401);
+          const info = (await (await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+            headers: { authorization: `Bearer ${token.access_token}` },
+          })).json()) as { sub: string; email?: string; name?: string };
+          uid = `gg:${info.sub}`;
+          login = info.email ?? info.name ?? `google-${info.sub.slice(0, 8)}`;
+        } else {
+          const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: { accept: 'application/json', 'content-type': 'application/json' },
+            body: JSON.stringify({
+              client_id: env.GITHUB_CLIENT_ID,
+              client_secret: env.GITHUB_CLIENT_SECRET,
+              code: url.searchParams.get('code'),
+            }),
+          });
+          const token = (await tokenRes.json()) as { access_token?: string };
+          if (!token.access_token) return json({ error: 'GitHub sign-in failed' }, 401);
+          const ghUser = (await (await fetch('https://api.github.com/user', {
+            headers: { authorization: `Bearer ${token.access_token}`, 'user-agent': 'glbforge' },
+          })).json()) as { id: number; login: string };
+          uid = `gh:${ghUser.id}`;
+          login = ghUser.login;
+        }
 
         await ensureSchema(env.DB);
         await env.DB.prepare(
-          'INSERT INTO users (id, login, credits, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET login = excluded.login',
-        ).bind(ghUser.id, ghUser.login, SIGNUP_CREDITS, Date.now()).run();
+          'INSERT INTO users_v2 (id, login, credits, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET login = excluded.login',
+        ).bind(uid, login, SIGNUP_CREDITS, Date.now()).run();
 
         return new Response(null, {
           status: 302,
           headers: {
             location: '/studio/',
-            'set-cookie': sessionCookie(await makeSession(env, ghUser.id, ghUser.login), 30 * 24 * 3600),
+            'set-cookie': sessionCookie(await makeSession(env, uid, login), 30 * 24 * 3600),
           },
         });
       }
@@ -218,7 +269,7 @@ export default {
         const session = await readSession(env, request);
         if (!session || !env.DB) return json({ user: null });
         await ensureSchema(env.DB);
-        const row = await env.DB.prepare('SELECT login, credits FROM users WHERE id = ?')
+        const row = await env.DB.prepare('SELECT login, credits FROM users_v2 WHERE id = ?')
           .bind(session.uid).first<{ login: string; credits: number }>();
         return json({ user: row ? { login: row.login, credits: row.credits } : null });
       }
@@ -240,11 +291,12 @@ export default {
           return json({ error: 'generation is temporarily unavailable — try again later' }, 503);
         }
 
-        // Atomic decrement: only succeeds while credits remain.
+        // Tiered cost; atomic decrement only succeeds with enough balance.
+        const cost = url.searchParams.get('pbr') === 'true' ? GEN_COST.pbr : GEN_COST.textured;
         await ensureSchema(env.DB);
-        const dec = await env.DB.prepare('UPDATE users SET credits = credits - 1 WHERE id = ? AND credits > 0')
-          .bind(session.uid).run();
-        if (dec.meta.changes === 0) return json({ error: 'out of credits' }, 402);
+        const dec = await env.DB.prepare('UPDATE users_v2 SET credits = credits - ? WHERE id = ? AND credits >= ?')
+          .bind(cost, session.uid, cost).run();
+        if (dec.meta.changes === 0) return json({ error: `needs ${cost} credits — buy more or drop PBR` }, 402);
 
         try {
           const mime = url.searchParams.get('mime') ?? 'image/png';
@@ -263,10 +315,10 @@ export default {
           if (!created.result) throw new Error(created.message ?? 'Meshy refused the task');
           await env.DB.prepare('INSERT INTO tasks (task_id, user_id, kind, created_at) VALUES (?, ?, ?, ?)')
             .bind(created.result, session.uid, 'image-to-3d', Date.now()).run();
-          return json({ taskId: created.result, kind: 'image-to-3d' });
+          return json({ taskId: created.result, kind: 'image-to-3d', cost });
         } catch (err) {
           // Refund on any failure after the decrement.
-          await env.DB.prepare('UPDATE users SET credits = credits + 1 WHERE id = ?').bind(session.uid).run();
+          await env.DB.prepare('UPDATE users_v2 SET credits = credits + ? WHERE id = ?').bind(cost, session.uid).run();
           throw err;
         }
       }
@@ -324,7 +376,7 @@ export default {
         };
         if (event.type === 'checkout.session.completed') {
           const { id, metadata } = event.data.object;
-          const uid = Number(metadata?.uid), credits = Number(metadata?.credits);
+          const uid = metadata?.uid ?? '', credits = Number(metadata?.credits);
           if (uid && credits) {
             await ensureSchema(env.DB);
             // Idempotent: purchases.session_id is the primary key.
@@ -332,7 +384,7 @@ export default {
               'INSERT OR IGNORE INTO purchases (session_id, user_id, credits, created_at) VALUES (?, ?, ?, ?)',
             ).bind(id, uid, credits, Date.now()).run();
             if (inserted.meta.changes === 1) {
-              await env.DB.prepare('UPDATE users SET credits = credits + ? WHERE id = ?')
+              await env.DB.prepare('UPDATE users_v2 SET credits = credits + ? WHERE id = ?')
                 .bind(credits, uid).run();
             }
           }
