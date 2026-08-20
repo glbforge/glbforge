@@ -66,7 +66,14 @@ export async function startUiServer(opts: {
 }): Promise<void> {
   const app = express();
   app.use(express.json());
-  const raw = express.raw({ type: '*/*', limit: '1gb' });
+  // Parse raw bodies regardless of Content-Type: browsers send none for
+  // ArrayBuffer fetch bodies, and body-parser skips typeless requests.
+  const raw = express.raw({ type: () => true, limit: '1gb' });
+  const requireBody = (req: express.Request, res: express.Response): boolean => {
+    if (req.body?.length > 0) return true;
+    res.status(400).json({ error: 'Empty upload — the request body had no bytes. Refresh the Studio tab if it has been open a while.' });
+    return false;
+  };
 
   app.get('/api/profiles', (_req, res) => res.json(PROFILES));
   app.get('/api/assets', (_req, res) => res.json([...assets.values()].map(summary)));
@@ -82,12 +89,14 @@ export async function startUiServer(opts: {
   });
 
   app.post('/api/assets', raw, async (req, res) => {
+    if (!requireBody(req, res)) return;
     try {
       const name = String(req.query.name ?? 'asset.glb');
       const profile = String(req.query.profile ?? 'mobile-hero');
       const asset = await ingest(name, new Uint8Array(req.body), profile);
       res.json({ ...summary(asset), report: asset.report });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -125,11 +134,13 @@ export async function startUiServer(opts: {
       );
       res.json({ ...summary(variant), report: variant.report });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 
   app.post('/api/extrude', raw, async (req, res) => {
+    if (!requireBody(req, res)) return;
     try {
       const name = String(req.query.name ?? 'image.png');
       const profile = String(req.query.profile ?? 'mobile-hero');
@@ -141,6 +152,7 @@ export async function startUiServer(opts: {
       const asset = await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', outBytes, profile);
       res.json({ ...summary(asset), report: asset.report });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -157,6 +169,7 @@ export async function startUiServer(opts: {
         .set('Content-Disposition', `attachment; filename="${asset.name.replace(/\.glb$/i, '')}.stl"`)
         .send(Buffer.from(stl));
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -166,6 +179,7 @@ export async function startUiServer(opts: {
     res.json({ available: !!process.env.MESHY_API_KEY }),
   );
   app.post('/api/meshy/image', raw, async (req, res) => {
+    if (!requireBody(req, res)) return;
     try {
       const client = new MeshyClient();
       const mime = String(req.query.mime ?? 'image/png');
@@ -176,6 +190,7 @@ export async function startUiServer(opts: {
       });
       res.json({ taskId, kind: 'image-to-3d' });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -184,6 +199,7 @@ export async function startUiServer(opts: {
       const task = await new MeshyClient().getTask(req.params.kind as TaskKind, req.params.id);
       res.json({ id: task.id, status: task.status, progress: task.progress, error: task.task_error?.message ?? null });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -195,6 +211,7 @@ export async function startUiServer(opts: {
       const asset = await ingest(`meshy-${task.id.slice(0, 8)}.glb`, bytes, 'mobile-hero');
       res.json({ ...summary(asset), report: asset.report });
     } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
