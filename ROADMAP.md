@@ -36,7 +36,8 @@ commodity; the gap between "generated" and "shipped" is the product.
 
 ## v0.4 — Distribution (make it findable)
 
-- [ ] npm publish (`glbforge` bin via npx; check scope availability — @xui may be taken, decide name once)
+- [x] Name decided: **GLBForge** — glbforge.dev registered (Cloudflare); npm, GitHub org, and .com/.ai were all free at decision time
+- [x] npm publish v0.1.0: `glbforge` + `@glbforge/core|meshy|mcp` all live and public (meshy/mcp sat in npm security review ~30min, then cleared). Cold-verified from the public registry: `npx glbforge analyze` and `npx @glbforge/mcp` both work
 - [ ] Per-package READMEs, docs site or GitHub README gallery with before/after numbers and screenshots
 - [ ] Submit MCP server to registries / awesome-mcp lists; Meshy community (Discord) showcase
 - [x] **GitHub Action** (`uses: glbforge/glbforge@main`): analyzes changed GLB/glTF in PRs, posts a sticky report-card comment, gates on budget. Live-tested on PR #1 — score table + findings + fix hint posted by the bot
