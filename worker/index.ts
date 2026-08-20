@@ -206,7 +206,7 @@ export default {
       // ---- auth (provider-aware: github | google) ----
       if (path === '/api/auth/providers') {
         return json({
-          rev: 'r2', // bump on worker changes to verify what's deployed
+          rev: 'r3', // bump on worker changes to verify what's deployed
           github: !!env.GITHUB_CLIENT_ID,
           google: !!env.GOOGLE_CLIENT_ID,
           generators: {
@@ -370,6 +370,7 @@ export default {
             const model = FAL_MODELS[provider];
             const submitRes = await fal(env, 'POST', `/${model}`, {
               image_url: dataUri, input_image_url: dataUri, input_image_urls: [dataUri],
+              textured_mesh: true, texture: true,
             });
             const submitted = (await submitRes.json()) as { request_id?: string; detail?: string };
             if (!submitted.request_id) throw new Error(String(submitted.detail ?? `${provider} refused the task`));

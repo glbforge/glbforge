@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type AssetDetail, type AssetSummary } from '../api';
+import { api, getBackend, type AssetDetail, type AssetSummary } from '../api';
 
 const mb = (bytes: number) => (bytes / 1048576).toFixed(1) + 'MB';
 const num = (value: number) => value.toLocaleString('en-US');
@@ -100,10 +100,16 @@ export function Inspector(props: {
             {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
-        <label className="check">
-          <input type="checkbox" checked={ktx2} onChange={(e) => setKtx2(e.target.checked)} />
-          KTX2 textures (~8× less GPU memory)
-        </label>
+        {getBackend() === 'remote' ? (
+          <label className="check">
+            <input type="checkbox" checked={ktx2} onChange={(e) => setKtx2(e.target.checked)} />
+            KTX2 textures (~8× less GPU memory)
+          </label>
+        ) : (
+          <div style={{ color: 'var(--dim)', fontSize: 11 }}>
+            KTX2 (~8× less GPU memory) needs native encoders — <code>npx glbforge ui</code>
+          </div>
+        )}
         <button onClick={() => void props.onRun(`optimizing ${asset.name}`, () => api.optimize(asset.id, { profile, ktx2 }))}>
           ⚒ Optimize for {profile}
         </button>

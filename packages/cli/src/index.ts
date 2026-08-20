@@ -220,10 +220,11 @@ program
   .description('Image → true 3D via open models on fal.ai (Hunyuan3D, TRELLIS, TripoSR). Needs FAL_KEY.')
   .argument('<image>', 'path to the source image')
   .option('--model <name>', 'hunyuan | trellis | triposr', 'hunyuan')
+  .option('--no-texture', 'geometry only (faster; Hunyuan skips its paint stage)')
   .option('-o, --out <file>', 'output GLB path', 'gen-output.glb')
   .option('--optimize', 'run glbforge optimize on the result')
   .option('-p, --profile <name>', 'budget profile for --optimize', 'mobile-hero')
-  .action(async (image: string, opts: { model: string; out: string; optimize?: boolean; profile: string }) => {
+  .action(async (image: string, opts: { model: string; out: string; optimize?: boolean; profile: string; texture: boolean }) => {
     const { FAL_MODELS, FalClient } = await import('@glbforge/meshy');
     const model = FAL_MODELS[opts.model as keyof typeof FAL_MODELS];
     if (!model) throw new Error(`Unknown model "${opts.model}" (hunyuan | trellis | triposr)`);
@@ -233,7 +234,7 @@ program
     const bytes = await readFile(image);
 
     const client = new FalClient();
-    const requestId = await client.submit(model, `data:${mime};base64,${bytes.toString('base64')}`);
+    const requestId = await client.submit(model, `data:${mime};base64,${bytes.toString('base64')}`, { textured: opts.texture });
     console.log(`  ${model} request ${requestId}`);
     for (;;) {
       const st = await client.status(model, requestId);
