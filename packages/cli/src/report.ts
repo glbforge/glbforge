@@ -1,5 +1,5 @@
 import pc from 'picocolors';
-import type { AnalysisResult } from '@xui/core';
+import type { AnalysisResult } from '@glbforge/core';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
 const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1) + 'MB';

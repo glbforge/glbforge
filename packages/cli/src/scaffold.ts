@@ -12,7 +12,7 @@ export async function scaffoldViewer(glbPath: string, outDir: string): Promise<v
   await mkdir(join(outDir, 'public'), { recursive: true });
   await cp(glbPath, join(outDir, 'public', 'model.glb'));
 
-  // Sibling LOD files (from `xui optimize --lods`) ride along automatically.
+  // Sibling LOD files (from `glbforge optimize --lods`) ride along automatically.
   const lodBase = glbPath.replace(/\.glb$/i, '');
   const lods: number[] = [];
   for (let i = 1; existsSync(`${lodBase}.lod${i}.glb`); i++) {
@@ -67,7 +67,7 @@ export default defineConfig({ plugins: [react()] });
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>XUI Viewer</title>
+    <title>GLBForge Viewer</title>
     <style>html, body, #root { margin: 0; height: 100%; background: #101014; }</style>
   </head>
   <body>
@@ -154,7 +154,7 @@ function modelWithLods(lods: number[]): string {
   return `function Model() {
   const gl = useThree((state) => state.gl);
   const extend = (loader: any) => loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
-  // Primary + LOD chain. LOD files are geometry-only (xui optimize --lods
+  // Primary + LOD chain. LOD files are geometry-only (glbforge optimize --lods
   // strips materials), so the primary's materials are shared into them below.
   const gltfs = useGLTF([${urls.join(', ')}], true, true, extend);
   const [full, ...lods] = gltfs;

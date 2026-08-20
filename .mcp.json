@@ -1,8 +1,10 @@
 {
   "mcpServers": {
-    "xui": {
+    "glbforge": {
       "command": "node",
-      "args": ["packages/mcp/dist/index.js"]
+      "args": [
+        "packages/mcp/dist/index.js"
+      ]
     }
   }
 }

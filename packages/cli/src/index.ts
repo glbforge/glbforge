@@ -16,7 +16,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials, toStl } from '@xui/core';
+import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials, toStl } from '@glbforge/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -26,8 +26,8 @@ loadDotEnv();
 
 /**
  * Shared analyze -> optimize -> write -> re-analyze pipeline; returns
- * whether the written asset passes the profile. Used by `xui optimize`
- * and by `xui meshy … --optimize`.
+ * whether the written asset passes the profile. Used by `glbforge optimize`
+ * and by `glbforge meshy … --optimize`.
  */
 async function optimizeFile(
   input: string,
@@ -96,8 +96,8 @@ async function optimizeFile(
 }
 
 const program = new Command()
-  .name('xui')
-  .description('Make AI-generated 3D assets web-ready: analyze, optimize, scaffold.')
+  .name('glbforge')
+  .description('GLBForge — make AI-generated 3D assets web-ready: analyze, optimize, extrude, scaffold.')
   .version('0.1.0');
 
 program

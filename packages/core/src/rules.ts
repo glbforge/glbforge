@@ -19,7 +19,7 @@ const RULES: Record<string, Rule> = {
       ruleId: 'perf/triangle-budget',
       severity: 'error',
       message: `${fmt(triangles)} triangles exceeds the ${r.profile.name} budget of ${fmt(max)} (${(triangles / max).toFixed(1)}x over).`,
-      suggestion: `Simplify to ~${fmt(max)} triangles (xui optimize applies meshopt simplification), or switch to a profile with more headroom.`,
+      suggestion: `Simplify to ~${fmt(max)} triangles (glbforge optimize applies meshopt simplification), or switch to a profile with more headroom.`,
       data: { triangles, max },
     };
   },

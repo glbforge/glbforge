@@ -1,16 +1,16 @@
-# XUI Roadmap
+# GLBForge Roadmap
 
 Mission: **the web-readiness layer for AI-generated 3D** — generation is a
 commodity; the gap between "generated" and "shipped" is the product.
 
 ## ✅ Done (v0.1 — validated end to end)
 
-- [x] `@xui/core` analyze: stats, welded-space topology, 14 named lint rules, 3 budget profiles
-- [x] `@xui/core` optimize: dedup → weld → simplify (error ladder) → smooth normals → WebP textures → meshopt
-- [x] `@xui/core` extrude: raster trace → bevel (watertight: clamp probes + crack stitching) → texture projection
-- [x] `@xui/cli`: analyze / optimize (+LODs) / extrude / scaffold / meshy, CI exit codes
-- [x] `@xui/meshy`: typed client, polling w/ backoff — all 3 generation paths live-validated
-- [x] `@xui/mcp`: 7 tools, validated via SDK client and in a live Claude Code session
+- [x] `@glbforge/core` analyze: stats, welded-space topology, 14 named lint rules, 3 budget profiles
+- [x] `@glbforge/core` optimize: dedup → weld → simplify (error ladder) → smooth normals → WebP textures → meshopt
+- [x] `@glbforge/core` extrude: raster trace → bevel (watertight: clamp probes + crack stitching) → texture projection
+- [x] `glbforge` CLI: analyze / optimize (+LODs) / extrude / scaffold / meshy, CI exit codes
+- [x] `@glbforge/meshy`: typed client, polling w/ backoff — all 3 generation paths live-validated
+- [x] `@glbforge/mcp`: 7 tools, validated via SDK client and in a live Claude Code session
 - [x] R3F viewer scaffold (offline-safe lighting, meshopt decoding)
 - [x] 13 tests incl. real Meshy fixtures + watertightness assertions
 
@@ -28,18 +28,18 @@ commodity; the gap between "generated" and "shipped" is the product.
 
 - [x] **KTX2/BasisU** texture option (`--ktx2` / `textureFormat: 'ktx2'`): basisu or toktx backend, ETC1S for color / UASTC for normals, KHR_texture_basisu required, scaffold ships the transcoder + KTX2Loader wiring. Measured: 63.8MB → 16.0MB GPU memory on the lucky-cat fixture
 - [x] **Runtime LODs in scaffold**: `--lods` files are now geometry-only (lod1 4.1MB→0.7MB, lod2 3.6MB→0.3MB); scaffold auto-detects `.lodN.glb` siblings and emits a `<Detailed>` viewer that shares the primary's materials at runtime (verified: 150k/40k/10k tris, all textured)
-- [x] **STL export** (`xui stl`, MCP `export_stl`): binary STL, mm-scaled, z-up, watertightness verdict in output. Verified: beveled logo → 70mm watertight keychain; lucky cat → 60mm figurine
+- [x] **STL export** (`glbforge stl`, MCP `export_stl`): binary STL, mm-scaled, z-up, watertightness verdict in output. Verified: beveled logo → 70mm watertight keychain; lucky cat → 60mm figurine
 - [x] SVG input for extrude: sharp rasterizes at high density into the existing trace pipeline (vector fidelity is trace-grid-limited either way); verified watertight on a test SVG
-- [x] `xui watch <dir>`: drop a GLB → auto analyze/optimize (debounced, own outputs excluded); verified live
+- [x] `glbforge watch <dir>`: drop a GLB → auto analyze/optimize (debounced, own outputs excluded); verified live
 - [x] Scaffold auto-framing via `<Bounds fit clip observe>`. Deferred: env presets, `<model-viewer>`/USDZ AR export
-- [x] Meshy surface area: remesh + retexture endpoints (client/CLI/MCP, mock-tested) + `xui meshy balance` (live-validated). Deferred: auto-rigging passthrough
+- [x] Meshy surface area: remesh + retexture endpoints (client/CLI/MCP, mock-tested) + `glbforge meshy balance` (live-validated). Deferred: auto-rigging passthrough
 
 ## v0.4 — Distribution (make it findable)
 
-- [ ] npm publish (`xui` bin via npx; check scope availability — @xui may be taken, decide name once)
+- [ ] npm publish (`glbforge` bin via npx; check scope availability — @xui may be taken, decide name once)
 - [ ] Per-package READMEs, docs site or GitHub README gallery with before/after numbers and screenshots
 - [ ] Submit MCP server to registries / awesome-mcp lists; Meshy community (Discord) showcase
-- [ ] **GitHub Action** (`xui-action`): PR comment with report-card diff when 3D assets change — the "Lighthouse CI" wedge into teams
+- [ ] **GitHub Action** (`glbforge-action`): PR comment with report-card diff when 3D assets change — the "Lighthouse CI" wedge into teams
 - [ ] Launch content: the numbers sell it (89MB→5.5MB, 40KB beveled logo). three.js forum, r/threejs, X creative-coding
 
 ## v1.0 — Product bets (choose after usage data)

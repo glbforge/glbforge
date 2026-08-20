@@ -1,9 +1,9 @@
 {
-  "name": "@xui/mcp",
+  "name": "@glbforge/mcp",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "xui-mcp": "dist/index.js"
+    "glbforge-mcp": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,8 +12,8 @@
   "dependencies": {
     "@gltf-transform/core": "^4.4.2",
     "@modelcontextprotocol/sdk": "^1.11.0",
-    "@xui/core": "workspace:*",
-    "@xui/meshy": "workspace:*",
+    "@glbforge/core": "workspace:*",
+    "@glbforge/meshy": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {

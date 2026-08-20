@@ -1,4 +1,6 @@
-# XUI — AI 3D Web Optimizer + Starter
+# GLBForge — the web-readiness layer for AI-generated 3D
+
+**glbforge.dev** · raw AI mesh in, shipped asset out
 
 Makes AI-generated 3D assets (Meshy, etc.) actually shippable on the web:
 **analyze → optimize → scaffold a viewer**, with performance budgets as a
@@ -6,12 +8,12 @@ CI-able contract.
 
 ## Status
 
-- ✅ `xui analyze` — budget report card + named lint rules
-- ✅ `xui optimize` — weld/simplify/LOD/compress to hit the budget
-- ✅ `xui scaffold` — emit a React Three Fiber viewer for the optimized asset
-- ✅ `xui meshy` — generate/download via Meshy REST API (image/text → 3D, `--optimize` glue)
-- ✅ MCP server wrapping all of the above (`@xui/mcp`, 6 tools)
-- ✅ `xui extrude` — deterministic logo/graphic → 3D (no AI, no credits): traces
+- ✅ `glbforge analyze` — budget report card + named lint rules
+- ✅ `glbforge optimize` — weld/simplify/LOD/compress to hit the budget
+- ✅ `glbforge scaffold` — emit a React Three Fiber viewer for the optimized asset
+- ✅ `glbforge meshy` — generate/download via Meshy REST API (image/text → 3D, `--optimize` glue)
+- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 6 tools)
+- ✅ `glbforge extrude` — deterministic logo/graphic → 3D (no AI, no credits): traces
   the silhouette (marching squares → Douglas-Peucker → earcut), extrudes it
   watertight, and projects the source image back on as the texture. For 2D
   artwork (logos, wordmarks) this beats image-to-3D generation outright:
@@ -46,10 +48,10 @@ EXT_meshopt_compression.
 
 | package     | purpose                                              |
 |-------------|------------------------------------------------------|
-| `@xui/core`  | pure analysis library: stats, topology, rules, budgets |
-| `@xui/cli`   | `xui` command-line interface                          |
-| `@xui/meshy` | typed Meshy REST client: tasks, polling w/ backoff, downloads |
-| `@xui/mcp`   | MCP server: analyze_glb, optimize_glb, meshy_create_task/status/download, list_profiles |
+| `@glbforge/core`  | pure analysis library: stats, topology, rules, budgets |
+| `glbforge` (CLI)   | `glbforge` command-line interface                          |
+| `@glbforge/meshy` | typed Meshy REST client: tasks, polling w/ backoff, downloads |
+| `@glbforge/mcp`   | MCP server: analyze_glb, optimize_glb, meshy_create_task/status/download, list_profiles |
 
 ## MCP server
 
@@ -57,7 +59,7 @@ EXT_meshopt_compression.
 `pnpm build`). For other clients:
 
 ```bash
-claude mcp add xui -- node /path/to/XUI/packages/mcp/dist/index.js
+claude mcp add glbforge -- node /path/to/XUI/packages/mcp/dist/index.js
 ```
 
 Generation tools are deliberately split into create/status/download — Meshy

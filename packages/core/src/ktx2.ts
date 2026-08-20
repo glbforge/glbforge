@@ -53,7 +53,7 @@ export async function ktx2Compress(
     .filter((t) => t.getMimeType() !== 'image/ktx2' && t.getImage());
   if (textures.length === 0) return 0;
 
-  const workDir = await mkdtemp(join(tmpdir(), 'xui-ktx2-'));
+  const workDir = await mkdtemp(join(tmpdir(), 'glbforge-ktx2-'));
   try {
     for (const [i, texture] of textures.entries()) {
       const slots = listTextureSlots(texture);

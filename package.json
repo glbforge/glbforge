@@ -1,5 +1,5 @@
 {
-  "name": "xui",
+  "name": "glbforge-monorepo",
   "private": true,
   "type": "module",
   "scripts": {

@@ -75,7 +75,7 @@ export function toStl(doc: Document, opts: StlOptions = {}): StlResult {
   const buffer = new ArrayBuffer(84 + triangles * 50);
   const view = new DataView(buffer);
   new Uint8Array(buffer).set(
-    new TextEncoder().encode('xui stl export (binary, mm)').slice(0, 80),
+    new TextEncoder().encode('glbforge stl export (binary, mm)').slice(0, 80),
   );
   view.setUint32(80, triangles, true);
 

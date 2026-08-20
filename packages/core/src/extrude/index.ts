@@ -155,7 +155,7 @@ export async function extrudeImage(
   const mesh = doc.createMesh('extrusion').addPrimitive(prim);
   const node = doc.createNode('extrusion').setMesh(mesh);
   doc.createScene('scene').addChild(node);
-  doc.getRoot().getAsset().generator = 'xui extrude';
+  doc.getRoot().getAsset().generator = 'glbforge extrude';
 
   return { doc, stats: { ...geo.stats, mode, traceWidth: tw, traceHeight: th } };
 }

@@ -1,9 +1,9 @@
 {
-  "name": "@xui/cli",
+  "name": "glbforge",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "xui": "dist/index.js"
+    "glbforge": "dist/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -12,11 +12,11 @@
   "dependencies": {
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
-    "@xui/core": "workspace:*",
+    "@glbforge/core": "workspace:*",
     "commander": "^12.1.0",
     "meshoptimizer": "^0.22.0",
     "picocolors": "^1.1.0",
-    "@xui/meshy": "workspace:*"
+    "@glbforge/meshy": "workspace:*"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

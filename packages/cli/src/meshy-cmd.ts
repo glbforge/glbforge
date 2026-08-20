@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { MeshyClient, type MeshyTask, type TaskKind } from '@xui/meshy';
+import { MeshyClient, type MeshyTask, type TaskKind } from '@glbforge/meshy';
 
 const MIME: Record<string, string> = {
   '.png': 'image/png',
@@ -53,7 +53,7 @@ export function registerMeshyCommands(
     .option('--no-texture', 'geometry stage only (faster, cheaper)')
     .option('--pbr', 'generate PBR maps (with texturing)')
     .option('--target-polycount <n>', 'ask Meshy for a polycount target', (v) => parseInt(v, 10))
-    .option('--optimize', 'run xui optimize on the result')
+    .option('--optimize', 'run glbforge optimize on the result')
     .option('-p, --profile <name>', 'budget profile for --optimize', 'mobile-hero')
     .action(async (image: string, opts: {
       out: string; texture: boolean; pbr?: boolean;
@@ -89,7 +89,7 @@ export function registerMeshyCommands(
     .option('--no-refine', 'stop after the untextured preview stage')
     .option('--art-style <style>', 'realistic | sculpture')
     .option('--seed <n>', 'seed for reproducible geometry', (v) => parseInt(v, 10))
-    .option('--optimize', 'run xui optimize on the result')
+    .option('--optimize', 'run glbforge optimize on the result')
     .option('-p, --profile <name>', 'budget profile for --optimize', 'mobile-hero')
     .action(async (prompt: string, opts: {
       out: string; refine: boolean; artStyle?: 'realistic' | 'sculpture';

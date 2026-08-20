@@ -10,18 +10,18 @@ importers:
 
   packages/cli:
     dependencies:
+      '@glbforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@glbforge/meshy':
+        specifier: workspace:*
+        version: link:../meshy
       '@gltf-transform/core':
         specifier: ^4.1.0
         version: 4.4.2
       '@gltf-transform/extensions':
         specifier: ^4.1.0
         version: 4.4.2
-      '@xui/core':
-        specifier: workspace:*
-        version: link:../core
-      '@xui/meshy':
-        specifier: workspace:*
-        version: link:../meshy
       commander:
         specifier: ^12.1.0
         version: 12.1.0
@@ -75,18 +75,18 @@ importers:
 
   packages/mcp:
     dependencies:
+      '@glbforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@glbforge/meshy':
+        specifier: workspace:*
+        version: link:../meshy
       '@gltf-transform/core':
         specifier: ^4.4.2
         version: 4.4.2
       '@modelcontextprotocol/sdk':
         specifier: ^1.11.0
         version: 1.30.0(zod@3.25.76)
-      '@xui/core':
-        specifier: workspace:*
-        version: link:../core
-      '@xui/meshy':
-        specifier: workspace:*
-        version: link:../meshy
       zod:
         specifier: ^3.23.0
         version: 3.25.76

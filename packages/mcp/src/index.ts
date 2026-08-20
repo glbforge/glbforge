@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * XUI MCP server — exposes the analyze/optimize/scaffold pipeline and the
+ * GLBForge MCP server — exposes the analyze/optimize/scaffold pipeline and the
  * Meshy generation API as MCP tools, so agents (Claude Code, Cursor, …) can
  * take an asset from generation to web-ready inside one conversation.
  *
@@ -28,8 +28,8 @@ import {
   stripMaterials,
   toStl,
   type AnalysisResult,
-} from '@xui/core';
-import { MeshyClient, type TaskKind } from '@xui/meshy';
+} from '@glbforge/core';
+import { MeshyClient, type TaskKind } from '@glbforge/meshy';
 
 // --- .env (never overrides real env vars, never logs values) ---
 try {
@@ -72,7 +72,7 @@ const json = (data: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
 });
 
-const server = new McpServer({ name: 'xui', version: '0.1.0' });
+const server = new McpServer({ name: 'glbforge', version: '0.1.0' });
 
 server.registerTool(
   'list_profiles',
@@ -222,7 +222,7 @@ server.registerTool(
   {
     description:
       'Export a GLB as binary STL for 3D printing — scaled to millimeters, rotated z-up. ' +
-      'Reports watertightness (xui-extruded assets are watertight by construction; ' +
+      'Reports watertightness (glbforge-extruded assets are watertight by construction; ' +
       'simplified AI meshes usually are too).',
     inputSchema: {
       path: z.string().describe('Absolute path to the .glb'),
