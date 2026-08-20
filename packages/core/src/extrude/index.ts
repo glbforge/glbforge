@@ -142,6 +142,20 @@ export async function extrudeFromRgba(
     }
   }
 
+  // Full-bleed detection: a luma-mode mask covering nearly the whole canvas
+  // is a photograph (or full-canvas art), not a silhouette to trace.
+  if (mode === 'luma' && !opts.mode) {
+    let solid = 0;
+    for (let i = 0; i < mask.length; i++) solid += mask[i];
+    if (solid / mask.length > 0.9) {
+      throw new Error(
+        'The image fills the whole canvas — this looks like a photograph, not flat artwork. ' +
+        'Use a generative model (glbforge ship routes there automatically, or glbforge gen), ' +
+        'or pass an explicit --mode/--threshold to isolate a silhouette.',
+      );
+    }
+  }
+
   const loops = cleanLoops(
     traceMask(mask, tw, th, { simplify: opts.simplify ?? 1.2 }), tw, th,
     opts.smoothing ?? 2,

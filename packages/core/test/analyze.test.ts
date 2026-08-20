@@ -373,9 +373,12 @@ describe('pillow relief + presets', () => {
   it('acrylic preset attaches KHR_materials_transmission', async () => {
     const { extrudeImage } = await import('../src/index.js');
     const sharp = (await import('sharp')).default;
+    // Solid square with a transparent border (a full-bleed fill now
+    // correctly triggers the photograph guard).
     const rgba = Buffer.alloc(32 * 32 * 4);
-    for (let i = 0; i < 32 * 32; i++) {
-      rgba[i * 4] = 80; rgba[i * 4 + 1] = 200; rgba[i * 4 + 2] = 255; rgba[i * 4 + 3] = 255;
+    for (let y = 4; y < 28; y++) for (let x = 4; x < 28; x++) {
+      const i = (y * 32 + x) * 4;
+      rgba[i] = 80; rgba[i + 1] = 200; rgba[i + 2] = 255; rgba[i + 3] = 255;
     }
     const png = await sharp(rgba, { raw: { width: 32, height: 32, channels: 4 } }).png().toBuffer();
     const { doc } = await extrudeImage(new Uint8Array(png), { texture: false, preset: 'acrylic' });
