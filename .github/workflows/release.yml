@@ -36,14 +36,16 @@ jobs:
       - run: pnpm -r test
 
       # npm >= 11.5 performs the OIDC exchange automatically when a trusted
-      # publisher is configured; pnpm delegates the publish through it.
+      # publisher is configured.
       - run: npm install -g npm@latest
 
-      # Idempotent: skip any package whose exact version is already on the
-      # registry (lets manual and CI publishes coexist without conflicts).
+      # Publish flow: `pnpm pack` converts workspace:^ deps to real ranges,
+      # `npm publish <tarball>` does the OIDC trusted publish with provenance.
+      # Idempotent two ways: versions visible on the registry are skipped
+      # up front, and EPUBLISHCONFLICT (e.g. a version that exists but sits
+      # in npm security review, invisible to `npm view`) is treated as a
+      # skip rather than a failure.
       - name: Publish packages not yet on the registry
-        env:
-          NPM_CONFIG_PROVENANCE: 'true'
         run: |
           set -euo pipefail
           for dir in packages/*; do
@@ -51,8 +53,16 @@ jobs:
             version=$(node -p "require('./$dir/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then
               echo "skip: $name@$version already published"
+              continue
+            fi
+            echo "publish: $name@$version"
+            tarball=$(cd "$dir" && pnpm pack --pack-destination "$RUNNER_TEMP" | tail -1)
+            if output=$(npm publish "$tarball" --access public --provenance 2>&1); then
+              echo "$output" | tail -2
+            elif echo "$output" | grep -qi 'previously published\|EPUBLISHCONFLICT\|cannot publish over'; then
+              echo "skip: $name@$version exists (registry says already published)"
             else
-              echo "publish: $name@$version"
-              (cd "$dir" && pnpm publish --no-git-checks)
+              echo "$output"
+              exit 1
             fi
           done
