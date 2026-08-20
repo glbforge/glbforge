@@ -14,6 +14,9 @@ export interface ExtrudeMeshOptions {
   /** Trace-space image dimensions (for UVs and scaling). */
   imageWidth: number;
   imageHeight: number;
+  /** Pillow/relief: extra front-cap height (meters) at trace coords (x, y).
+   *  Must be ~0 along contours so walls stay sealed. Disables the bevel. */
+  frontHeightFn?: (x: number, y: number) => number;
 }
 
 export interface ExtrudeStats {
@@ -48,7 +51,7 @@ export function buildExtrusion(
   const scale = width / iw; // meters per trace pixel
   const depth = opts.depth ?? width * 0.08;
   const hz = depth / 2;
-  const bevel = Math.min(opts.bevel ?? 0, depth * 0.49);
+  const bevel = opts.frontHeightFn ? 0 : Math.min(opts.bevel ?? 0, depth * 0.49);
   const bevelPx = bevel / scale;
   const segments = Math.max(1, Math.round(opts.bevelSegments ?? 3));
   const cx = iw / 2, cy = ih / 2;
@@ -195,11 +198,137 @@ export function buildExtrusion(
       });
       if (!valid) continue;
       const tris = earcut(flat, holeIndices.length ? holeIndices : undefined);
+
+      if (nz === 1 && opts.frontHeightFn) {
+        // Pillow front cap: re-tessellate densely, displace, smooth-shade.
+        buildDisplacedCap(tris, globalIds, holeIndices, hz, opts.frontHeightFn);
+        continue;
+      }
+
       for (let t = 0; t < tris.length; t += 3) {
         let [a, b, c] = [globalIds[tris[t]], globalIds[tris[t + 1]], globalIds[tris[t + 2]]];
         if (Math.sign(triNormalZ(positions, a, b, c)) !== nz) [b, c] = [c, b];
         indices.push(a, b, c);
       }
+    }
+  }
+
+  /**
+   * Densified, displaced front cap. Uniform 4:1 subdivision (no T-junctions
+   * by construction) in TRACE coordinates, then each vertex is lifted by the
+   * height function. Rim vertices reuse the existing strip-top ids so the
+   * cap stays sealed to the walls; the height function is ~0 there anyway.
+   */
+  function buildDisplacedCap(
+    tris: number[],
+    rimIds: number[],
+    holeStarts: number[],
+    zBase: number,
+    heightFn: (x: number, y: number) => number,
+  ): void {
+    // Recover trace coords for the rim ring from world positions (invert toWorld).
+    const traceXY: number[] = [];
+    for (const id of rimIds) {
+      traceXY.push(positions[id * 3] / scale + cx, cy - positions[id * 3 + 1] / scale);
+    }
+    let verts = traceXY;             // [x, y] per vertex, trace space
+    let faces = [...tris];
+    // Vertex ids: first rimIds.length map to existing ids; new ones appended.
+    const isRim = (i: number) => i < rimIds.length;
+
+    // Ring (contour) edges must NEVER split: the wall quads keep whole
+    // edges, so splitting the cap's rim would create T-junction cracks.
+    const edgeKey = (a: number, b: number) => (a < b ? a * 1e7 + b : b * 1e7 + a);
+    const ringEdges = new Set<number>();
+    const starts = [0, ...holeStarts, rimIds.length];
+    for (let r = 0; r < starts.length - 1; r++) {
+      for (let i = starts[r]; i < starts[r + 1]; i++) {
+        const j = i + 1 === starts[r + 1] ? starts[r] : i + 1;
+        ringEdges.add(edgeKey(i, j));
+      }
+    }
+
+    const ROUNDS = verts.length / 2 < 600 ? 4 : 3;
+    const MAX_TRIS = 120_000;
+    for (let round = 0; round < ROUNDS && (faces.length / 3) * 4 <= MAX_TRIS; round++) {
+      const mid = new Map<number, number>();
+      const nextFaces: number[] = [];
+      const midpoint = (a: number, b: number): number | null => {
+        const key = edgeKey(a, b);
+        if (ringEdges.has(key)) return null;
+        const hit = mid.get(key);
+        if (hit !== undefined) return hit;
+        const idx = verts.length / 2;
+        verts.push((verts[a * 2] + verts[b * 2]) / 2, (verts[a * 2 + 1] + verts[b * 2 + 1]) / 2);
+        mid.set(key, idx);
+        return idx;
+      };
+      for (let t = 0; t < faces.length; t += 3) {
+        const [a, b, c] = [faces[t], faces[t + 1], faces[t + 2]];
+        const ab = midpoint(a, b), bc = midpoint(b, c), ca = midpoint(c, a);
+        const splits = [ab, bc, ca].filter((m) => m !== null).length;
+        if (splits === 3) {
+          nextFaces.push(a, ab!, ca!, ab!, b, bc!, ca!, bc!, c, ab!, bc!, ca!);
+        } else if (splits === 2) {
+          // Rotate so the unsplit edge is (a, b).
+          let [p, q, r2, m1, m2] = ab === null
+            ? [a, b, c, bc!, ca!]
+            : bc === null
+              ? [b, c, a, ca!, ab!]
+              : [c, a, b, ab!, bc!];
+          nextFaces.push(p, q, m1, p, m1, m2, m2, m1, r2);
+        } else if (splits === 1) {
+          const m = (ab ?? bc ?? ca)!;
+          if (ab !== null) nextFaces.push(a, m, c, m, b, c);
+          else if (bc !== null) nextFaces.push(b, m, a, m, c, a);
+          else nextFaces.push(c, m, b, m, a, b);
+        } else {
+          nextFaces.push(a, b, c);
+        }
+      }
+      faces = nextFaces;
+    }
+
+    // Emit vertices: rim ring reuses existing ids (sealed to walls); new
+    // interior/midpoint vertices are pushed with displaced z.
+    const emitted: number[] = [];
+    for (let i = 0; i < verts.length / 2; i++) {
+      if (isRim(i)) {
+        emitted.push(rimIds[i]);
+      } else {
+        const x = verts[i * 2], y = verts[i * 2 + 1];
+        emitted.push(pushVert(x, y, zBase + heightFn(x, y), [0, 0, 1]));
+      }
+    }
+
+    // Faces (winding normalized against +z), collecting for normal pass.
+    const capFaces: number[] = [];
+    for (let t = 0; t < faces.length; t += 3) {
+      let [a, b, c] = [emitted[faces[t]], emitted[faces[t + 1]], emitted[faces[t + 2]]];
+      if (Math.sign(triNormalZ(positions, a, b, c)) !== 1) [b, c] = [c, b];
+      indices.push(a, b, c);
+      capFaces.push(a, b, c);
+    }
+
+    // Smooth normals over the displaced surface (area-weighted).
+    const acc = new Map<number, [number, number, number]>();
+    for (let t = 0; t < capFaces.length; t += 3) {
+      const [a, b, c] = [capFaces[t], capFaces[t + 1], capFaces[t + 2]];
+      const ax = positions[a * 3], ay = positions[a * 3 + 1], az = positions[a * 3 + 2];
+      const ux = positions[b * 3] - ax, uy = positions[b * 3 + 1] - ay, uz = positions[b * 3 + 2] - az;
+      const vx = positions[c * 3] - ax, vy = positions[c * 3 + 1] - ay, vz = positions[c * 3 + 2] - az;
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nzc = ux * vy - uy * vx;
+      for (const vId of [a, b, c]) {
+        const cur = acc.get(vId) ?? [0, 0, 0];
+        cur[0] += nx; cur[1] += ny; cur[2] += nzc;
+        acc.set(vId, cur);
+      }
+    }
+    for (const [vId, n] of acc) {
+      const len = Math.hypot(n[0], n[1], n[2]) || 1;
+      normals[vId * 3] = n[0] / len;
+      normals[vId * 3 + 1] = n[1] / len;
+      normals[vId * 3 + 2] = n[2] / len;
     }
   }
 

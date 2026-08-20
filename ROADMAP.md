@@ -49,8 +49,8 @@ commodity; the gap between "generated" and "shipped" is the product.
   quantization (majority-filtered labels kill AA halos) → per-color trace → stepped depths,
   backs coplanar, flat per-layer materials. Default 4 layers = exactly the mobile-hero
   draw-call budget. Verified: plushqlty logo → 4 layers, 41k tris, score 95
-- [ ] Pillow/relief displacement (distance-transform "puffy sticker", luminance emboss)
-- [ ] Material presets (enamel pin, chrome, neon/emissive, acrylic, rubber)
+- [x] **Pillow relief** (`--pillow <m>`, studio toggle): exact EDT → `H·sqrt(min(D,R)/R)` dome on a ring-edge-aware subdivided front cap (T-junction-free by construction; watertight verified). Composes with layers = embroidered-patch look. Deferred: luminance emboss
+- [x] **Material presets** (`--preset`, studio dropdown): enamel, chrome, neon (emissive from cluster colors / glows the artwork when textured), acrylic (KHR_materials_transmission), rubber
 - [ ] glbforge.dev landing page + docs (Cloudflare Pages; CTA = `npx glbforge ui`)
 - [ ] Hosted demo, phase 2: moat features account-free (size caps + rate limits);
   generation via BYOK **and** purchased credits (GitHub OAuth + Stripe, quota ledger,

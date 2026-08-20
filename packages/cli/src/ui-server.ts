@@ -147,7 +147,9 @@ export async function startUiServer(opts: {
       const bevel = Number(req.query.bevel ?? 0);
       const depth = req.query.depth ? Number(req.query.depth) : undefined;
       const layers = req.query.layers ? Number(req.query.layers) : undefined;
-      const { doc } = await extrudeImage(new Uint8Array(req.body), { bevel, depth, layers });
+      const pillow = req.query.pillow ? Number(req.query.pillow) : undefined;
+      const preset = req.query.preset ? String(req.query.preset) as 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber' : undefined;
+      const { doc } = await extrudeImage(new Uint8Array(req.body), { bevel, depth, layers, pillow, preset });
       const io = await createNodeIO();
       const outBytes = await io.writeBinary(doc);
       const asset = await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', outBytes, profile);

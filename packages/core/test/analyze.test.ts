@@ -325,3 +325,52 @@ describe('layered extrusion', () => {
     expect(result.geometry.topology!.nonManifoldEdges).toBe(0);
   });
 });
+
+describe('pillow relief + presets', () => {
+  it('domes the front cap, stays sealed, applies enamel preset', async () => {
+    const { extrudeImage } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 96;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      if (Math.hypot(x - 48, y - 48) < 36) {
+        const i = (y * size + x) * 4;
+        rgba[i] = 255; rgba[i + 1] = 120; rgba[i + 2] = 60; rgba[i + 3] = 255;
+      }
+    }
+    const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+
+    const { doc } = await extrudeImage(new Uint8Array(png), {
+      texture: false, pillow: 0.05, depth: 0.05, preset: 'enamel',
+    });
+
+    // Front cap must rise above the flat extrusion depth (dome exists)...
+    const prim = doc.getRoot().listMeshes()[0].listPrimitives()[0];
+    const pos = prim.getAttribute('POSITION')!.getArray()!;
+    let maxZ = -Infinity;
+    for (let i = 2; i < pos.length; i += 3) maxZ = Math.max(maxZ, pos[i]);
+    expect(maxZ).toBeGreaterThan(0.05); // hz = 0.025; dome adds up to 0.05
+
+    // ...while staying watertight (rim shared with walls, height 0 at edges).
+    const result = analyze(doc, { profile: getProfile('mobile-hero') });
+    expect(result.geometry.topology!.boundaryEdges).toBe(0);
+    expect(result.geometry.topology!.nonManifoldEdges).toBe(0);
+
+    const material = doc.getRoot().listMaterials()[0];
+    expect(material.getMetallicFactor()).toBeCloseTo(0.85);
+    expect(material.getRoughnessFactor()).toBeCloseTo(0.25);
+  }, 30_000);
+
+  it('acrylic preset attaches KHR_materials_transmission', async () => {
+    const { extrudeImage } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const rgba = Buffer.alloc(32 * 32 * 4);
+    for (let i = 0; i < 32 * 32; i++) {
+      rgba[i * 4] = 80; rgba[i * 4 + 1] = 200; rgba[i * 4 + 2] = 255; rgba[i * 4 + 3] = 255;
+    }
+    const png = await sharp(rgba, { raw: { width: 32, height: 32, channels: 4 } }).png().toBuffer();
+    const { doc } = await extrudeImage(new Uint8Array(png), { texture: false, preset: 'acrylic' });
+    expect(doc.getRoot().listExtensionsUsed().map((e) => e.extensionName))
+      .toContain('KHR_materials_transmission');
+  });
+});

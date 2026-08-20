@@ -21,11 +21,16 @@ export function AssetRail(props: {
   const [pending, setPending] = useState<PendingImage | null>(null);
   const [pbr, setPbr] = useState(true);
   const [layered, setLayered] = useState(true);
+  const [pillow, setPillow] = useState(false);
+  const [preset, setPreset] = useState('');
 
   const extrude = (image: PendingImage) =>
     props.onRun(`forging ${image.name}`, () =>
       api.extrude(image.name, image.bytes, {
-        bevel: 0.015, profile: 'mobile-hero', layers: layered ? 4 : undefined,
+        bevel: pillow ? 0 : 0.015, profile: 'mobile-hero',
+        layers: layered ? 4 : undefined,
+        pillow: pillow ? 0.035 : undefined,
+        preset: preset || undefined,
       }));
 
   const ingest = async (files: FileList | File[]) => {
@@ -88,6 +93,18 @@ export function AssetRail(props: {
             <input type="checkbox" checked={layered} onChange={(e) => setLayered(e.target.checked)} />
             layered colors (acrylic look)
           </label>
+          <label className="check">
+            <input type="checkbox" checked={pillow} onChange={(e) => setPillow(e.target.checked)} />
+            pillow (puffy sticker)
+          </label>
+          <select value={preset} onChange={(e) => setPreset(e.target.value)}>
+            <option value="">material: default</option>
+            <option value="enamel">enamel pin</option>
+            <option value="chrome">chrome</option>
+            <option value="neon">neon</option>
+            <option value="acrylic">acrylic</option>
+            <option value="rubber">rubber</option>
+          </select>
           <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr); setPending(null); }}>
             ✨ Generate with Meshy <span className="choice-sub">textured model · ~5–10 min · credits</span>
           </button>

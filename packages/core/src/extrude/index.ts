@@ -3,6 +3,9 @@ import sharp from 'sharp';
 import { pointInLoop, traceMask, type Loop } from './trace.js';
 import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { quantizeColors, srgbToLinear } from './layers.js';
+import { distanceTransform, sampleDistance } from './relief.js';
+import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
+import type { Material, Texture } from '@gltf-transform/core';
 
 export interface ExtrudeOptions {
   /** Solid-pixel test: 'alpha' (transparent bg) or 'luma' (white bg). Auto-detected by default. */
@@ -25,6 +28,11 @@ export interface ExtrudeOptions {
   layers?: number;
   /** Extra depth per layer (meters). Default depth * 0.5. */
   layerStep?: number;
+  /** Pillow relief: puffy-sticker dome height (meters) on the front face.
+   *  0/omit = flat. Supersedes bevel (the pillow IS the rounded profile). */
+  pillow?: number;
+  /** Material preset applied to all forge materials. */
+  preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
   /** Project the source image onto the mesh as baseColor. Default true. */
   texture?: boolean;
   /** Flat base color (used when texture=false), e.g. [1, 0.2, 0.6, 1]. */
@@ -126,6 +134,7 @@ export async function extrudeImage(
     bevelSegments: opts.bevelSegments,
     imageWidth: tw,
     imageHeight: th,
+    frontHeightFn: makeHeightFn(opts, mask, tw, th),
   });
 
   const material = doc
@@ -133,6 +142,7 @@ export async function extrudeImage(
     .setMetallicFactor(opts.metallic ?? 0)
     .setRoughnessFactor(opts.roughness ?? 0.6)
     .setDoubleSided(false);
+  applyPreset(material, opts.preset, null);
 
   if (opts.texture !== false) {
     // Re-encode the source as PNG (capped at 2048) and project it via the
@@ -143,6 +153,10 @@ export async function extrudeImage(
       .toBuffer();
     const texture = doc.createTexture('source').setImage(png).setMimeType('image/png');
     material.setBaseColorTexture(texture);
+    if (opts.preset === 'neon') {
+      // Glow the artwork itself.
+      material.setEmissiveTexture(texture).setEmissiveFactor([1, 1, 1]);
+    }
   } else if (opts.color) {
     material.setBaseColorFactor(opts.color);
   }
@@ -251,14 +265,17 @@ async function extrudeLayered(
       bevelSegments: opts.bevelSegments,
       imageWidth: tw,
       imageHeight: th,
+      frontHeightFn: makeHeightFn(opts, layerMask, tw, th),
     });
 
     const [r, g, b] = colors[cluster];
+    const linear: [number, number, number] = [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
     const material = doc
       .createMaterial(`layer-${layerIdx}`)
-      .setBaseColorFactor([srgbToLinear(r), srgbToLinear(g), srgbToLinear(b), 1])
+      .setBaseColorFactor([...linear, 1])
       .setMetallicFactor(opts.metallic ?? 0)
       .setRoughnessFactor(opts.roughness ?? 0.45);
+    applyPreset(material, opts.preset, linear);
 
     const buffer = doc.getRoot().listBuffers()[0];
     const prim = doc
@@ -288,4 +305,61 @@ async function extrudeLayered(
   }
   doc.getRoot().getAsset().generator = 'glbforge extrude';
   return { doc, stats };
+}
+
+/** Pillow height function over a mask: H * sqrt(min(D, R)/R), 0 at edges. */
+function makeHeightFn(
+  opts: ExtrudeOptions,
+  mask: Uint8Array,
+  tw: number,
+  th: number,
+): ((x: number, y: number) => number) | undefined {
+  const heightM = opts.pillow ?? 0;
+  if (heightM <= 0) return undefined;
+  const width = opts.width ?? 1;
+  const scale = width / tw; // meters per trace px
+  const rolloffPx = Math.max(4, heightM / scale);
+  const dist = distanceTransform(mask, tw, th);
+  return (x, y) => {
+    const d = sampleDistance(dist, tw, th, x, y);
+    return heightM * Math.sqrt(Math.min(d, rolloffPx) / rolloffPx);
+  };
+}
+
+/** Forge material presets. Layered materials pass their cluster color. */
+function applyPreset(
+  material: Material,
+  preset: ExtrudeOptions['preset'],
+  layerColor: [number, number, number] | null,
+): void {
+  if (!preset) return;
+  switch (preset) {
+    case 'enamel':
+      material.setMetallicFactor(0.85).setRoughnessFactor(0.25);
+      break;
+    case 'chrome':
+      material.setMetallicFactor(1).setRoughnessFactor(0.08);
+      break;
+    case 'rubber':
+      material.setMetallicFactor(0).setRoughnessFactor(0.95);
+      break;
+    case 'neon':
+      material.setRoughnessFactor(0.4);
+      if (layerColor) {
+        material.setEmissiveFactor(layerColor);
+        material.setBaseColorFactor([layerColor[0] * 0.15, layerColor[1] * 0.15, layerColor[2] * 0.15, 1]);
+      }
+      // Textured neon is wired at the texture-assignment site.
+      break;
+    case 'acrylic': {
+      const document = Document.fromGraph(material.getGraph())!;
+      const transmission = document.createExtension(KHRMaterialsTransmission);
+      material.setExtension(
+        'KHR_materials_transmission',
+        transmission.createTransmission().setTransmissionFactor(0.85),
+      );
+      material.setRoughnessFactor(0.1).setMetallicFactor(0);
+      break;
+    }
+  }
 }
