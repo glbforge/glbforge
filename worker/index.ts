@@ -206,6 +206,7 @@ export default {
       // ---- auth (provider-aware: github | google) ----
       if (path === '/api/auth/providers') {
         return json({
+          rev: 'r2', // bump on worker changes to verify what's deployed
           github: !!env.GITHUB_CLIENT_ID,
           google: !!env.GOOGLE_CLIENT_ID,
           generators: {
@@ -406,9 +407,17 @@ export default {
         if (owned.kind.startsWith('fal:')) {
           const model = owned.kind.slice(4).split('/').slice(0, 2).join('/');
           if (!taskMatch[2]) {
-            const st = (await (await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}/status`)).json()) as
-              { status: string; queue_position?: number };
-            const progress = st.status === 'COMPLETED' ? 100 : st.status === 'IN_PROGRESS' ? 50 : 5;
+            const statusRes = await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}/status`);
+            const st = (await statusRes.json()) as
+              { status?: string; queue_position?: number; detail?: unknown };
+            if (!statusRes.ok || !st.status) {
+              // Surface upstream failures instead of masking them as queued.
+              return json({
+                status: 'IN_PROGRESS', progress: 5,
+                error: `status check failed (HTTP ${statusRes.status})`,
+              });
+            }
+            const progress = st.status === 'COMPLETED' ? 100 : st.status === 'IN_PROGRESS' ? 50 : 8;
             return json({
               status: st.status === 'COMPLETED' ? 'SUCCEEDED' : 'IN_PROGRESS',
               progress, error: null,
