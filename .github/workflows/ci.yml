@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # LFS is deliberately NOT pulled: the 130MB of Meshy fixtures would
+      # burn bandwidth quota on every run. Fixture-dependent specs detect
+      # the pointer files and skip themselves; synthetic-geometry specs and
+      # the CLI dogfood below still cover the full pipeline.
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      - run: pnpm -r test
+
+      # Dogfood the CLI end to end: extrude a committed test image, then
+      # hold the output to the mobile-hero budget (non-zero exit = fail).
+      - name: CLI dogfood (extrude -> analyze)
+        run: |
+          node packages/cli/dist/index.js extrude assets/ci-ring.png -o /tmp/ring.glb --bevel 0.01
+          node packages/cli/dist/index.js analyze /tmp/ring.glb --profile mobile-hero

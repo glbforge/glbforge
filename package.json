@@ -1,0 +1,10 @@
+{
+  "name": "xui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  },
+  "packageManager": "pnpm@10.15.1"
+}

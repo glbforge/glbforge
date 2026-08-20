@@ -1,0 +1,26 @@
+{
+  "name": "@xui/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "xui": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@xui/core": "workspace:*",
+    "commander": "^12.1.0",
+    "meshoptimizer": "^0.22.0",
+    "picocolors": "^1.1.0",
+    "@xui/meshy": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

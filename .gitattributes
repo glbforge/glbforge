@@ -1,0 +1,2 @@
+# Meshy fixtures are 34-93MB — LFS keeps the repo cloneable.
+fixtures/*.glb filter=lfs diff=lfs merge=lfs -text

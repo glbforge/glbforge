@@ -1,0 +1,23 @@
+{
+  "name": "@xui/mcp",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "xui-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "@xui/core": "workspace:*",
+    "@xui/meshy": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

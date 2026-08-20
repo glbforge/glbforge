@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+examples/viewer/node_modules/
+
+# generated example outputs (reproducible via the CLI; keep the repo light)
+examples/*.glb
+examples/viewer/public/model.glb
+.claude/
