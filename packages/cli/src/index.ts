@@ -98,7 +98,7 @@ async function optimizeFile(
 const program = new Command()
   .name('glbforge')
   .description('GLBForge — make AI-generated 3D assets web-ready: analyze, optimize, extrude, scaffold.')
-  .version('0.3.0');
+  .version('0.4.0');
 
 program
   .command('analyze')
