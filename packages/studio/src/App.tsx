@@ -24,6 +24,8 @@ export default function App() {
   const [mode, setMode] = useState<'remote' | 'local' | null>(null);
   const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
   const [providers, setProviders] = useState<{ github: boolean; google: boolean }>({ github: false, google: false });
+  const [generators, setGenerators] = useState<Record<string, boolean>>({});
+  const [genCosts, setGenCosts] = useState<Record<string, number>>({});
   const [history, setHistory] = useState<Array<{ task_id: string; kind: string; created_at: number }>>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const refreshCloud = useCallback(() => cloud.me().then(setCloudAuth).catch(() => {}), []);
@@ -39,7 +41,10 @@ export default function App() {
     detectBackend().then(async (detected) => {
       setMode(detected);
       if (detected === 'remote') {
-        api.meshyAvailable().then((m) => setMeshy(m.available)).catch(() => {});
+        api.meshyAvailable().then((m) => {
+          setMeshy(m.available);
+          setGenerators(m.generators ?? (m.available ? { meshy: true } : {}));
+        }).catch(() => {});
       } else {
         // Hosted studio: generation is available when the edge API is up
         // (sign-in gates the actual spend).
@@ -48,7 +53,11 @@ export default function App() {
         setCloudAuth(auth);
         setMeshy(auth.available);
         if (auth.available) {
-          cloud.providers().then(setProviders).catch(() => {});
+          cloud.providers().then((p) => {
+            setProviders({ github: p.github, google: p.google });
+            setGenerators(p.generators ?? {});
+            setGenCosts(p.costs ?? {});
+          }).catch(() => {});
           if (auth.user) cloud.history().then((h) => setHistory(h.tasks)).catch(() => {});
         }
       }
@@ -88,7 +97,7 @@ export default function App() {
     return () => clearInterval(timer);
   }, [tasks, refresh]);
 
-  const generate = useCallback(async (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean) => {
+  const generate = useCallback(async (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean, provider = 'meshy') => {
     setError(null);
     try {
       if (getBackend() === 'local') {
@@ -96,11 +105,11 @@ export default function App() {
           location.href = cloud.loginUrl('github');
           return;
         }
-        const { taskId, kind } = await cloud.genImage(bytes, mime, pbr);
+        const { taskId, kind } = await cloud.genImage(bytes, mime, pbr, provider);
         setTasks((prev) => [...prev, { taskId, kind, name, progress: 0, status: 'PENDING' }]);
         void refreshCloud();
       } else {
-        const { taskId, kind } = await api.meshyImage(bytes, mime, pbr);
+        const { taskId, kind } = await api.meshyImage(bytes, mime, pbr, provider);
         setTasks((prev) => [...prev, { taskId, kind, name, progress: 0, status: 'PENDING' }]);
       }
     } catch (err) {
@@ -173,6 +182,7 @@ export default function App() {
         <AssetRail
           assets={assets} selectedId={selected?.id ?? null} onSelect={select} onRun={run}
           meshyAvailable={meshy} tasks={tasks} onGenerate={generate}
+          generators={generators} genCosts={genCosts}
           onDismissTask={(id) => setTasks((prev) => prev.filter((t) => t.taskId !== id))}
           history={history.filter((h) => !assets.some((a) => a.name.includes(h.task_id.slice(0, 8))))}
           onReimport={reimport}

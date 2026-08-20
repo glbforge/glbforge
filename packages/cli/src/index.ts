@@ -216,6 +216,42 @@ program
   });
 
 program
+  .command('gen')
+  .description('Image → true 3D via open models on fal.ai (Hunyuan3D, TRELLIS, TripoSR). Needs FAL_KEY.')
+  .argument('<image>', 'path to the source image')
+  .option('--model <name>', 'hunyuan | trellis | triposr', 'hunyuan')
+  .option('-o, --out <file>', 'output GLB path', 'gen-output.glb')
+  .option('--optimize', 'run glbforge optimize on the result')
+  .option('-p, --profile <name>', 'budget profile for --optimize', 'mobile-hero')
+  .action(async (image: string, opts: { model: string; out: string; optimize?: boolean; profile: string }) => {
+    const { FAL_MODELS, FalClient } = await import('@glbforge/meshy');
+    const model = FAL_MODELS[opts.model as keyof typeof FAL_MODELS];
+    if (!model) throw new Error(`Unknown model "${opts.model}" (hunyuan | trellis | triposr)`);
+    const ext = image.toLowerCase().split('.').pop() ?? '';
+    const mime = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[ext];
+    if (!mime) throw new Error(`Unsupported image extension ".${ext}"`);
+    const bytes = await readFile(image);
+
+    const client = new FalClient();
+    const requestId = await client.submit(model, `data:${mime};base64,${bytes.toString('base64')}`);
+    console.log(`  ${model} request ${requestId}`);
+    for (;;) {
+      const st = await client.status(model, requestId);
+      process.stdout.write(`\r  ${st.status.toLowerCase().padEnd(12)}${st.queuePosition !== null ? ` queue #${st.queuePosition}` : ''}   `);
+      if (st.status === 'COMPLETED') break;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    process.stdout.write('\n');
+    const glb = await client.downloadGlb(await client.resultGlbUrl(model, requestId));
+    await writeFile(opts.out, glb);
+    console.log(`  saved ${opts.out} (${(glb.byteLength / 1048576).toFixed(1)}MB)`);
+    if (opts.optimize) {
+      const passed = await optimizeFile(opts.out, opts.out.replace(/\.glb$/i, '') + '.web.glb', opts.profile);
+      process.exitCode = passed ? 0 : 1;
+    }
+  });
+
+program
   .command('ui')
   .description('Open GLBForge Studio — a local web UI for the whole pipeline.')
   .argument('[files...]', 'GLB files to preload into the asset rail')

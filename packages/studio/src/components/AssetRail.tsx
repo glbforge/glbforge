@@ -13,7 +13,9 @@ export function AssetRail(props: {
   onRun: (label: string, task: () => Promise<AssetDetail | void>) => Promise<void>;
   meshyAvailable: boolean;
   tasks: GenTask[];
-  onGenerate: (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean) => Promise<void>;
+  onGenerate: (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean, provider?: string) => Promise<void>;
+  generators?: Record<string, boolean>;
+  genCosts?: Record<string, number>;
   onDismissTask: (taskId: string) => void;
   history?: Array<{ task_id: string; kind: string; created_at: number }>;
   onReimport?: (taskId: string) => Promise<void>;
@@ -22,6 +24,7 @@ export function AssetRail(props: {
   const [over, setOver] = useState(false);
   const [pending, setPending] = useState<PendingImage | null>(null);
   const [pbr, setPbr] = useState(true);
+  const [genModel, setGenModel] = useState('meshy');
   const [layered, setLayered] = useState(true);
   const [pillow, setPillow] = useState(false);
   const [sculpt, setSculpt] = useState(false);
@@ -113,13 +116,27 @@ export function AssetRail(props: {
             <option value="acrylic">acrylic</option>
             <option value="rubber">rubber</option>
           </select>
-          <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr); setPending(null); }}>
-            ✨ Generate with Meshy <span className="choice-sub">textured model · ~5–10 min · {pbr ? '3 credits (PBR)' : '2 credits'}</span>
+          {Object.keys(props.generators ?? {}).length > 1 && (
+            <select value={genModel} onChange={(e) => setGenModel(e.target.value)}>
+              {props.generators?.meshy && <option value="meshy">Meshy 7 — richest textures</option>}
+              {props.generators?.hunyuan && <option value="hunyuan">Hunyuan3D-2 — open, high quality</option>}
+              {props.generators?.trellis && <option value="trellis">TRELLIS — open, balanced</option>}
+              {props.generators?.triposr && <option value="triposr">TripoSR — fastest</option>}
+            </select>
+          )}
+          <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr, genModel); setPending(null); }}>
+            ✨ Generate true 3D <span className="choice-sub">
+              {genModel === 'meshy'
+                ? `~5–10 min · ${pbr ? (props.genCosts?.pbr ?? 3) + ' credits (PBR)' : (props.genCosts?.textured ?? 2) + ' credits'}`
+                : `~1–3 min · ${props.genCosts?.[genModel] ?? 1} credit${(props.genCosts?.[genModel] ?? 1) > 1 ? 's' : ''}`}
+            </span>
           </button>
-          <label className="check">
-            <input type="checkbox" checked={pbr} onChange={(e) => setPbr(e.target.checked)} />
-            PBR maps (Meshy)
-          </label>
+          {genModel === 'meshy' && (
+            <label className="check">
+              <input type="checkbox" checked={pbr} onChange={(e) => setPbr(e.target.checked)} />
+              PBR maps (Meshy)
+            </label>
+          )}
           <button className="ghost" onClick={() => setPending(null)}>cancel</button>
         </div>
       )}

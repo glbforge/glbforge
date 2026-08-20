@@ -23,6 +23,7 @@ interface Env {
   GOOGLE_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
   MESHY_API_KEY?: string;
+  FAL_KEY?: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
 }
@@ -40,8 +41,38 @@ interface D1Database {
 
 const SIGNUP_CREDITS = 6;
 const MESHY_BALANCE_FLOOR = 100;
-// Generation costs in GLBForge credits, tiered by upstream cost drivers.
-const GEN_COST = { textured: 2, pbr: 3 };
+// Generation costs in GLBForge credits, tiered by provider + features.
+// Open models on GPU inference cost a fraction of Meshy upstream.
+const GEN_COST = { textured: 2, pbr: 3, hunyuan: 2, trellis: 1, triposr: 1 };
+const FAL_MODELS: Record<string, string> = {
+  hunyuan: 'fal-ai/hunyuan3d/v2',
+  trellis: 'fal-ai/trellis',
+  triposr: 'fal-ai/triposr',
+};
+
+/** Deep scan a fal result for the first .glb URL. */
+function findGlbUrl(value: unknown): string | null {
+  if (typeof value === 'string') return /^https?:\/\/\S+\.glb(\?\S*)?$/i.test(value) ? value : null;
+  if (Array.isArray(value)) { for (const v of value) { const hit = findGlbUrl(v); if (hit) return hit; } return null; }
+  if (value && typeof value === 'object') {
+    for (const key of Object.keys(value)) {
+      const hit = findGlbUrl((value as Record<string, unknown>)[key]);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+async function fal(env: Env, method: string, path: string, body?: unknown): Promise<Response> {
+  return fetch('https://queue.fal.run' + path, {
+    method,
+    headers: {
+      authorization: `Key ${env.FAL_KEY}`,
+      ...(body ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
 const PACKS: Record<string, { credits: number; usd: number; label: string }> = {
   starter: { credits: 20, usd: 500, label: 'GLBForge — 20 credits' },
   studio: { credits: 80, usd: 1500, label: 'GLBForge — 80 credits' },
@@ -177,6 +208,11 @@ export default {
         return json({
           github: !!env.GITHUB_CLIENT_ID,
           google: !!env.GOOGLE_CLIENT_ID,
+          generators: {
+            meshy: !!env.MESHY_API_KEY,
+            ...(env.FAL_KEY ? { hunyuan: true, trellis: true, triposr: true } : {}),
+          },
+          costs: GEN_COST,
         });
       }
 
@@ -283,17 +319,27 @@ export default {
       if (path === '/api/gen/image' && request.method === 'POST') {
         const session = await readSession(env, request);
         if (!session) return json({ error: 'sign in to generate' }, 401);
-        if (!env.DB || !env.MESHY_API_KEY) return json({ error: 'generation not configured yet' }, 503);
+        if (!env.DB) return json({ error: 'generation not configured yet' }, 503);
 
-        // Upstream kill-switch: stop selling what we can't deliver.
-        const balanceRes = await meshy(env, 'GET', '/openapi/v1/balance');
-        const { balance } = (await balanceRes.json()) as { balance: number };
-        if (balance < MESHY_BALANCE_FLOOR) {
-          return json({ error: 'generation is temporarily unavailable — try again later' }, 503);
+        const provider = url.searchParams.get('provider') ?? 'meshy';
+        if (provider === 'meshy' && !env.MESHY_API_KEY) return json({ error: 'Meshy generation not configured' }, 503);
+        if (provider !== 'meshy' && (!env.FAL_KEY || !FAL_MODELS[provider])) {
+          return json({ error: `${provider} generation not available` }, 503);
+        }
+
+        if (provider === 'meshy') {
+          // Upstream kill-switch: stop selling what we can't deliver.
+          const balanceRes = await meshy(env, 'GET', '/openapi/v1/balance');
+          const { balance } = (await balanceRes.json()) as { balance: number };
+          if (balance < MESHY_BALANCE_FLOOR) {
+            return json({ error: 'generation is temporarily unavailable — try again later' }, 503);
+          }
         }
 
         // Tiered cost; atomic decrement only succeeds with enough balance.
-        const cost = url.searchParams.get('pbr') === 'true' ? GEN_COST.pbr : GEN_COST.textured;
+        const cost = provider === 'meshy'
+          ? (url.searchParams.get('pbr') === 'true' ? GEN_COST.pbr : GEN_COST.textured)
+          : (GEN_COST as Record<string, number>)[provider];
         await ensureSchema(env.DB);
         const dec = await env.DB.prepare('UPDATE users_v2 SET credits = credits - ? WHERE id = ? AND credits >= ?')
           .bind(cost, session.uid, cost).run();
@@ -307,16 +353,31 @@ export default {
           for (let i = 0; i < bytes.length; i += 0x8000) {
             b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
           }
-          const createRes = await meshy(env, 'POST', '/openapi/v1/image-to-3d', {
-            image_url: `data:${mime};base64,${btoa(b64)}`,
-            should_texture: true,
-            enable_pbr: url.searchParams.get('pbr') === 'true',
-          });
-          const created = (await createRes.json()) as { result?: string; message?: string };
-          if (!created.result) throw new Error(created.message ?? 'Meshy refused the task');
+          const dataUri = `data:${mime};base64,${btoa(b64)}`;
+          let taskId: string, kind: string;
+          if (provider === 'meshy') {
+            const createRes = await meshy(env, 'POST', '/openapi/v1/image-to-3d', {
+              image_url: dataUri,
+              should_texture: true,
+              enable_pbr: url.searchParams.get('pbr') === 'true',
+            });
+            const created = (await createRes.json()) as { result?: string; message?: string };
+            if (!created.result) throw new Error(created.message ?? 'Meshy refused the task');
+            taskId = created.result;
+            kind = 'image-to-3d';
+          } else {
+            const model = FAL_MODELS[provider];
+            const submitRes = await fal(env, 'POST', `/${model}`, {
+              image_url: dataUri, input_image_url: dataUri, input_image_urls: [dataUri],
+            });
+            const submitted = (await submitRes.json()) as { request_id?: string; detail?: string };
+            if (!submitted.request_id) throw new Error(String(submitted.detail ?? `${provider} refused the task`));
+            taskId = submitted.request_id;
+            kind = `fal:${model}`;
+          }
           await env.DB.prepare('INSERT INTO tasks (task_id, user_id, kind, created_at) VALUES (?, ?, ?, ?)')
-            .bind(created.result, session.uid, 'image-to-3d', Date.now()).run();
-          return json({ taskId: created.result, kind: 'image-to-3d', cost });
+            .bind(taskId, session.uid, kind, Date.now()).run();
+          return json({ taskId, kind, cost });
         } catch (err) {
           // Refund on any failure after the decrement.
           await env.DB.prepare('UPDATE users_v2 SET credits = credits + ? WHERE id = ?').bind(cost, session.uid).run();
@@ -341,6 +402,24 @@ export default {
         const owned = await env.DB.prepare('SELECT kind FROM tasks WHERE task_id = ? AND user_id = ?')
           .bind(taskMatch[1], session.uid).first<{ kind: string }>();
         if (!owned) return json({ error: 'no such task' }, 404);
+
+        if (owned.kind.startsWith('fal:')) {
+          const model = owned.kind.slice(4);
+          if (!taskMatch[2]) {
+            const st = (await (await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}/status`)).json()) as
+              { status: string; queue_position?: number };
+            const progress = st.status === 'COMPLETED' ? 100 : st.status === 'IN_PROGRESS' ? 50 : 5;
+            return json({
+              status: st.status === 'COMPLETED' ? 'SUCCEEDED' : 'IN_PROGRESS',
+              progress, error: null,
+            });
+          }
+          const result = (await (await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}`)).json()) as unknown;
+          const glbUrl = findGlbUrl(result);
+          if (!glbUrl) return json({ error: 'no model in result yet' }, 409);
+          const glb = await fetch(glbUrl);
+          return new Response(glb.body, { headers: { 'content-type': 'model/gltf-binary' } });
+        }
 
         const taskRes = await meshy(env, 'GET', `/openapi/v1/${owned.kind}/${taskMatch[1]}`);
         const task = (await taskRes.json()) as {

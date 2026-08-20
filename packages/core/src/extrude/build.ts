@@ -17,6 +17,9 @@ export interface ExtrudeMeshOptions {
   /** Pillow/relief: extra front-cap height (meters) at trace coords (x, y).
    *  Must be ~0 along contours so walls stay sealed. Disables the bevel. */
   frontHeightFn?: (x: number, y: number) => number;
+  /** Mirror the height field onto the back cap too (full 3D object read
+   *  from every angle instead of a flat-backed plaque). */
+  doubleSided?: boolean;
 }
 
 export interface ExtrudeStats {
@@ -199,9 +202,15 @@ export function buildExtrusion(
       if (!valid) continue;
       const tris = earcut(flat, holeIndices.length ? holeIndices : undefined);
 
-      if (nz === 1 && opts.frontHeightFn) {
-        // Pillow front cap: re-tessellate densely, displace, smooth-shade.
-        buildDisplacedCap(tris, globalIds, holeIndices, hz, opts.frontHeightFn);
+      if (opts.frontHeightFn && (nz === 1 || opts.doubleSided)) {
+        // Displaced cap (front always; back too when double-sided —
+        // mirrored, so the object reads as a full form from behind).
+        const fn = opts.frontHeightFn;
+        buildDisplacedCap(
+          tris, globalIds, holeIndices, nz * hz,
+          nz === 1 ? fn : (x, y) => -fn(x, y),
+          nz,
+        );
         continue;
       }
 
@@ -225,6 +234,7 @@ export function buildExtrusion(
     holeStarts: number[],
     zBase: number,
     heightFn: (x: number, y: number) => number,
+    normalSign = 1,
   ): void {
     // Recover trace coords for the rim ring from world positions (invert toWorld).
     const traceXY: number[] = [];
@@ -297,15 +307,16 @@ export function buildExtrusion(
         emitted.push(rimIds[i]);
       } else {
         const x = verts[i * 2], y = verts[i * 2 + 1];
-        emitted.push(pushVert(x, y, zBase + heightFn(x, y), [0, 0, 1]));
+        emitted.push(pushVert(x, y, zBase + heightFn(x, y), [0, 0, normalSign]));
       }
     }
 
-    // Faces (winding normalized against +z), collecting for normal pass.
+    // Faces (winding normalized against the cap's outward z), collected
+    // for the smooth-normal pass.
     const capFaces: number[] = [];
     for (let t = 0; t < faces.length; t += 3) {
       let [a, b, c] = [emitted[faces[t]], emitted[faces[t + 1]], emitted[faces[t + 2]]];
-      if (Math.sign(triNormalZ(positions, a, b, c)) !== 1) [b, c] = [c, b];
+      if (Math.sign(triNormalZ(positions, a, b, c)) !== normalSign) [b, c] = [c, b];
       indices.push(a, b, c);
       capFaces.push(a, b, c);
     }

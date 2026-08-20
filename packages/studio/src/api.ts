@@ -133,16 +133,19 @@ export const api = {
         }).then((r) => check<AssetDetail>(r)),
 
   meshyAvailable: async () => backend === 'local'
-    ? { available: false }
-    : fetch('/api/meshy/available').then((r) => check<{ available: boolean }>(r)),
-  meshyImage: (bytes: ArrayBuffer, mime: string, pbr: boolean) =>
-    fetch(`/api/meshy/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}`, {
+    ? { available: false, generators: {} as Record<string, boolean> }
+    : fetch('/api/meshy/available').then((r) =>
+        check<{ available: boolean; generators?: Record<string, boolean> }>(r)),
+  meshyImage: (bytes: ArrayBuffer, mime: string, pbr: boolean, provider = 'meshy') =>
+    fetch(`/api/meshy/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}&provider=${provider}`, {
       method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<{ taskId: string; kind: string }>(r)),
   meshyTask: (kind: string, id: string) =>
-    fetch(`/api/meshy/tasks/${kind}/${id}`).then((r) => check<{ status: string; progress: number; error: string | null }>(r)),
+    fetch(`/api/meshy/task2?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`)
+      .then((r) => check<{ status: string; progress: number; error: string | null }>(r)),
   meshyImport: (kind: string, id: string) =>
-    fetch(`/api/meshy/tasks/${kind}/${id}/import`, { method: 'POST' }).then((r) => check<AssetDetail>(r)),
+    fetch(`/api/meshy/import2?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`, { method: 'POST' })
+      .then((r) => check<AssetDetail>(r)),
 };
 
 // Synchronous blob-URL lookup for local mode (the engine registers URLs at
@@ -167,7 +170,7 @@ export interface CloudUser { login: string; credits: number }
 
 export const cloud = {
   loginUrl: (provider: 'github' | 'google' = 'github') => `/api/auth/login?provider=${provider}`,
-  providers: async (): Promise<{ github: boolean; google: boolean }> => {
+  providers: async (): Promise<{ github: boolean; google: boolean; generators?: Record<string, boolean>; costs?: Record<string, number> }> => {
     try {
       const res = await fetch('/api/auth/providers', { signal: AbortSignal.timeout(4000) });
       return res.ok ? res.json() : { github: false, google: false };
@@ -184,10 +187,10 @@ export const cloud = {
     }
   },
   logout: () => fetch('/api/auth/logout', { method: 'POST' }).then(() => undefined),
-  genImage: (bytes: ArrayBuffer, mime: string, pbr: boolean) =>
-    fetch(`/api/gen/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}`, {
+  genImage: (bytes: ArrayBuffer, mime: string, pbr: boolean, provider = 'meshy') =>
+    fetch(`/api/gen/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}&provider=${provider}`, {
       method: 'POST', body: bytes, headers: OCTET,
-    }).then((r) => check<{ taskId: string; kind: string }>(r)),
+    }).then((r) => check<{ taskId: string; kind: string; cost?: number }>(r)),
   genTask: (id: string) =>
     fetch(`/api/gen/tasks/${id}`).then((r) => check<{ status: string; progress: number; error: string | null }>(r)),
   history: () =>

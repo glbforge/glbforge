@@ -111,3 +111,49 @@ describe('remesh / retexture / balance', () => {
     expect(await client.getBalance()).toBe(420);
   });
 });
+
+describe('FalClient', () => {
+  const fjson = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status });
+
+  async function makeFal(responses: Response[]) {
+    const fetch = vi.fn(async () => responses.shift()!);
+    const { FalClient } = await import('../src/fal.js');
+    return { client: new FalClient({ apiKey: 'fal-test', fetch }), fetch };
+  }
+
+  it('submits with aliased image keys and returns the request id', async () => {
+    const { client, fetch } = await makeFal([fjson({ request_id: 'req_1' })]);
+    const id = await client.submit('fal-ai/trellis', 'data:image/png;base64,x');
+    expect(id).toBe('req_1');
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://queue.fal.run/fal-ai/trellis');
+    const body = JSON.parse(String(init.body));
+    expect(body.image_url).toBe('data:image/png;base64,x');
+    expect(body.input_image_url).toBe('data:image/png;base64,x');
+  });
+
+  it('deep-scans nested results for the glb url', async () => {
+    const { findGlbUrl } = await import('../src/fal.js');
+    expect(findGlbUrl({
+      model_mesh: { file: { url: 'https://cdn.fal.ai/x/mesh.glb?token=1' } },
+      textures: ['https://cdn.fal.ai/x/tex.png'],
+    })).toBe('https://cdn.fal.ai/x/mesh.glb?token=1');
+    expect(findGlbUrl({ outputs: [{ url: 'https://x/y.obj' }] })).toBeNull();
+  });
+
+  it('polls status and downloads the finished glb', async () => {
+    const bytes = new Uint8Array([7, 7]);
+    const { client } = await makeFal([
+      fjson({ status: 'IN_PROGRESS', queue_position: 2 }),
+      fjson({ status: 'COMPLETED' }),
+      fjson({ result: { mesh: { url: 'https://cdn.fal.ai/m.glb' } } }),
+      new Response(bytes),
+    ]);
+    expect((await client.status('m', 'r')).status).toBe('IN_PROGRESS');
+    expect((await client.status('m', 'r')).status).toBe('COMPLETED');
+    const url = await client.resultGlbUrl('m', 'r');
+    expect(url).toBe('https://cdn.fal.ai/m.glb');
+    expect(await client.downloadGlb(url)).toEqual(bytes);
+  });
+});

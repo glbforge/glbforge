@@ -37,6 +37,9 @@ export interface ExtrudeOptions {
    *  the engraved/sculpted read. Fades to zero at contours so the mesh stays
    *  sealed. Combines with pillow. Try depth * 0.15. */
   emboss?: number;
+  /** Mirror pillow/emboss onto the back face — a full object from every
+   *  angle instead of a flat-backed plaque. Default true when pillow set. */
+  doubleSided?: boolean;
   /** Material preset applied to all forge materials. */
   preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
   /** Project the source image onto the mesh as baseColor. Default true. */
@@ -172,6 +175,7 @@ export async function extrudeFromRgba(
     imageWidth: tw,
     imageHeight: th,
     frontHeightFn: makeHeightFn(opts, mask, tw, th, px),
+    doubleSided: opts.doubleSided ?? (opts.pillow ?? 0) > 0,
   });
 
   const material = doc
@@ -337,6 +341,7 @@ async function extrudeLayered(
       imageWidth: tw,
       imageHeight: th,
       frontHeightFn: makeHeightFn(opts, layerMask, tw, th, px),
+      doubleSided: opts.doubleSided ?? (opts.pillow ?? 0) > 0,
     });
 
     const [r, g, b] = colors[cluster];

@@ -14,7 +14,7 @@ import {
   toStl,
   type AnalysisResult,
 } from '@glbforge/core';
-import { MeshyClient, type TaskKind } from '@glbforge/meshy';
+import { FAL_MODELS, FalClient, MeshyClient, type TaskKind } from '@glbforge/meshy';
 
 interface Asset {
   id: string;
@@ -180,15 +180,29 @@ export async function startUiServer(opts: {
 
   // --- Meshy bridge (active only when a key is configured) ---
   app.get('/api/meshy/available', (_req, res) =>
-    res.json({ available: !!process.env.MESHY_API_KEY }),
+    res.json({
+      available: !!process.env.MESHY_API_KEY || !!process.env.FAL_KEY,
+      generators: {
+        meshy: !!process.env.MESHY_API_KEY,
+        ...(process.env.FAL_KEY ? { hunyuan: true, trellis: true, triposr: true } : {}),
+      },
+    }),
   );
   app.post('/api/meshy/image', raw, async (req, res) => {
     if (!requireBody(req, res)) return;
     try {
-      const client = new MeshyClient();
       const mime = String(req.query.mime ?? 'image/png');
+      const provider = String(req.query.provider ?? 'meshy');
+      const dataUri = `data:${mime};base64,${Buffer.from(req.body).toString('base64')}`;
+      if (provider !== 'meshy') {
+        const model = FAL_MODELS[provider as keyof typeof FAL_MODELS];
+        if (!model) return res.status(400).json({ error: `unknown provider ${provider}` });
+        const requestId = await new FalClient().submit(model, dataUri);
+        return res.json({ taskId: requestId, kind: `fal:${model}` });
+      }
+      const client = new MeshyClient();
       const taskId = await client.createImageTo3D({
-        image_url: `data:${mime};base64,${Buffer.from(req.body).toString('base64')}`,
+        image_url: dataUri,
         should_texture: req.query.texture !== 'false',
         enable_pbr: req.query.pbr === 'true',
       });
@@ -198,12 +212,50 @@ export async function startUiServer(opts: {
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
+  // Query-based (kinds like 'fal:fal-ai/trellis' contain slashes).
+  app.get('/api/meshy/task2', async (req, res) => {
+    try {
+      const kind = String(req.query.kind), id = String(req.query.id);
+      if (kind.startsWith('fal:')) {
+        const st = await new FalClient().status(kind.slice(4), id);
+        res.json({
+          status: st.status === 'COMPLETED' ? 'SUCCEEDED' : 'IN_PROGRESS',
+          progress: st.status === 'COMPLETED' ? 100 : st.status === 'IN_PROGRESS' ? 50 : 5,
+          error: null,
+        });
+        return;
+      }
+      const task = await new MeshyClient().getTask(kind as TaskKind, id);
+      res.json({ status: task.status, progress: task.progress, error: task.task_error?.message ?? null });
+    } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  app.post('/api/meshy/import2', async (req, res) => {
+    try {
+      const kind = String(req.query.kind), id = String(req.query.id);
+      let bytes: Uint8Array;
+      if (kind.startsWith('fal:')) {
+        const fal = new FalClient();
+        bytes = await fal.downloadGlb(await fal.resultGlbUrl(kind.slice(4), id));
+      } else {
+        const client = new MeshyClient();
+        bytes = await client.downloadModel(await client.getTask(kind as TaskKind, id), 'glb');
+      }
+      const asset = await ingest(`gen-${id.slice(0, 8)}.glb`, bytes, 'mobile-hero');
+      res.json({ ...summary(asset), report: asset.report });
+    } catch (err) {
+      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+  // Legacy path-based routes kept for older clients (Meshy kinds only).
   app.get('/api/meshy/tasks/:kind/:id', async (req, res) => {
     try {
       const task = await new MeshyClient().getTask(req.params.kind as TaskKind, req.params.id);
       res.json({ id: task.id, status: task.status, progress: task.progress, error: task.task_error?.message ?? null });
     } catch (err) {
-      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
@@ -215,7 +267,6 @@ export async function startUiServer(opts: {
       const asset = await ingest(`meshy-${task.id.slice(0, 8)}.glb`, bytes, 'mobile-hero');
       res.json({ ...summary(asset), report: asset.report });
     } catch (err) {
-      console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
