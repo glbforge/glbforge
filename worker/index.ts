@@ -363,7 +363,15 @@ export default {
       }
 
       // ---- billing ----
-      if (path === '/api/billing/packs') return json(PACKS);
+      if (path === '/api/billing/packs') {
+        return json({
+          packs: PACKS,
+          checkout: !!env.STRIPE_SECRET_KEY,
+          webhook: !!env.STRIPE_WEBHOOK_SECRET,
+          mode: env.STRIPE_SECRET_KEY?.startsWith('sk_test') ? 'test'
+            : env.STRIPE_SECRET_KEY?.startsWith('sk_live') ? 'live' : null,
+        });
+      }
 
       if (path === '/api/billing/checkout' && request.method === 'POST') {
         const session = await readSession(env, request);
