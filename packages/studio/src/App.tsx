@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type AssetDetail, type AssetSummary } from './api';
+import { api, detectBackend, getBackend, type AssetDetail, type AssetSummary } from './api';
 import { AssetRail } from './components/AssetRail';
 import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
@@ -21,9 +21,12 @@ export default function App() {
     if (selectId) setSelected(await api.get(selectId));
   }, []);
 
+  const [mode, setMode] = useState<'remote' | 'local' | null>(null);
   useEffect(() => {
-    api.meshyAvailable().then((m) => setMeshy(m.available)).catch(() => {});
-    refresh().then(async () => {
+    detectBackend().then(async (detected) => {
+      setMode(detected);
+      api.meshyAvailable().then((m) => setMeshy(m.available)).catch(() => {});
+      await refresh();
       const list = await api.list();
       if (list.length > 0) setSelected(await api.get(list[0].id));
     }).catch((err) => setError(String(err.message ?? err)));
@@ -93,6 +96,11 @@ export default function App() {
         <div className="brand">
           <span className="brand-mark">⬢</span> GLBForge <span className="brand-sub">Studio</span>
         </div>
+        {mode === 'local' && (
+          <div className="mode-badge" title="The whole pipeline runs in your browser — assets never leave your device. For Meshy generation and KTX2, run: npx glbforge ui">
+            ⚡ in-browser · private
+          </div>
+        )}
         {busy && <div className="busy">⚙ {busy}…</div>}
         {error && <div className="error" onClick={() => setError(null)}>{error} ✕</div>}
       </header>

@@ -41,6 +41,27 @@ export type AssetDetail = AssetSummary & { report: Report };
 // parser needs one to engage.
 const OCTET = { 'Content-Type': 'application/octet-stream' };
 
+/**
+ * Backend detection: served by `glbforge ui` -> remote Express API; served
+ * statically (glbforge.dev/studio) -> everything runs in this browser via
+ * the local engine. Resolved once at boot by probing /api/profiles.
+ */
+export type Backend = 'remote' | 'local';
+let backend: Backend = 'remote';
+export const getBackend = (): Backend => backend;
+
+export async function detectBackend(): Promise<Backend> {
+  try {
+    const res = await fetch('/api/profiles', { signal: AbortSignal.timeout(2500) });
+    backend = res.ok ? 'remote' : 'local';
+  } catch {
+    backend = 'local';
+  }
+  return backend;
+}
+
+const local = () => import('./local-engine').then((m) => m.localEngine);
+
 async function check<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -50,37 +71,68 @@ async function check<T>(res: Response): Promise<T> {
 }
 
 export const api = {
-  profiles: () => fetch('/api/profiles').then((r) => check<Record<string, unknown>>(r)),
-  list: () => fetch('/api/assets').then((r) => check<AssetSummary[]>(r)),
-  get: (id: string) => fetch(`/api/assets/${id}`).then((r) => check<AssetDetail>(r)),
-  fileUrl: (id: string) => `/api/assets/${id}/file`,
-  stlUrl: (id: string, size = 80) => `/api/assets/${id}/stl?size=${size}`,
+  profiles: async () => backend === 'local'
+    ? (await local()).profiles()
+    : fetch('/api/profiles').then((r) => check<Record<string, unknown>>(r)),
+  list: async () => backend === 'local'
+    ? (await local()).list()
+    : fetch('/api/assets').then((r) => check<AssetSummary[]>(r)),
+  get: async (id: string) => backend === 'local'
+    ? (await local()).get(id)
+    : fetch(`/api/assets/${id}`).then((r) => check<AssetDetail>(r)),
+  fileUrl: (id: string) => backend === 'local'
+    ? localFileUrl(id)
+    : `/api/assets/${id}/file`,
 
-  upload: (name: string, bytes: ArrayBuffer, profile: string) =>
-    fetch(`/api/assets?name=${encodeURIComponent(name)}&profile=${profile}`, {
-      method: 'POST', body: bytes, headers: OCTET,
-    }).then((r) => check<AssetDetail>(r)),
+  /** Download helpers work in both modes (blob in local, fetch in remote). */
+  downloadStl: async (id: string, name: string, size = 80) => {
+    const blob = backend === 'local'
+      ? await (await local()).stlBlob(id, size)
+      : await fetch(`/api/assets/${id}/stl?size=${size}`).then((r) => r.blob());
+    triggerDownload(blob, name.replace(/\.glb$/i, '') + '.stl');
+  },
+  downloadGlb: async (id: string, name: string) => {
+    const blob = backend === 'local'
+      ? await (await local()).glbBlob(id)
+      : await fetch(`/api/assets/${id}/file`).then((r) => r.blob());
+    triggerDownload(blob, name);
+  },
 
-  extrude: (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number; pillow?: number; preset?: string }) =>
-    fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}`, {
-      method: 'POST', body: bytes, headers: OCTET,
-    }).then((r) => check<AssetDetail>(r)),
+  upload: async (name: string, bytes: ArrayBuffer, profile: string) =>
+    backend === 'local'
+      ? (await local()).upload(name, bytes, profile)
+      : fetch(`/api/assets?name=${encodeURIComponent(name)}&profile=${profile}`, {
+          method: 'POST', body: bytes, headers: OCTET,
+        }).then((r) => check<AssetDetail>(r)),
 
-  optimize: (id: string, opts: { profile: string; ktx2: boolean }) =>
-    fetch(`/api/assets/${id}/optimize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(opts),
-    }).then((r) => check<AssetDetail>(r)),
+  extrude: async (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number; pillow?: number; preset?: string }) =>
+    backend === 'local'
+      ? (await local()).extrude(name, bytes, opts)
+      : fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}`, {
+          method: 'POST', body: bytes, headers: OCTET,
+        }).then((r) => check<AssetDetail>(r)),
 
-  reanalyze: (id: string, profile: string) =>
-    fetch(`/api/assets/${id}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile }),
-    }).then((r) => check<AssetDetail>(r)),
+  optimize: async (id: string, opts: { profile: string; ktx2: boolean }) =>
+    backend === 'local'
+      ? (await local()).optimize(id, opts)
+      : fetch(`/api/assets/${id}/optimize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(opts),
+        }).then((r) => check<AssetDetail>(r)),
 
-  meshyAvailable: () => fetch('/api/meshy/available').then((r) => check<{ available: boolean }>(r)),
+  reanalyze: async (id: string, profile: string) =>
+    backend === 'local'
+      ? (await local()).reanalyze(id, profile)
+      : fetch(`/api/assets/${id}/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile }),
+        }).then((r) => check<AssetDetail>(r)),
+
+  meshyAvailable: async () => backend === 'local'
+    ? { available: false }
+    : fetch('/api/meshy/available').then((r) => check<{ available: boolean }>(r)),
   meshyImage: (bytes: ArrayBuffer, mime: string, pbr: boolean) =>
     fetch(`/api/meshy/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}`, {
       method: 'POST', body: bytes, headers: OCTET,
@@ -90,3 +142,17 @@ export const api = {
   meshyImport: (kind: string, id: string) =>
     fetch(`/api/meshy/tasks/${kind}/${id}/import`, { method: 'POST' }).then((r) => check<AssetDetail>(r)),
 };
+
+// Synchronous blob-URL lookup for local mode (the engine registers URLs at
+// ingest; this avoids making fileUrl async for the viewport).
+let localUrls: ((id: string) => string) | null = null;
+export function registerLocalUrls(fn: (id: string) => string): void { localUrls = fn; }
+function localFileUrl(id: string): string { return localUrls ? localUrls(id) : ''; }
+
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}

@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { api, type AssetDetail } from '../api';
 
-const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
+const ktx2Loader = new KTX2Loader().setTranscoderPath(import.meta.env.BASE_URL + 'basis/');
 
 function useModel(url: string) {
   const gl = useThree((s) => s.gl);

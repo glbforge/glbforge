@@ -1,5 +1,4 @@
 import { Document } from '@gltf-transform/core';
-import sharp from 'sharp';
 import { pointInLoop, traceMask, type Loop } from './trace.js';
 import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { quantizeColors, srgbToLinear } from './layers.js';
@@ -39,6 +38,9 @@ export interface ExtrudeOptions {
   color?: [number, number, number, number];
   metallic?: number;
   roughness?: number;
+  /** Pre-encoded artwork to project as baseColor (browser path; Node's
+   *  extrudeImage generates this via sharp automatically). */
+  textureBytes?: { bytes: Uint8Array; mimeType: string };
 }
 
 export interface LayerInfo {
@@ -60,15 +62,15 @@ export interface ExtrudeResult {
 const TRACE_MAX = 1024; // tracing resolution cap; texture keeps up to 2048
 
 /**
- * Turn a logo/graphic image into an extruded 3D GLB document.
+ * Turn a logo/graphic image into an extruded 3D GLB document (Node entry).
  * Accepts PNG/JPEG/WebP — and SVG, which sharp rasterizes at high density
- * before tracing (the marching-squares grid is the accuracy limit either
- * way, so rasterized vectors lose nothing at trace resolution).
+ * before tracing. Browsers decode with canvas and call extrudeFromRgba.
  */
 export async function extrudeImage(
   imageBytes: Uint8Array,
   opts: ExtrudeOptions = {},
 ): Promise<ExtrudeResult> {
+  const sharp = (await import('sharp')).default;
   // SVG inputs get rasterized generously so the trace grid is saturated.
   const isSvg = looksLikeSvg(imageBytes);
   if (isSvg) {
@@ -79,17 +81,44 @@ export async function extrudeImage(
         .toBuffer(),
     );
   }
-  const meta = await sharp(imageBytes).metadata();
-  const hasAlpha = meta.hasAlpha ?? false;
-  const mode = opts.mode ?? (hasAlpha ? 'alpha' : 'luma');
-
   const raw = await sharp(imageBytes)
     .resize(TRACE_MAX, TRACE_MAX, { fit: 'inside', withoutEnlargement: true })
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const { width: tw, height: th } = raw.info;
-  const px = raw.data;
+
+  let textureBytes = opts.textureBytes;
+  if (opts.texture !== false && !textureBytes) {
+    const png = await sharp(imageBytes)
+      .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
+      .png()
+      .toBuffer();
+    textureBytes = { bytes: new Uint8Array(png), mimeType: 'image/png' };
+  }
+
+  return extrudeFromRgba(
+    new Uint8Array(raw.data), raw.info.width, raw.info.height,
+    { ...opts, textureBytes },
+  );
+}
+
+/**
+ * Pure, environment-agnostic extrusion from decoded RGBA pixels (row-major,
+ * 4 bytes/px). This is the whole pipeline minus image decoding — safe in
+ * browsers, workers, and Node alike.
+ */
+export async function extrudeFromRgba(
+  px: Uint8Array,
+  tw: number,
+  th: number,
+  opts: ExtrudeOptions = {},
+): Promise<ExtrudeResult> {
+  // Auto mode: alpha if the alpha channel actually varies.
+  let hasAlpha = false;
+  for (let i = 3; i < px.length; i += 4) {
+    if (px[i] < 250) { hasAlpha = true; break; }
+  }
+  const mode = opts.mode ?? (hasAlpha ? 'alpha' : 'luma');
 
   const mask = new Uint8Array(tw * th);
   if (mode === 'alpha') {
@@ -122,7 +151,7 @@ export async function extrudeImage(
   }
 
   if (opts.layers && opts.layers >= 2) {
-    return extrudeLayered(imageBytes, px, mask, tw, th, mode, opts);
+    return extrudeLayered(px, mask, tw, th, mode, opts);
   }
 
   const doc = new Document();
@@ -144,14 +173,12 @@ export async function extrudeImage(
     .setDoubleSided(false);
   applyPreset(material, opts.preset, null);
 
-  if (opts.texture !== false) {
-    // Re-encode the source as PNG (capped at 2048) and project it via the
-    // pixel-space UVs — gradients and glows survive without any painting.
-    const png = await sharp(imageBytes)
-      .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
-      .png()
-      .toBuffer();
-    const texture = doc.createTexture('source').setImage(png).setMimeType('image/png');
+  if (opts.texture !== false && opts.textureBytes) {
+    // Project the source artwork via the pixel-space UVs — gradients and
+    // glows survive without any painting.
+    const texture = doc.createTexture('source')
+      .setImage(opts.textureBytes.bytes)
+      .setMimeType(opts.textureBytes.mimeType);
     material.setBaseColorTexture(texture);
     if (opts.preset === 'neon') {
       // Glow the artwork itself.
@@ -211,8 +238,7 @@ function cleanLoops(loops: Loop[], width: number, height: number): Loop[] {
  * details pop forward.
  */
 async function extrudeLayered(
-  imageBytes: Uint8Array,
-  px: Buffer,
+  px: Uint8Array,
   mask: Uint8Array,
   tw: number,
   th: number,

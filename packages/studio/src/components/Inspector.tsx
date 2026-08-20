@@ -113,8 +113,8 @@ export function Inspector(props: {
         >
           Re-analyze with {profile}
         </button>
-        <a href={api.stlUrl(asset.id)} download><button className="ghost">⬇ Export STL (80mm)</button></a>
-        <a href={api.fileUrl(asset.id)} download={asset.name}><button className="ghost">⬇ Download GLB</button></a>
+        <button className="ghost" onClick={() => void api.downloadStl(asset.id, asset.name)}>⬇ Export STL (80mm)</button>
+        <button className="ghost" onClick={() => void api.downloadGlb(asset.id, asset.name)}>⬇ Download GLB</button>
         {meshy && <div style={{ color: 'var(--dim)', fontSize: 11 }}>Meshy connected — drop an image on the rail to forge or generate.</div>}
       </div>
 

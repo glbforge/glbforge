@@ -1,14 +1,16 @@
-import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { Document } from '@gltf-transform/core';
 import { KHRTextureBasisu } from '@gltf-transform/extensions';
 import { listTextureSlots } from '@gltf-transform/functions';
-import sharp from 'sharp';
 
-const run = promisify(execFile);
+// Node-only dependencies load lazily so this module can sit in a browser
+// bundle unexecuted (KTX2 encoding requires local CLIs regardless).
+async function nodeDeps() {
+  const [{ execFile }, { promisify }, fs, os, path, sharp] = await Promise.all([
+    import('node:child_process'), import('node:util'), import('node:fs/promises'),
+    import('node:os'), import('node:path'), import('sharp'),
+  ]);
+  return { run: promisify(execFile), fs, os, path, sharp: sharp.default };
+}
 
 export type Ktx2Encoder = 'basisu' | 'toktx';
 
@@ -17,6 +19,7 @@ export type Ktx2Encoder = 'basisu' | 'toktx';
  * basis_universal`) is preferred; `toktx` (KTX-Software) also works.
  */
 export async function detectKtx2Encoder(): Promise<Ktx2Encoder | null> {
+  const { run } = await nodeDeps();
   for (const [bin, args] of [['basisu', ['-version']], ['toktx', ['--version']]] as const) {
     try {
       await run(bin, [...args]);
@@ -53,7 +56,8 @@ export async function ktx2Compress(
     .filter((t) => t.getMimeType() !== 'image/ktx2' && t.getImage());
   if (textures.length === 0) return 0;
 
-  const workDir = await mkdtemp(join(tmpdir(), 'glbforge-ktx2-'));
+  const { run, fs, os, path, sharp } = await nodeDeps();
+  const workDir = await fs.mkdtemp(path.join(os.tmpdir(), 'glbforge-ktx2-'));
   try {
     for (const [i, texture] of textures.entries()) {
       const slots = listTextureSlots(texture);
@@ -67,9 +71,9 @@ export async function ktx2Compress(
       const scale = Math.min(1, opts.maxSize / Math.max(meta.width ?? 1, meta.height ?? 1));
       const width = Math.max(4, Math.floor(((meta.width ?? 4) * scale) / 4) * 4);
       const height = Math.max(4, Math.floor(((meta.height ?? 4) * scale) / 4) * 4);
-      const pngPath = join(workDir, `t${i}.png`);
-      const ktxPath = join(workDir, `t${i}.ktx2`);
-      await writeFile(pngPath, await image.resize(width, height, { fit: 'fill' }).png().toBuffer());
+      const pngPath = path.join(workDir, `t${i}.png`);
+      const ktxPath = path.join(workDir, `t${i}.ktx2`);
+      await fs.writeFile(pngPath, await image.resize(width, height, { fit: 'fill' }).png().toBuffer());
 
       const args =
         encoder === 'basisu'
@@ -89,7 +93,7 @@ export async function ktx2Compress(
             ];
       await run(encoder, args);
 
-      const ktxBytes = await readFile(ktxPath);
+      const ktxBytes = await fs.readFile(ktxPath);
       texture.setImage(new Uint8Array(ktxBytes)).setMimeType('image/ktx2');
       opts.log?.(
         `ktx2 (${isNormal ? 'uastc' : 'etc1s'}): ${texture.getName() || 't' + i} ` +
@@ -99,6 +103,6 @@ export async function ktx2Compress(
     doc.createExtension(KHRTextureBasisu).setRequired(true);
     return textures.length;
   } finally {
-    await rm(workDir, { recursive: true, force: true });
+    await fs.rm(workDir, { recursive: true, force: true });
   }
 }

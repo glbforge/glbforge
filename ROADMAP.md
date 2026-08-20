@@ -52,10 +52,14 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [x] **Pillow relief** (`--pillow <m>`, studio toggle): exact EDT → `H·sqrt(min(D,R)/R)` dome on a ring-edge-aware subdivided front cap (T-junction-free by construction; watertight verified). Composes with layers = embroidered-patch look. Deferred: luminance emboss
 - [x] **Material presets** (`--preset`, studio dropdown): enamel, chrome, neon (emissive from cluster colors / glows the artwork when textured), acrylic (KHR_materials_transmission), rubber
 - [x] glbforge.dev landing page (`site/`, zero-build static): live `<model-viewer>` embeds of forged assets (meshopt decoder wired), stats strip, pipeline grid, npx CTAs, MCP + Action snippets. Deploy = connect repo to Cloudflare Pages, output dir `site`
-- [ ] Hosted demo, phase 2: moat features account-free (size caps + rate limits);
-  generation via BYOK **and** purchased credits (GitHub OAuth + Stripe, quota ledger,
-  balance kill-switch via getBalance). Check Meshy ToS re: resale — an affiliate/volume
-  arrangement may be the better structure
+- [x] **Studio in the browser** (glbforge.dev/studio): core made isomorphic (lazy
+  sharp/node imports, pluggable TextureEncoder, extrudeFromRgba); Studio auto-detects
+  its backend (Express API locally, in-browser engine when static). Analyze, forge
+  (layers/pillow/presets), optimize (meshopt WASM + canvas WebP), STL — all client-side,
+  zero servers, assets never leave the visitor's device. Meshy + KTX2 route to npx.
+- [ ] Hosted generation, phase 2: BYOK **and** purchased credits (GitHub OAuth + Stripe,
+  quota ledger, balance kill-switch via getBalance). Check Meshy ToS re: resale — an
+  affiliate/volume arrangement may be the better structure
 
 ## v1.0 — Product bets (choose after usage data)
 

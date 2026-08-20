@@ -11,8 +11,18 @@ import {
   weld,
 } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
-import sharp from 'sharp';
 import type { Profile } from './types.js';
+
+/**
+ * Environment-specific texture recompressor. Given the encoded source image
+ * and its material slots, return re-encoded bytes (resized to maxSize) or
+ * null to leave the texture untouched. Node's default uses sharp; browsers
+ * supply a canvas-based encoder.
+ */
+export type TextureEncoder = (
+  input: { bytes: Uint8Array; mimeType: string; slots: string[] },
+  target: { maxSize: number },
+) => Promise<{ bytes: Uint8Array; mimeType: string } | null>;
 
 export interface OptimizeOptions {
   profile: Profile;
@@ -22,6 +32,9 @@ export interface OptimizeOptions {
   textures?: boolean;
   /** 'webp' (default, smallest file) or 'ktx2' (GPU-resident, ~8x less VRAM). */
   textureFormat?: 'webp' | 'ktx2';
+  /** Custom texture recompressor (browser environments). Overrides the
+   *  sharp-based default; ignored when textureFormat is 'ktx2'. */
+  textureEncoder?: TextureEncoder;
   /** Skip meshopt compression (emit plain quantized GLB). */
   compress?: boolean;
   log?: (msg: string) => void;
@@ -177,8 +190,27 @@ export async function optimize(
     const { ktx2Compress } = await import('./ktx2.js');
     const count = await ktx2Compress(doc, { maxSize: opts.profile.maxTextureSize, log });
     steps.push(`textures -> ktx2 x${count} @ ${opts.profile.maxTextureSize}px`);
+  } else if (opts.textures !== false && doc.getRoot().listTextures().length > 0 && opts.textureEncoder) {
+    // Environment-supplied encoder (e.g. canvas in the browser).
+    const cap = opts.profile.maxTextureSize;
+    const { listTextureSlots } = await import('@gltf-transform/functions');
+    let encoded = 0;
+    for (const texture of doc.getRoot().listTextures()) {
+      const image = texture.getImage();
+      if (!image || texture.getMimeType() === 'image/ktx2') continue;
+      const result = await opts.textureEncoder(
+        { bytes: image, mimeType: texture.getMimeType(), slots: listTextureSlots(texture) },
+        { maxSize: cap },
+      );
+      if (result) {
+        texture.setImage(result.bytes).setMimeType(result.mimeType);
+        encoded++;
+      }
+    }
+    if (encoded > 0) steps.push(`textures -> re-encoded x${encoded} @ ${cap}px`);
   } else if (opts.textures !== false && doc.getRoot().listTextures().length > 0) {
     const cap = opts.profile.maxTextureSize;
+    const sharp = (await import('sharp')).default;
     // Normal maps get near-lossless encoding: lossy artifacts in a normal
     // map show up as shading noise, not subtle color shifts.
     await doc.transform(
