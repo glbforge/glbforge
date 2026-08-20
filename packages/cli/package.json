@@ -12,13 +12,16 @@
   "dependencies": {
     "@glbforge/core": "workspace:*",
     "@glbforge/meshy": "workspace:*",
+    "@glbforge/studio": "workspace:*",
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
     "commander": "^12.1.0",
+    "express": "^5.2.1",
     "meshoptimizer": "^0.22.0",
     "picocolors": "^1.1.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.20.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
@@ -34,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge CLI \u2014 make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
+  "description": "GLBForge CLI — make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
   "keywords": [
     "gltf",
     "glb",

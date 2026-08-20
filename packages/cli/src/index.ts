@@ -207,6 +207,19 @@ program
   });
 
 program
+  .command('ui')
+  .description('Open GLBForge Studio — a local web UI for the whole pipeline.')
+  .argument('[files...]', 'GLB files to preload into the asset rail')
+  .option('--port <n>', 'port to serve on', (v) => parseInt(v, 10), 5177)
+  .option('-p, --profile <name>', 'default budget profile', 'mobile-hero')
+  .action(async (files: string[], opts: { port: number; profile: string }) => {
+    const { startUiServer } = await import('./ui-server.js');
+    await startUiServer({ port: opts.port, preload: files, profile: opts.profile });
+    // Keep serving until interrupted.
+    await new Promise(() => {});
+  });
+
+program
   .command('watch')
   .description('Watch a directory: new or changed GLBs are analyzed and optimized automatically.')
   .argument('<dir>', 'directory to watch')
