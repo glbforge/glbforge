@@ -92,3 +92,8 @@ button.ghost { background: var(--panel-2); color: var(--text); border: 1px solid
 label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); cursor: pointer; }
 .delta { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
 .delta .to { color: var(--good); font-weight: 600; }
+.choice { margin: 0 10px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
+  display: flex; flex-direction: column; gap: 7px; }
+.choice-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choice-sub { display: block; font-weight: 400; font-size: 11px; opacity: 0.75; }
+.asset.task .asset-score { color: var(--accent-2); cursor: default; }

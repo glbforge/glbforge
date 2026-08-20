@@ -12,7 +12,11 @@ CI-able contract.
 - ✅ `glbforge optimize` — weld/simplify/LOD/compress to hit the budget
 - ✅ `glbforge scaffold` — emit a React Three Fiber viewer for the optimized asset
 - ✅ `glbforge meshy` — generate/download via Meshy REST API (image/text → 3D, `--optimize` glue)
-- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 6 tools)
+- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 8 tools)
+- ✅ **GLBForge Studio** (`glbforge ui`) — local web UI: drag-drop analyze,
+  one-click optimize with a before/after compare slider in the viewport,
+  logo forging, Meshy generation with live progress, STL export. Zero
+  hosting; runs entirely on your machine.
 - ✅ `glbforge extrude` — deterministic logo/graphic → 3D (no AI, no credits): traces
   the silhouette (marching squares → Douglas-Peucker → earcut), extrudes it
   watertight, and projects the source image back on as the texture. For 2D
@@ -31,6 +35,7 @@ pnpm install && pnpm build
 node packages/cli/dist/index.js analyze fixtures/veiled-guardian.glb --profile mobile-hero
 node packages/cli/dist/index.js optimize fixtures/veiled-guardian-tex4k.glb -o out.web.glb --lods 40000,10000
 node packages/cli/dist/index.js scaffold out.web.glb -o viewer && cd viewer && pnpm install --ignore-workspace && pnpm dev
+node packages/cli/dist/index.js ui model.glb   # GLBForge Studio on localhost:5177
 ```
 
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,

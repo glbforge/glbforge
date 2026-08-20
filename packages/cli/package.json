@@ -1,6 +1,6 @@
 {
   "name": "glbforge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "bin": {
     "glbforge": "dist/index.js"
@@ -10,9 +10,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@glbforge/core": "workspace:*",
-    "@glbforge/meshy": "workspace:*",
-    "@glbforge/studio": "workspace:*",
+    "@glbforge/core": "workspace:^",
+    "@glbforge/meshy": "workspace:^",
+    "@glbforge/studio": "workspace:^",
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
     "commander": "^12.1.0",
@@ -37,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge CLI — make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
+  "description": "GLBForge CLI \u2014 make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
   "keywords": [
     "gltf",
     "glb",

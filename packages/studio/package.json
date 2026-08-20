@@ -1,13 +1,23 @@
 {
   "name": "@glbforge/studio",
-  "version": "0.1.0",
-  "description": "GLBForge Studio — local web UI for the GLBForge pipeline, served by `glbforge ui`.",
+  "version": "0.2.0",
+  "description": "GLBForge Studio \u2014 local web UI for the GLBForge pipeline, served by `glbforge ui`.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://glbforge.dev",
-  "repository": { "type": "git", "url": "git+https://github.com/glbforge/glbforge.git", "directory": "packages/studio" },
-  "files": ["dist", "README.md", "LICENSE"],
-  "publishConfig": { "access": "public" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glbforge/glbforge.git",
+    "directory": "packages/studio"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "vite",
     "build": "node copy-basis.mjs && vite build",

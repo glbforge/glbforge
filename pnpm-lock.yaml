@@ -11,13 +11,13 @@ importers:
   packages/cli:
     dependencies:
       '@glbforge/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@glbforge/meshy':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../meshy
       '@glbforge/studio':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../studio
       '@gltf-transform/core':
         specifier: ^4.1.0
@@ -91,10 +91,10 @@ importers:
   packages/mcp:
     dependencies:
       '@glbforge/core':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../core
       '@glbforge/meshy':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../meshy
       '@gltf-transform/core':
         specifier: ^4.4.2

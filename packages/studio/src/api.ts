@@ -37,6 +37,10 @@ export interface Report {
 
 export type AssetDetail = AssetSummary & { report: Report };
 
+// Browsers send no Content-Type for ArrayBuffer bodies; Express's raw
+// parser needs one to engage.
+const OCTET = { 'Content-Type': 'application/octet-stream' };
+
 async function check<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
@@ -54,12 +58,12 @@ export const api = {
 
   upload: (name: string, bytes: ArrayBuffer, profile: string) =>
     fetch(`/api/assets?name=${encodeURIComponent(name)}&profile=${profile}`, {
-      method: 'POST', body: bytes,
+      method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<AssetDetail>(r)),
 
   extrude: (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string }) =>
     fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}`, {
-      method: 'POST', body: bytes,
+      method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<AssetDetail>(r)),
 
   optimize: (id: string, opts: { profile: string; ktx2: boolean }) =>
@@ -79,7 +83,7 @@ export const api = {
   meshyAvailable: () => fetch('/api/meshy/available').then((r) => check<{ available: boolean }>(r)),
   meshyImage: (bytes: ArrayBuffer, mime: string, pbr: boolean) =>
     fetch(`/api/meshy/image?mime=${encodeURIComponent(mime)}&pbr=${pbr}`, {
-      method: 'POST', body: bytes,
+      method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<{ taskId: string; kind: string }>(r)),
   meshyTask: (kind: string, id: string) =>
     fetch(`/api/meshy/tasks/${kind}/${id}`).then((r) => check<{ status: string; progress: number; error: string | null }>(r)),

@@ -115,7 +115,7 @@ export function Inspector(props: {
         </button>
         <a href={api.stlUrl(asset.id)} download><button className="ghost">⬇ Export STL (80mm)</button></a>
         <a href={api.fileUrl(asset.id)} download={asset.name}><button className="ghost">⬇ Download GLB</button></a>
-        {meshy && <div style={{ color: 'var(--dim)', fontSize: 11 }}>Meshy connected — drop an image on the rail and choose "generate" (coming) or use the CLI.</div>}
+        {meshy && <div style={{ color: 'var(--dim)', fontSize: 11 }}>Meshy connected — drop an image on the rail to forge or generate.</div>}
       </div>
 
       {r.findings.length > 0 && <div className="section-title">Findings ({r.findings.length})</div>}
