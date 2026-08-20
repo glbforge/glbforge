@@ -164,6 +164,8 @@ program
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))
   .option('--depth <m>', 'extrusion depth in meters', parseFloat)
   .option('--bevel <m>', 'bevel radius on both rims (signage look)', parseFloat, 0)
+  .option('--layers <n>', 'layered color extrusion: quantize into N color layers (2-6)', (v) => parseInt(v, 10))
+  .option('--layer-step <m>', 'extra depth per layer in meters', parseFloat)
   .option('--bevel-segments <n>', 'bevel roundness: 1=chamfer, 3=rounded', (v) => parseInt(v, 10), 3)
   .option('--width <m>', 'world width in meters', parseFloat, 1)
   .option('--simplify <px>', 'contour simplification tolerance', parseFloat, 1.2)
@@ -174,7 +176,7 @@ program
   .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
     out?: string; mode?: 'alpha' | 'luma'; threshold?: number; depth?: number;
-    bevel: number; bevelSegments: number;
+    bevel: number; bevelSegments: number; layers?: number; layerStep?: number;
     width: number; simplify: number; texture: boolean; color?: string;
     metallic: number; roughness: number; json?: boolean;
   }) => {
@@ -188,6 +190,7 @@ program
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
       mode: opts.mode, threshold: opts.threshold, depth: opts.depth,
       bevel: opts.bevel, bevelSegments: opts.bevelSegments,
+      layers: opts.layers, layerStep: opts.layerStep,
       width: opts.width, simplify: opts.simplify,
       texture: opts.texture, color, metallic: opts.metallic, roughness: opts.roughness,
     });
@@ -198,9 +201,10 @@ program
     if (opts.json) {
       console.log(JSON.stringify({ outPath, bytes: outBytes.byteLength, ...stats }, null, 2));
     } else {
+      const layerNote = stats.layerInfo ? `, ${stats.layerInfo.length} layers` : '';
       console.log(
         `  ${outPath} (${(outBytes.byteLength / 1048576).toFixed(1)}MB)  ` +
-        `${stats.outerLoops} shape(s), ${stats.holes} hole(s), ` +
+        `${stats.outerLoops} shape(s), ${stats.holes} hole(s)${layerNote}, ` +
         `${stats.triangles.toLocaleString()} tris  [mode=${stats.mode}]`,
       );
     }

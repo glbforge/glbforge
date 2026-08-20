@@ -193,6 +193,8 @@ server.registerTool(
       depth: z.number().positive().optional().describe('Extrusion depth in meters (default width*0.08)'),
       bevel: z.number().min(0).default(0).describe('Bevel radius in meters (signage look; try depth*0.25)'),
       bevelSegments: z.number().int().min(1).max(8).default(3),
+      layers: z.number().int().min(2).max(6).optional()
+        .describe('Layered color extrusion: quantize into N color layers at stepped depths (the "layered acrylic" look)'),
       simplify: z.number().min(0).default(1.2).describe('Contour tolerance in trace pixels'),
       texture: z.boolean().default(true).describe('Project source image as baseColor'),
       color: z.string().optional().describe('Hex color when texture=false, e.g. "#ff2266"'),
@@ -200,14 +202,14 @@ server.registerTool(
       roughness: z.number().min(0).max(1).default(0.6),
     },
   },
-  async ({ path, out, mode, threshold, width, depth, bevel, bevelSegments, simplify, texture, color, metallic, roughness }) => {
+  async ({ path, out, mode, threshold, width, depth, bevel, bevelSegments, layers, simplify, texture, color, metallic, roughness }) => {
     const bytes = await readFile(path);
     const rgba = color
       ? ([1, 3, 5].map((i) => parseInt(color.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
           .concat(1) as [number, number, number, number])
       : undefined;
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
-      mode, threshold, width, depth, bevel, bevelSegments, simplify,
+      mode, threshold, width, depth, bevel, bevelSegments, layers, simplify,
       texture, color: rgba, metallic, roughness,
     });
     const io = await createNodeIO();

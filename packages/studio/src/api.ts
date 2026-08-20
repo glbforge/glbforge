@@ -61,8 +61,8 @@ export const api = {
       method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<AssetDetail>(r)),
 
-  extrude: (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string }) =>
-    fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}`, {
+  extrude: (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number }) =>
+    fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}`, {
       method: 'POST', body: bytes, headers: OCTET,
     }).then((r) => check<AssetDetail>(r)),
 

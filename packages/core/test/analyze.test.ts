@@ -295,3 +295,33 @@ describe('toStl', () => {
     expect(Math.max(...sizeMm)).toBeCloseTo(50, 1);
   });
 });
+
+describe('layered extrusion', () => {
+  it('splits a two-color graphic into stepped watertight layers', async () => {
+    const { extrudeImage } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 96;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      // Red square backdrop with a blue circle detail.
+      if (x > 8 && x < 88 && y > 8 && y < 88) {
+        rgba[i] = 220; rgba[i + 1] = 40; rgba[i + 2] = 40; rgba[i + 3] = 255;
+        if (Math.hypot(x - 48, y - 48) < 20) { rgba[i] = 40; rgba[i + 1] = 60; rgba[i + 2] = 220; }
+      }
+    }
+    const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+
+    const { doc, stats } = await extrudeImage(new Uint8Array(png), { layers: 2, texture: false });
+    expect(stats.layerInfo).toHaveLength(2);
+    // Backdrop (red, larger area) first and shallower; detail deeper.
+    expect(stats.layerInfo![0].depth).toBeLessThan(stats.layerInfo![1].depth);
+    expect(doc.getRoot().listMaterials()).toHaveLength(2);
+    expect(doc.getRoot().listMeshes()).toHaveLength(2);
+
+    const result = analyze(doc, { profile: getProfile('mobile-hero') });
+    expect(result.geometry.drawCallEstimate).toBe(2);
+    expect(result.geometry.topology!.boundaryEdges).toBe(0);
+    expect(result.geometry.topology!.nonManifoldEdges).toBe(0);
+  });
+});

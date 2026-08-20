@@ -43,6 +43,20 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [x] **GitHub Action** (`uses: glbforge/glbforge@main`): analyzes changed GLB/glTF in PRs, posts a sticky report-card comment, gates on budget. Live-tested on PR #1 — score table + findings + fix hint posted by the bot
 - [ ] Launch content: the numbers sell it (89MB→5.5MB, 40KB beveled logo). three.js forum, r/threejs, X creative-coding
 
+## Pre-launch: Forge upgrades + hosted demo
+
+- [x] **Layered color extrusion** (`--layers N`, studio "layered colors" toggle): k-means color
+  quantization (majority-filtered labels kill AA halos) → per-color trace → stepped depths,
+  backs coplanar, flat per-layer materials. Default 4 layers = exactly the mobile-hero
+  draw-call budget. Verified: plushqlty logo → 4 layers, 41k tris, score 95
+- [ ] Pillow/relief displacement (distance-transform "puffy sticker", luminance emboss)
+- [ ] Material presets (enamel pin, chrome, neon/emissive, acrylic, rubber)
+- [ ] glbforge.dev landing page + docs (Cloudflare Pages; CTA = `npx glbforge ui`)
+- [ ] Hosted demo, phase 2: moat features account-free (size caps + rate limits);
+  generation via BYOK **and** purchased credits (GitHub OAuth + Stripe, quota ledger,
+  balance kill-switch via getBalance). Check Meshy ToS re: resale — an affiliate/volume
+  arrangement may be the better structure
+
 ## v1.0 — Product bets (choose after usage data)
 
 - [ ] Hosted drag-and-drop: GLB in → report + optimized asset out (free tier = lead gen)

@@ -1,7 +1,8 @@
 import { Document } from '@gltf-transform/core';
 import sharp from 'sharp';
-import { pointInLoop as pointInLoopPub, traceMask, type Loop } from './trace.js';
+import { pointInLoop, traceMask, type Loop } from './trace.js';
 import { buildExtrusion, type ExtrudeStats } from './build.js';
+import { quantizeColors, srgbToLinear } from './layers.js';
 
 export interface ExtrudeOptions {
   /** Solid-pixel test: 'alpha' (transparent bg) or 'luma' (white bg). Auto-detected by default. */
@@ -18,6 +19,12 @@ export interface ExtrudeOptions {
   bevel?: number;
   /** Bevel roundness: 1 = chamfer, 3+ = rounded. Default 3. */
   bevelSegments?: number;
+  /** Layered color extrusion: quantize into this many color layers (2-6).
+   *  Each layer extrudes at a stepped depth with a flat material in its
+   *  cluster color — the "layered acrylic" look. Omit/0 = single layer. */
+  layers?: number;
+  /** Extra depth per layer (meters). Default depth * 0.5. */
+  layerStep?: number;
   /** Project the source image onto the mesh as baseColor. Default true. */
   texture?: boolean;
   /** Flat base color (used when texture=false), e.g. [1, 0.2, 0.6, 1]. */
@@ -26,9 +33,20 @@ export interface ExtrudeOptions {
   roughness?: number;
 }
 
+export interface LayerInfo {
+  color: [number, number, number];
+  depth: number;
+  triangles: number;
+}
+
 export interface ExtrudeResult {
   doc: Document;
-  stats: ExtrudeStats & { mode: 'alpha' | 'luma'; traceWidth: number; traceHeight: number };
+  stats: ExtrudeStats & {
+    mode: 'alpha' | 'luma';
+    traceWidth: number;
+    traceHeight: number;
+    layerInfo?: LayerInfo[];
+  };
 }
 
 const TRACE_MAX = 1024; // tracing resolution cap; texture keeps up to 2048
@@ -77,27 +95,9 @@ export async function extrudeImage(
     }
   }
 
-  let loops: Loop[] = traceMask(mask, tw, th, { simplify: opts.simplify ?? 1.2 });
-  // Drop specks (< 0.005% of image area) — antialiasing noise, not shapes.
-  const minArea = tw * th * 0.00005;
-  loops = loops.filter((l) => l.area >= minArea);
-  // Re-derive nesting after filtering (parents may be gone).
-  loops.forEach((l, i) => {
-    l.depth = 0; l.parent = -1;
-    // recomputed below
-  });
-  for (let i = 0; i < loops.length; i++) {
-    const containers: number[] = [];
-    for (let j = 0; j < loops.length; j++) {
-      if (i !== j && pointInLoopPub(loops[i].points[0], loops[j].points)) containers.push(j);
-    }
-    loops[i].depth = containers.length;
-    if (containers.length) {
-      loops[i].parent = containers.reduce((best, j) =>
-        loops[j].area < loops[best].area ? j : best, containers[0]);
-    }
-  }
-
+  const loops = cleanLoops(
+    traceMask(mask, tw, th, { simplify: opts.simplify ?? 1.2 }), tw, th,
+  );
   if (loops.length > 150) {
     throw new Error(
       `Traced ${loops.length} contours — this looks like a photograph or a noisy mask, ` +
@@ -111,6 +111,10 @@ export async function extrudeImage(
       `No shapes found (mode=${mode}). For white-background images pass mode "luma"; ` +
       'for transparent-background images pass "alpha"; or adjust the threshold.',
     );
+  }
+
+  if (opts.layers && opts.layers >= 2) {
+    return extrudeLayered(imageBytes, px, mask, tw, th, mode, opts);
   }
 
   const doc = new Document();
@@ -167,4 +171,121 @@ function looksLikeSvg(bytes: Uint8Array): boolean {
     .trimStart()
     .toLowerCase();
   return head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'));
+}
+
+/** Drop specks and re-derive containment nesting after filtering. */
+function cleanLoops(loops: Loop[], width: number, height: number): Loop[] {
+  const minArea = width * height * 0.00005;
+  const kept = loops.filter((l) => l.area >= minArea);
+  for (let i = 0; i < kept.length; i++) {
+    const containers: number[] = [];
+    for (let j = 0; j < kept.length; j++) {
+      if (i !== j && pointInLoop(kept[i].points[0], kept[j].points)) containers.push(j);
+    }
+    kept[i].depth = containers.length;
+    kept[i].parent = containers.length
+      ? containers.reduce((best, j) => (kept[j].area < kept[best].area ? j : best), containers[0])
+      : -1;
+  }
+  return kept;
+}
+
+/**
+ * Layered color extrusion: cluster the artwork's colors, trace each color
+ * region, and extrude each at a stepped depth (backs coplanar). One
+ * primitive + flat material per layer; larger-area colors sit lower so
+ * details pop forward.
+ */
+async function extrudeLayered(
+  imageBytes: Uint8Array,
+  px: Buffer,
+  mask: Uint8Array,
+  tw: number,
+  th: number,
+  mode: 'alpha' | 'luma',
+  opts: ExtrudeOptions,
+): Promise<ExtrudeResult> {
+  const k = Math.min(6, Math.max(2, opts.layers!));
+  const { labels, colors, counts } = quantizeColors(px, mask, tw, th, k);
+
+  const width = opts.width ?? 1;
+  const baseDepth = opts.depth ?? width * 0.08;
+  const step = opts.layerStep ?? baseDepth * 0.5;
+
+  // Larger-area clusters are backdrop; smaller ones pop forward.
+  const order = colors
+    .map((_, c) => c)
+    .filter((c) => counts[c] > 0)
+    .sort((a, b) => counts[b] - counts[a]);
+
+  const doc = new Document();
+  doc.createBuffer();
+  const scene = doc.createScene('scene');
+  const stats = {
+    loops: 0, outerLoops: 0, holes: 0, triangles: 0, vertices: 0,
+    mode, traceWidth: tw, traceHeight: th,
+    layerInfo: [] as LayerInfo[],
+  };
+
+  let totalContours = 0;
+  for (const [layerIdx, cluster] of order.entries()) {
+    const layerMask = new Uint8Array(tw * th);
+    for (let i = 0; i < layerMask.length; i++) layerMask[i] = labels[i] === cluster ? 1 : 0;
+    const loops = cleanLoops(
+      traceMask(layerMask, tw, th, { simplify: opts.simplify ?? 1.2 }), tw, th,
+    );
+    totalContours += loops.length;
+    if (totalContours > 300) {
+      throw new Error(
+        'Layered tracing produced too many contours — the image looks photographic. ' +
+        'Use fewer layers, a cleaner graphic, or Meshy image-to-3D for photos.',
+      );
+    }
+    if (loops.filter((l) => l.depth % 2 === 0).length === 0) continue;
+
+    const depth = baseDepth + layerIdx * step;
+    const geo = buildExtrusion(doc, loops, {
+      width: opts.width,
+      depth,
+      bevel: opts.bevel,
+      bevelSegments: opts.bevelSegments,
+      imageWidth: tw,
+      imageHeight: th,
+    });
+
+    const [r, g, b] = colors[cluster];
+    const material = doc
+      .createMaterial(`layer-${layerIdx}`)
+      .setBaseColorFactor([srgbToLinear(r), srgbToLinear(g), srgbToLinear(b), 1])
+      .setMetallicFactor(opts.metallic ?? 0)
+      .setRoughnessFactor(opts.roughness ?? 0.45);
+
+    const buffer = doc.getRoot().listBuffers()[0];
+    const prim = doc
+      .createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(geo.positions).setBuffer(buffer))
+      .setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(geo.normals).setBuffer(buffer))
+      .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(geo.uvs).setBuffer(buffer))
+      .setIndices(doc.createAccessor().setType('SCALAR').setArray(geo.indices).setBuffer(buffer))
+      .setMaterial(material);
+    const mesh = doc.createMesh(`layer-${layerIdx}`).addPrimitive(prim);
+    // Backs coplanar: each build centers on its own depth, so shift by half
+    // the extra depth this layer has over the base layer.
+    const node = doc.createNode(`layer-${layerIdx}`).setMesh(mesh)
+      .setTranslation([0, 0, (depth - baseDepth) / 2]);
+    scene.addChild(node);
+
+    stats.loops += geo.stats.loops;
+    stats.outerLoops += geo.stats.outerLoops;
+    stats.holes += geo.stats.holes;
+    stats.triangles += geo.stats.triangles;
+    stats.vertices += geo.stats.vertices;
+    stats.layerInfo.push({ color: colors[cluster], depth, triangles: geo.stats.triangles });
+  }
+
+  if (stats.layerInfo.length === 0) {
+    throw new Error('No layers produced any shapes — try fewer layers or a different threshold.');
+  }
+  doc.getRoot().getAsset().generator = 'glbforge extrude';
+  return { doc, stats };
 }

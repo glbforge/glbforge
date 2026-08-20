@@ -20,10 +20,13 @@ export function AssetRail(props: {
   const [over, setOver] = useState(false);
   const [pending, setPending] = useState<PendingImage | null>(null);
   const [pbr, setPbr] = useState(true);
+  const [layered, setLayered] = useState(true);
 
   const extrude = (image: PendingImage) =>
     props.onRun(`forging ${image.name}`, () =>
-      api.extrude(image.name, image.bytes, { bevel: 0.015, profile: 'mobile-hero' }));
+      api.extrude(image.name, image.bytes, {
+        bevel: 0.015, profile: 'mobile-hero', layers: layered ? 4 : undefined,
+      }));
 
   const ingest = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
@@ -81,6 +84,10 @@ export function AssetRail(props: {
           <button onClick={() => { void extrude(pending); setPending(null); }}>
             ⚒ Forge logo → 3D <span className="choice-sub">instant · free · exact silhouette</span>
           </button>
+          <label className="check">
+            <input type="checkbox" checked={layered} onChange={(e) => setLayered(e.target.checked)} />
+            layered colors (acrylic look)
+          </label>
           <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr); setPending(null); }}>
             ✨ Generate with Meshy <span className="choice-sub">textured model · ~5–10 min · credits</span>
           </button>

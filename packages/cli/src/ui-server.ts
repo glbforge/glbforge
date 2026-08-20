@@ -146,7 +146,8 @@ export async function startUiServer(opts: {
       const profile = String(req.query.profile ?? 'mobile-hero');
       const bevel = Number(req.query.bevel ?? 0);
       const depth = req.query.depth ? Number(req.query.depth) : undefined;
-      const { doc } = await extrudeImage(new Uint8Array(req.body), { bevel, depth });
+      const layers = req.query.layers ? Number(req.query.layers) : undefined;
+      const { doc } = await extrudeImage(new Uint8Array(req.body), { bevel, depth, layers });
       const io = await createNodeIO();
       const outBytes = await io.writeBinary(doc);
       const asset = await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', outBytes, profile);
