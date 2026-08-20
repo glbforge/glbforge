@@ -29,7 +29,7 @@ import {
   toStl,
   type AnalysisResult,
 } from '@glbforge/core';
-import { MeshyClient, type TaskKind } from '@glbforge/meshy';
+import { FAL_MODELS, FalClient, MeshyClient, type TaskKind } from '@glbforge/meshy';
 
 // --- .env (never overrides real env vars, never logs values) ---
 try {
@@ -252,6 +252,57 @@ server.registerTool(
       boundaryEdges: topo.boundaryEdges,
       nonManifoldEdges: topo.nonManifoldEdges,
     });
+  },
+);
+
+server.registerTool(
+  'generate_image_to_3d',
+  {
+    description:
+      'True volumetric 3D from a single image via open models on fal.ai GPU inference ' +
+      '(needs FAL_KEY): hunyuan (Hunyuan3D-2, highest quality), trellis (balanced), ' +
+      'triposr (fastest). Cheaper than Meshy for most subjects; use Meshy for the richest ' +
+      'PBR texturing. Returns a request id — poll generation_status, then download.',
+    inputSchema: {
+      image: z.string().describe('Local path or http(s) URL of the source image'),
+      model: z.enum(['hunyuan', 'trellis', 'triposr']).default('hunyuan'),
+    },
+  },
+  async ({ image, model }) => {
+    const client = new FalClient();
+    let imageUrl = image;
+    if (!/^https?:\/\//.test(image)) {
+      const ext = image.toLowerCase().split('.').pop();
+      const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' }[ext ?? ''];
+      if (!mime) throw new Error(`Unsupported image extension ".${ext}"`);
+      imageUrl = `data:${mime};base64,${(await readFile(image)).toString('base64')}`;
+    }
+    const requestId = await client.submit(FAL_MODELS[model], imageUrl);
+    return json({ requestId, model, hint: 'Poll generation_status; typical time 1-3 minutes.' });
+  },
+);
+
+server.registerTool(
+  'generation_status',
+  {
+    description: 'Check an open-model generation (from generate_image_to_3d); when COMPLETED, pass download=true with an out path to save the GLB.',
+    inputSchema: {
+      requestId: z.string(),
+      model: z.enum(['hunyuan', 'trellis', 'triposr']),
+      download: z.boolean().default(false),
+      out: z.string().optional().describe('Absolute output path for the .glb when downloading'),
+    },
+  },
+  async ({ requestId, model, download, out }) => {
+    const client = new FalClient();
+    const st = await client.status(FAL_MODELS[model], requestId);
+    if (!download || st.status !== 'COMPLETED') {
+      return json({ status: st.status, queuePosition: st.queuePosition });
+    }
+    if (!out) throw new Error('pass "out" to download the finished model');
+    const bytes = await client.downloadGlb(await client.resultGlbUrl(FAL_MODELS[model], requestId));
+    await writeFile(out, bytes);
+    return json({ status: 'COMPLETED', out, bytes: bytes.byteLength });
   },
 );
 
