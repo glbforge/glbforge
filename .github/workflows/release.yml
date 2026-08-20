@@ -1,0 +1,44 @@
+name: Release
+
+# Publishes all packages to npm via OIDC trusted publishing when a v* tag
+# is pushed. No tokens, no OTP: npm verifies the workflow identity itself.
+#
+# One-time setup on npmjs.com (per package: glbforge, @glbforge/core,
+# @glbforge/meshy, @glbforge/mcp):
+#   Package -> Settings -> Trusted Publisher -> GitHub Actions
+#   org: glbforge   repo: glbforge   workflow: release.yml
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for npm trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      - run: pnpm -r test
+
+      # npm >= 11.5 performs the OIDC exchange automatically when a trusted
+      # publisher is configured; pnpm delegates the publish through it.
+      - run: npm install -g npm@latest
+
+      - run: pnpm -r publish --no-git-checks
+        env:
+          NPM_CONFIG_PROVENANCE: 'true'
