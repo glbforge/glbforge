@@ -15,6 +15,8 @@ export function AssetRail(props: {
   tasks: GenTask[];
   onGenerate: (name: string, bytes: ArrayBuffer, mime: string, pbr: boolean) => Promise<void>;
   onDismissTask: (taskId: string) => void;
+  history?: Array<{ task_id: string; kind: string; created_at: number }>;
+  onReimport?: (taskId: string) => Promise<void>;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
@@ -125,6 +127,14 @@ export function AssetRail(props: {
           {task.status === 'FAILED'
             ? <span className="asset-score fail" onClick={() => props.onDismissTask(task.taskId)}>dismiss</span>
             : <span className="asset-score">{task.status === 'IMPORTING' ? 'importing…' : `${task.progress}%`}</span>}
+        </div>
+      ))}
+
+      {(props.history?.length ?? 0) > 0 && <div className="rail-section">Your generations</div>}
+      {props.history?.map((h) => (
+        <div key={h.task_id} className="asset task" title={new Date(h.created_at).toLocaleString()}>
+          <span className="asset-name">☁ meshy-{h.task_id.slice(0, 8)}</span>
+          <span className="asset-score" style={{ cursor: 'pointer' }} onClick={() => void props.onReimport?.(h.task_id)}>import</span>
         </div>
       ))}
 

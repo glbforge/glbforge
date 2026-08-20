@@ -32,6 +32,7 @@ interface D1Database {
     bind(...args: unknown[]): {
       first<T = Record<string, unknown>>(): Promise<T | null>;
       run(): Promise<{ meta: { changes: number } }>;
+      all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
     };
   };
   exec(sql: string): Promise<unknown>;
@@ -321,6 +322,16 @@ export default {
           await env.DB.prepare('UPDATE users_v2 SET credits = credits + ? WHERE id = ?').bind(cost, session.uid).run();
           throw err;
         }
+      }
+
+      if (path === '/api/gen/history') {
+        const session = await readSession(env, request);
+        if (!session || !env.DB) return json({ tasks: [] });
+        await ensureSchema(env.DB);
+        const rows = await env.DB.prepare(
+          'SELECT task_id, kind, created_at FROM tasks WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+        ).bind(session.uid).all<{ task_id: string; kind: string; created_at: number }>();
+        return json({ tasks: rows.results ?? [] });
       }
 
       const taskMatch = /^\/api\/gen\/tasks\/([\w-]+)(\/file)?$/.exec(path);

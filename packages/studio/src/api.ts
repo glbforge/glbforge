@@ -61,6 +61,8 @@ export async function detectBackend(): Promise<Backend> {
 }
 
 const local = () => import('./local-engine').then((m) => m.localEngine);
+export const restoreLocal = () =>
+  import('./local-engine').then((m) => m.restorePersisted());
 
 async function check<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -188,6 +190,8 @@ export const cloud = {
     }).then((r) => check<{ taskId: string; kind: string }>(r)),
   genTask: (id: string) =>
     fetch(`/api/gen/tasks/${id}`).then((r) => check<{ status: string; progress: number; error: string | null }>(r)),
+  history: () =>
+    fetch('/api/gen/history').then((r) => check<{ tasks: Array<{ task_id: string; kind: string; created_at: number }> }>(r)),
   genFileBytes: async (id: string): Promise<ArrayBuffer> => {
     const res = await fetch(`/api/gen/tasks/${id}/file`);
     if (!res.ok) throw new Error('model download failed');

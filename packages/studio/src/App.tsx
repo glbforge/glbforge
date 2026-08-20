@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, cloud, detectBackend, getBackend, type AssetDetail, type AssetSummary, type CloudUser } from './api';
+import { api, cloud, detectBackend, getBackend, restoreLocal, type AssetDetail, type AssetSummary, type CloudUser } from './api';
 import { AssetRail } from './components/AssetRail';
 import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
@@ -24,6 +24,14 @@ export default function App() {
   const [mode, setMode] = useState<'remote' | 'local' | null>(null);
   const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
   const [providers, setProviders] = useState<{ github: boolean; google: boolean }>({ github: false, google: false });
+  const [history, setHistory] = useState<Array<{ task_id: string; kind: string; created_at: number }>>([]);
+
+  const reimport = useCallback(async (taskId: string) => {
+    await run(`re-importing ${taskId.slice(0, 8)}`, async () => {
+      const bytes = await cloud.genFileBytes(taskId);
+      return api.upload(`meshy-${taskId.slice(0, 8)}.glb`, bytes, 'mobile-hero');
+    });
+  }, [run]);
   const refreshCloud = useCallback(() => cloud.me().then(setCloudAuth).catch(() => {}), []);
   useEffect(() => {
     detectBackend().then(async (detected) => {
@@ -33,10 +41,14 @@ export default function App() {
       } else {
         // Hosted studio: generation is available when the edge API is up
         // (sign-in gates the actual spend).
+        await restoreLocal();
         const auth = await cloud.me();
         setCloudAuth(auth);
         setMeshy(auth.available);
-        if (auth.available) cloud.providers().then(setProviders).catch(() => {});
+        if (auth.available) {
+          cloud.providers().then(setProviders).catch(() => {});
+          if (auth.user) cloud.history().then((h) => setHistory(h.tasks)).catch(() => {});
+        }
       }
       await refresh();
       const list = await api.list();
@@ -152,6 +164,8 @@ export default function App() {
           assets={assets} selectedId={selected?.id ?? null} onSelect={select} onRun={run}
           meshyAvailable={meshy} tasks={tasks} onGenerate={generate}
           onDismissTask={(id) => setTasks((prev) => prev.filter((t) => t.taskId !== id))}
+          history={history.filter((h) => !assets.some((a) => a.name.includes(h.task_id.slice(0, 8))))}
+          onReimport={reimport}
         />
         <Viewport
           asset={selected}

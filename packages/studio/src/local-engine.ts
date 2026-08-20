@@ -17,6 +17,7 @@ import {
   type TextureEncoder,
 } from '@glbforge/core';
 import { registerLocalUrls, type AssetDetail, type AssetSummary } from './api';
+import { loadAssets, persistAsset } from './persist';
 
 interface LocalAsset {
   id: string;
@@ -67,7 +68,30 @@ async function ingest(
     blobUrl: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' })),
   };
   assets.set(asset.id, asset);
+  void persistAsset({
+    id: asset.id, name, parentId: parentId ?? null, ts: Date.now(),
+    bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    report,
+  });
   return asset;
+}
+
+/** Rehydrate persisted assets (reports included — no re-analysis needed). */
+let restored = false;
+export async function restorePersisted(): Promise<void> {
+  if (restored) return;
+  restored = true;
+  const rows = (await loadAssets()).sort((a, b) => Number(a.id) - Number(b.id));
+  for (const row of rows) {
+    const bytes = new Uint8Array(row.bytes);
+    assets.set(row.id, {
+      id: row.id, name: row.name, bytes,
+      report: row.report as LocalAsset['report'],
+      parentId: row.parentId ?? undefined,
+      blobUrl: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' })),
+    });
+    nextId = Math.max(nextId, Number(row.id) + 1);
+  }
 }
 
 /** Decode any browser-supported image (incl. SVG) to capped RGBA pixels. */
