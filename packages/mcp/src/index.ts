@@ -197,6 +197,8 @@ server.registerTool(
         .describe('Layered color extrusion: quantize into N color layers at stepped depths (the "layered acrylic" look)'),
       pillow: z.number().min(0).optional()
         .describe('Puffy-sticker dome height in meters (e.g. 0.04); supersedes bevel'),
+      emboss: z.number().optional()
+        .describe('Luminance micro-relief in meters — bright artwork rises (try depth*0.15)'),
       preset: z.enum(['enamel', 'chrome', 'neon', 'acrylic', 'rubber']).optional()
         .describe('Material preset for the forged piece'),
       simplify: z.number().min(0).default(1.2).describe('Contour tolerance in trace pixels'),
@@ -206,14 +208,14 @@ server.registerTool(
       roughness: z.number().min(0).max(1).default(0.6),
     },
   },
-  async ({ path, out, mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, preset, simplify, texture, color, metallic, roughness }) => {
+  async ({ path, out, mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness }) => {
     const bytes = await readFile(path);
     const rgba = color
       ? ([1, 3, 5].map((i) => parseInt(color.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
           .concat(1) as [number, number, number, number])
       : undefined;
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
-      mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, preset, simplify,
+      mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify,
       texture, color: rgba, metallic, roughness,
     });
     const io = await createNodeIO();

@@ -50,7 +50,8 @@ commodity; the gap between "generated" and "shipped" is the product.
   backs coplanar, flat per-layer materials. Default 4 layers = exactly the mobile-hero
   draw-call budget. Verified: plushqlty logo → 4 layers, 41k tris, score 95
 - [x] **Pillow relief** (`--pillow <m>`, studio toggle): exact EDT → `H·sqrt(min(D,R)/R)` dome on a ring-edge-aware subdivided front cap (T-junction-free by construction; watertight verified). Composes with layers = embroidered-patch look. Deferred: luminance emboss
-- [x] **Material presets** (`--preset`, studio dropdown): enamel, chrome, neon (emissive from cluster colors / glows the artwork when textured), acrylic (KHR_materials_transmission), rubber
+- [x] **Material presets** (`--preset`, studio dropdown): enamel (layer-aware: metal base + gloss fills), chrome, neon (emissive from cluster colors / glows the artwork when textured), acrylic (KHR_materials_transmission), rubber
+- [x] **Forge v2 quality pass** (post-launch): angle-aware Chaikin contour smoothing (rounds staircase noise, preserves star points and letter corners), artwork texture projection onto color layers (gradients survive + depth), luminance micro-relief, studio contact shadows. Full stack verified watertight (0/0/0) on real logos
 - [x] glbforge.dev landing page (`site/`, zero-build static): live `<model-viewer>` embeds of forged assets (meshopt decoder wired), stats strip, pipeline grid, npx CTAs, MCP + Action snippets. Deploy = connect repo to Cloudflare Pages, output dir `site`
 - [x] **Studio in the browser** (glbforge.dev/studio): core made isomorphic (lazy
   sharp/node imports, pluggable TextureEncoder, extrudeFromRgba); Studio auto-detects

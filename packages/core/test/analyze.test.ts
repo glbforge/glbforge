@@ -164,6 +164,14 @@ describe('extrudeImage', () => {
     expect(result.geometry.primsMissingNormals).toBe(0);
     expect(result.geometry.primsMissingUVs).toBe(0);
 
+    // Emboss relief must keep the seal too (edge-faded height field).
+    const embossed = await extrudeImage(new Uint8Array(png), {
+      texture: false, emboss: 0.012, depth: 0.05,
+    });
+    const embossResult = analyze(embossed.doc, { profile: getProfile('mobile-hero') });
+    expect(embossResult.geometry.topology!.boundaryEdges).toBe(0);
+    expect(embossResult.geometry.topology!.nonManifoldEdges).toBe(0);
+
     // Beveled variant must also be watertight and strictly heavier.
     const beveled = await extrudeImage(new Uint8Array(png), {
       texture: false, bevel: 0.01, bevelSegments: 3,
@@ -356,9 +364,10 @@ describe('pillow relief + presets', () => {
     expect(result.geometry.topology!.boundaryEdges).toBe(0);
     expect(result.geometry.topology!.nonManifoldEdges).toBe(0);
 
+    // Enamel is layer-aware: layer 0 (the only layer here) is the metal base.
     const material = doc.getRoot().listMaterials()[0];
-    expect(material.getMetallicFactor()).toBeCloseTo(0.85);
-    expect(material.getRoughnessFactor()).toBeCloseTo(0.25);
+    expect(material.getMetallicFactor()).toBeCloseTo(1);
+    expect(material.getRoughnessFactor()).toBeCloseTo(0.35);
   }, 30_000);
 
   it('acrylic preset attaches KHR_materials_transmission', async () => {

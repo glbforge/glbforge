@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Bounds, Center, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
+import { Bounds, Center, ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { api, type AssetDetail } from '../api';
@@ -31,9 +31,17 @@ function useClip(scene: THREE.Object3D, plane: THREE.Plane | null) {
   }, [scene, plane]);
 }
 
-function Single({ url }: { url: string }) {
+function Single({ url, onGround }: { url: string; onGround: (y: number, radius: number) => void }) {
   const scene = useModel(url);
   useClip(scene, null);
+  useEffect(() => {
+    const box = new THREE.Box3().setFromObject(scene);
+    if (Number.isFinite(box.min.y)) {
+      const size = box.getSize(new THREE.Vector3());
+      // Center recenters the model at the origin, so the ground sits at -h/2.
+      onGround(-size.y / 2 - 0.001, Math.max(size.x, size.z));
+    }
+  }, [scene, onGround]);
   return <primitive object={scene} />;
 }
 
@@ -72,6 +80,8 @@ function Compare({ beforeUrl, afterUrl, split }: { beforeUrl: string; afterUrl: 
 
 export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null }) {
   const [split, setSplit] = useState(0.5);
+  const [ground, setGround] = useState<{ y: number; radius: number } | null>(null);
+  const onGround = useMemo(() => (y: number, radius: number) => setGround({ y, radius }), []);
 
   if (!props.asset) {
     return (
@@ -103,9 +113,18 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
             <Center>
               {compareUrl
                 ? <Compare beforeUrl={compareUrl} afterUrl={url} split={split} />
-                : <Single url={url} />}
+                : <Single url={url} onGround={onGround} />}
             </Center>
           </Bounds>
+          {!compareUrl && ground && (
+            <ContactShadows
+              position={[0, ground.y, 0]}
+              scale={ground.radius * 2.4}
+              blur={2.2}
+              opacity={0.5}
+              far={ground.radius}
+            />
+          )}
           <Environment resolution={256}>
             <Lightformer position={[3, 2, 3]} scale={5} intensity={7} color="#ffffff" />
             <Lightformer position={[-3, 1, 2]} scale={4} intensity={3.5} color="#dfe8ff" />

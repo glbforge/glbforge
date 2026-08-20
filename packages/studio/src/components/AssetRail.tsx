@@ -24,14 +24,16 @@ export function AssetRail(props: {
   const [pbr, setPbr] = useState(true);
   const [layered, setLayered] = useState(true);
   const [pillow, setPillow] = useState(false);
+  const [sculpt, setSculpt] = useState(false);
   const [preset, setPreset] = useState('');
 
   const extrude = (image: PendingImage) =>
     props.onRun(`forging ${image.name}`, () =>
       api.extrude(image.name, image.bytes, {
-        bevel: pillow ? 0 : 0.015, profile: 'mobile-hero',
+        bevel: pillow || sculpt ? 0 : 0.015, profile: 'mobile-hero',
         layers: layered ? 4 : undefined,
         pillow: pillow ? 0.035 : undefined,
+        emboss: sculpt ? 0.012 : undefined,
         preset: preset || undefined,
       }));
 
@@ -98,6 +100,10 @@ export function AssetRail(props: {
           <label className="check">
             <input type="checkbox" checked={pillow} onChange={(e) => setPillow(e.target.checked)} />
             pillow (puffy sticker)
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={sculpt} onChange={(e) => setSculpt(e.target.checked)} />
+            sculpt relief (from artwork shading)
           </label>
           <select value={preset} onChange={(e) => setPreset(e.target.value)}>
             <option value="">material: default</option>

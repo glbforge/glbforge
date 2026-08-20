@@ -172,11 +172,11 @@ export const localEngine = {
     toDetail(await ingest(name, new Uint8Array(bytes), profile)),
 
   extrude: async (name: string, bytes: ArrayBuffer, opts: {
-    bevel: number; profile: string; layers?: number; pillow?: number; preset?: string;
+    bevel: number; profile: string; layers?: number; pillow?: number; emboss?: number; preset?: string;
   }) => {
     const { px, width, height, pngBytes } = await decodeImage(bytes, name);
     const { doc } = await extrudeFromRgba(px, width, height, {
-      bevel: opts.bevel, layers: opts.layers, pillow: opts.pillow,
+      bevel: opts.bevel, layers: opts.layers, pillow: opts.pillow, emboss: opts.emboss,
       preset: opts.preset as 'enamel' | undefined,
       textureBytes: { bytes: pngBytes, mimeType: 'image/png' },
     });

@@ -167,6 +167,7 @@ program
   .option('--layers <n>', 'layered color extrusion: quantize into N color layers (2-6)', (v) => parseInt(v, 10))
   .option('--layer-step <m>', 'extra depth per layer in meters', parseFloat)
   .option('--pillow <m>', 'puffy-sticker dome height in meters (supersedes bevel)', parseFloat)
+  .option('--emboss <m>', 'luminance micro-relief in meters (bright rises; try depth*0.15)', parseFloat)
   .option('--preset <name>', 'material preset: enamel | chrome | neon | acrylic | rubber')
   .option('--bevel-segments <n>', 'bevel roundness: 1=chamfer, 3=rounded', (v) => parseInt(v, 10), 3)
   .option('--width <m>', 'world width in meters', parseFloat, 1)
@@ -179,7 +180,7 @@ program
   .action(async (image: string, opts: {
     out?: string; mode?: 'alpha' | 'luma'; threshold?: number; depth?: number;
     bevel: number; bevelSegments: number; layers?: number; layerStep?: number;
-    pillow?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
+    pillow?: number; emboss?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
     width: number; simplify: number; texture: boolean; color?: string;
     metallic: number; roughness: number; json?: boolean;
   }) => {
@@ -194,7 +195,7 @@ program
       mode: opts.mode, threshold: opts.threshold, depth: opts.depth,
       bevel: opts.bevel, bevelSegments: opts.bevelSegments,
       layers: opts.layers, layerStep: opts.layerStep,
-      pillow: opts.pillow, preset: opts.preset,
+      pillow: opts.pillow, emboss: opts.emboss, preset: opts.preset,
       width: opts.width, simplify: opts.simplify,
       texture: opts.texture, color, metallic: opts.metallic, roughness: opts.roughness,
     });

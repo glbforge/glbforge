@@ -13,6 +13,9 @@ export interface ExtrudeOptions {
   threshold?: number;
   /** Douglas-Peucker tolerance in trace pixels. Default 1.2. */
   simplify?: number;
+  /** Contour smoothing iterations (angle-aware Chaikin): rounds staircase
+   *  noise while keeping intentional sharp corners. Default 2; 0 = off. */
+  smoothing?: number;
   /** World width in meters. Default 1. */
   width?: number;
   /** Extrusion depth in meters. Default width * 0.08. */
@@ -30,6 +33,10 @@ export interface ExtrudeOptions {
   /** Pillow relief: puffy-sticker dome height (meters) on the front face.
    *  0/omit = flat. Supersedes bevel (the pillow IS the rounded profile). */
   pillow?: number;
+  /** Luminance micro-relief (meters): brighter artwork rises, darker sinks —
+   *  the engraved/sculpted read. Fades to zero at contours so the mesh stays
+   *  sealed. Combines with pillow. Try depth * 0.15. */
+  emboss?: number;
   /** Material preset applied to all forge materials. */
   preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
   /** Project the source image onto the mesh as baseColor. Default true. */
@@ -134,6 +141,7 @@ export async function extrudeFromRgba(
 
   const loops = cleanLoops(
     traceMask(mask, tw, th, { simplify: opts.simplify ?? 1.2 }), tw, th,
+    opts.smoothing ?? 2,
   );
   if (loops.length > 150) {
     throw new Error(
@@ -163,7 +171,7 @@ export async function extrudeFromRgba(
     bevelSegments: opts.bevelSegments,
     imageWidth: tw,
     imageHeight: th,
-    frontHeightFn: makeHeightFn(opts, mask, tw, th),
+    frontHeightFn: makeHeightFn(opts, mask, tw, th, px),
   });
 
   const material = doc
@@ -171,7 +179,7 @@ export async function extrudeFromRgba(
     .setMetallicFactor(opts.metallic ?? 0)
     .setRoughnessFactor(opts.roughness ?? 0.6)
     .setDoubleSided(false);
-  applyPreset(material, opts.preset, null);
+  applyPreset(material, opts.preset, null, 0);
 
   if (opts.texture !== false && opts.textureBytes) {
     // Project the source artwork via the pixel-space UVs — gradients and
@@ -214,10 +222,46 @@ function looksLikeSvg(bytes: Uint8Array): boolean {
   return head.startsWith('<svg') || (head.startsWith('<?xml') && head.includes('<svg'));
 }
 
+/**
+ * Angle-aware Chaikin smoothing: staircase vertices (shallow turns) get
+ * corner-cut into rounded pairs; deliberate features (sharp turns, like
+ * star points and letter corners) are preserved exactly.
+ */
+function smoothLoop(points: Array<[number, number]>, iterations: number): Array<[number, number]> {
+  const SHARP_DEG = 42;
+  let current = points;
+  for (let iter = 0; iter < iterations; iter++) {
+    if (current.length < 6) break;
+    const n = current.length;
+    const out: Array<[number, number]> = [];
+    for (let i = 0; i < n; i++) {
+      const prev = current[(i - 1 + n) % n];
+      const point = current[i];
+      const next = current[(i + 1) % n];
+      const a1 = Math.atan2(point[1] - prev[1], point[0] - prev[0]);
+      const a2 = Math.atan2(next[1] - point[1], next[0] - point[0]);
+      let turn = Math.abs(a2 - a1) * (180 / Math.PI);
+      if (turn > 180) turn = 360 - turn;
+      if (turn >= SHARP_DEG) {
+        out.push(point); // deliberate corner — keep verbatim
+      } else {
+        // Chaikin corner cut: replace with quarter points of both edges.
+        out.push([point[0] * 0.75 + prev[0] * 0.25, point[1] * 0.75 + prev[1] * 0.25]);
+        out.push([point[0] * 0.75 + next[0] * 0.25, point[1] * 0.75 + next[1] * 0.25]);
+      }
+    }
+    current = out;
+  }
+  return current;
+}
+
 /** Drop specks and re-derive containment nesting after filtering. */
-function cleanLoops(loops: Loop[], width: number, height: number): Loop[] {
+function cleanLoops(loops: Loop[], width: number, height: number, smoothing = 2): Loop[] {
   const minArea = width * height * 0.00005;
   const kept = loops.filter((l) => l.area >= minArea);
+  if (smoothing > 0) {
+    for (const loop of kept) loop.points = smoothLoop(loop.points, smoothing);
+  }
   for (let i = 0; i < kept.length; i++) {
     const containers: number[] = [];
     for (let j = 0; j < kept.length; j++) {
@@ -273,6 +317,7 @@ async function extrudeLayered(
     for (let i = 0; i < layerMask.length; i++) layerMask[i] = labels[i] === cluster ? 1 : 0;
     const loops = cleanLoops(
       traceMask(layerMask, tw, th, { simplify: opts.simplify ?? 1.2 }), tw, th,
+      opts.smoothing ?? 2,
     );
     totalContours += loops.length;
     if (totalContours > 300) {
@@ -291,17 +336,27 @@ async function extrudeLayered(
       bevelSegments: opts.bevelSegments,
       imageWidth: tw,
       imageHeight: th,
-      frontHeightFn: makeHeightFn(opts, layerMask, tw, th),
+      frontHeightFn: makeHeightFn(opts, layerMask, tw, th, px),
     });
 
     const [r, g, b] = colors[cluster];
     const linear: [number, number, number] = [srgbToLinear(r), srgbToLinear(g), srgbToLinear(b)];
     const material = doc
       .createMaterial(`layer-${layerIdx}`)
-      .setBaseColorFactor([...linear, 1])
       .setMetallicFactor(opts.metallic ?? 0)
       .setRoughnessFactor(opts.roughness ?? 0.45);
-    applyPreset(material, opts.preset, linear);
+    if (opts.texture !== false && opts.textureBytes) {
+      // Project the artwork onto the layer: gradients and glows survive
+      // (walls sample their nearest edge pixels, which reads as printed
+      // edges on the layered-acrylic look).
+      material.setBaseColorTexture(sharedTexture(doc, opts.textureBytes));
+      if (opts.preset === 'neon') {
+        material.setEmissiveTexture(sharedTexture(doc, opts.textureBytes)).setEmissiveFactor([1, 1, 1]);
+      }
+    } else {
+      material.setBaseColorFactor([...linear, 1]);
+    }
+    applyPreset(material, opts.preset, opts.textureBytes ? null : linear, layerIdx);
 
     const buffer = doc.getRoot().listBuffers()[0];
     const prim = doc
@@ -333,35 +388,86 @@ async function extrudeLayered(
   return { doc, stats };
 }
 
-/** Pillow height function over a mask: H * sqrt(min(D, R)/R), 0 at edges. */
+/**
+ * Front-cap height field: pillow dome (EDT sqrt profile) plus luminance
+ * micro-relief, both fading to zero at contours so walls stay sealed.
+ */
 function makeHeightFn(
   opts: ExtrudeOptions,
   mask: Uint8Array,
   tw: number,
   th: number,
+  px?: Uint8Array,
 ): ((x: number, y: number) => number) | undefined {
-  const heightM = opts.pillow ?? 0;
-  if (heightM <= 0) return undefined;
+  const pillowM = opts.pillow ?? 0;
+  const embossM = opts.emboss ?? 0;
+  if (pillowM <= 0 && embossM === 0) return undefined;
   const width = opts.width ?? 1;
   const scale = width / tw; // meters per trace px
-  const rolloffPx = Math.max(4, heightM / scale);
+  const rolloffPx = Math.max(4, pillowM / scale);
   const dist = distanceTransform(mask, tw, th);
+
+  // Blurred luminance map (3x3 box) for the relief signal.
+  let luma: Float32Array | null = null;
+  if (embossM !== 0 && px) {
+    const raw = new Float32Array(tw * th);
+    for (let i = 0; i < tw * th; i++) {
+      raw[i] = (px[i * 4] * 0.2126 + px[i * 4 + 1] * 0.7152 + px[i * 4 + 2] * 0.0722) / 255;
+    }
+    luma = new Float32Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      for (let x = 0; x < tw; x++) {
+        let sum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && ny >= 0 && nx < tw && ny < th) { sum += raw[ny * tw + nx]; count++; }
+        }
+        luma[y * tw + x] = sum / count;
+      }
+    }
+  }
+  const embossFadePx = Math.max(3, Math.abs(embossM) / scale * 1.5);
+
   return (x, y) => {
     const d = sampleDistance(dist, tw, th, x, y);
-    return heightM * Math.sqrt(Math.min(d, rolloffPx) / rolloffPx);
+    let h = pillowM > 0 ? pillowM * Math.sqrt(Math.min(d, rolloffPx) / rolloffPx) : 0;
+    if (luma) {
+      const xi = Math.min(tw - 1, Math.max(0, Math.round(x)));
+      const yi = Math.min(th - 1, Math.max(0, Math.round(y)));
+      const fade = Math.min(1, d / embossFadePx);
+      h += embossM * (luma[yi * tw + xi] - 0.5) * 2 * fade;
+    }
+    return h;
   };
 }
 
-/** Forge material presets. Layered materials pass their cluster color. */
+/** One texture object per document, shared across layer materials. */
+const textureCache = new WeakMap<Document, Texture>();
+function sharedTexture(doc: Document, source: { bytes: Uint8Array; mimeType: string }): Texture {
+  let texture = textureCache.get(doc);
+  if (!texture) {
+    texture = doc.createTexture('source').setImage(source.bytes).setMimeType(source.mimeType);
+    textureCache.set(doc, texture);
+  }
+  return texture;
+}
+
+/**
+ * Forge material presets. Layer-aware where it matters: a real enamel pin
+ * is a polished metal base with glossy enamel fills, so layer 0 goes
+ * metallic and upper layers go gloss.
+ */
 function applyPreset(
   material: Material,
   preset: ExtrudeOptions['preset'],
   layerColor: [number, number, number] | null,
+  layerIdx: number,
 ): void {
   if (!preset) return;
   switch (preset) {
     case 'enamel':
-      material.setMetallicFactor(0.85).setRoughnessFactor(0.25);
+      if (layerIdx === 0) material.setMetallicFactor(1).setRoughnessFactor(0.35);
+      else material.setMetallicFactor(0.1).setRoughnessFactor(0.18);
       break;
     case 'chrome':
       material.setMetallicFactor(1).setRoughnessFactor(0.08);
