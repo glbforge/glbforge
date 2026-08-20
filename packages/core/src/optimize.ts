@@ -44,6 +44,10 @@ export interface OptimizeSummary {
   steps: string[];
   trianglesBefore: number;
   trianglesAfter: number;
+  /** Upper bound on geometric deviation from simplification, as a fraction
+   *  of the mesh extent (from the meshopt error tolerance actually used).
+   *  0 when no simplification ran — the geometry is untouched. */
+  fidelityBound: number;
 }
 
 function countTriangles(doc: Document): number {
@@ -105,7 +109,9 @@ export async function optimize(
   log(`welded: ${countTriangles(doc).toLocaleString()} triangles`);
 
   // Error ladder: retry with looser geometric error until we reach the
-  // budget (within 10%) or run out of tolerance.
+  // budget (within 10%) or run out of tolerance. The last rung used is the
+  // upper bound on how far the surface moved (fidelityBound).
+  let fidelityBound = 0;
   for (const error of [0.001, 0.01, 0.05, 0.1]) {
     const current = countTriangles(doc);
     if (current <= target * 1.1) break;
@@ -116,6 +122,7 @@ export async function optimize(
         error,
       }),
     );
+    fidelityBound = error;
     const after = countTriangles(doc);
     steps.push(`simplify(error=${error}) -> ${after.toLocaleString()}`);
     log(`simplify @ error=${error}: ${current.toLocaleString()} -> ${after.toLocaleString()}`);
@@ -239,7 +246,7 @@ export async function optimize(
     steps.push('meshopt');
   }
 
-  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc) };
+  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc), fidelityBound };
 }
 
 /**

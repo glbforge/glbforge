@@ -121,6 +121,68 @@ server.registerTool(
 );
 
 server.registerTool(
+  'ship_asset',
+  {
+    description:
+      'One call from anything to web-ready. A .glb is optimized to the budget and gated. ' +
+      'An image is routed: flat artwork forges instantly (free); photographic input returns ' +
+      'a routing instruction to call generate_image_to_3d (then optimize_glb the result). ' +
+      'Returns the final report with pass/fail and a fidelity bound on any simplification.',
+    inputSchema: {
+      input: z.string().describe('Absolute path: .glb or image (png/jpg/webp/svg)'),
+      out: z.string().optional().describe('Output path (default: <input>.web.glb)'),
+      profile: PROFILE_ENUM.default('mobile-hero'),
+      textureFormat: z.enum(['webp', 'ktx2']).default('webp'),
+    },
+  },
+  async ({ input, out, profile, textureFormat }) => {
+    const prof = getProfile(profile);
+    const io = await createNodeIO();
+    const outPath = out ?? input.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
+
+    const finish = async (doc: Awaited<ReturnType<typeof io.readBinary>>, sourceBytes: number) => {
+      doc.setLogger(new Logger(Logger.Verbosity.ERROR));
+      const summary = await optimize(doc, { profile: prof, textureFormat });
+      const outBytes = await io.writeBinary(doc);
+      await writeFile(outPath, outBytes);
+      const after = analyze(await io.readBinary(outBytes), {
+        profile: prof, topology: false, filePath: outPath, fileBytes: outBytes.byteLength,
+      });
+      return json({
+        outPath, steps: summary.steps,
+        fidelityBound: summary.fidelityBound,
+        savedPct: sourceBytes ? Math.round((1 - outBytes.byteLength / sourceBytes) * 1000) / 10 : null,
+        report: summarize(after),
+      });
+    };
+
+    if (/\.glb$/i.test(input)) {
+      const bytes = await readFile(input);
+      return finish(await io.readBinary(new Uint8Array(bytes)), bytes.byteLength);
+    }
+    try {
+      const raw = new Uint8Array(await readFile(input));
+      const { doc } = await extrudeImage(raw, { layers: 4, pillow: 0.02 });
+      return finish(doc, raw.byteLength);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (/photograph|noisy mask/i.test(message)) {
+        return json({
+          routed: 'generation',
+          reason: 'Input looks photographic — deterministic forging would produce mush.',
+          nextActions: [
+            { tool: 'generate_image_to_3d', args: { image: input, model: 'hunyuan' } },
+            { tool: 'generation_status', note: 'poll until COMPLETED, download with out=...' },
+            { tool: 'ship_asset', note: 'then ship the downloaded .glb' },
+          ],
+        });
+      }
+      throw err;
+    }
+  },
+);
+
+server.registerTool(
   'audit_directory',
   {
     description:

@@ -218,6 +218,17 @@ const RULES: Record<string, Rule> = {
     };
   },
 
+  'gen/profile': (r) => {
+    if (r.generator.guess === 'unknown' || r.generator.notes.length === 0) return null;
+    return {
+      ruleId: 'gen/profile',
+      severity: 'info',
+      message: `Generator fingerprint: ${r.generator.guess} (${r.generator.confidence} confidence).`,
+      suggestion: r.generator.notes.join(' '),
+      data: { generator: r.generator.guess },
+    };
+  },
+
   'scene/scale-sanity': (r) => {
     const b = r.geometry.bounds;
     if (!b) return null;

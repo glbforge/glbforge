@@ -216,6 +216,88 @@ program
   });
 
 program
+  .command('ship')
+  .description('Anything → web-ready, one command: GLBs are optimized to budget; flat artwork is forged; photos are generated (FAL_KEY/MESHY_API_KEY) — then analyzed, optimized, and budget-gated.')
+  .argument('<input>', 'a .glb, or an image (png/jpg/webp/svg)')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('-o, --out <file>', 'output path (default: <input>.web.glb)')
+  .option('--prefer <route>', 'force image routing: forge | gen')
+  .option('--model <name>', 'generator for photos: hunyuan | trellis | triposr | meshy', 'hunyuan')
+  .option('--ktx2', 'KTX2 textures (GPU-resident)')
+  .option('--lods <targets>', 'LOD chain triangle targets, e.g. 40000,10000')
+  .action(async (input: string, opts: {
+    profile: string; out?: string; prefer?: 'forge' | 'gen';
+    model: string; ktx2?: boolean; lods?: string;
+  }) => {
+    const finish = async (glbPath: string) => {
+      const outPath = opts.out ?? glbPath.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
+      const passed = await optimizeFile(glbPath, outPath, opts.profile, {
+        textureFormat: opts.ktx2 ? 'ktx2' : 'webp', lods: opts.lods,
+      });
+      process.exitCode = passed ? 0 : 1;
+    };
+
+    if (/\.glb$/i.test(input)) return finish(input);
+    if (!/\.(png|jpe?g|webp|svg)$/i.test(input)) {
+      throw new Error('ship takes a .glb or an image (png/jpg/webp/svg)');
+    }
+
+    // Image: forge first (instant, free, exact) unless the tracer says the
+    // input is photographic — then route to a generative model.
+    const raw = new Uint8Array(await readFile(input));
+    const forged = input.replace(/\.[a-z0-9]+$/i, '') + '.glb';
+    if (opts.prefer !== 'gen') {
+      try {
+        const { doc, stats } = await extrudeImage(raw, { layers: 4, pillow: 0.02 });
+        const io = await createIO();
+        await writeFile(forged, await io.writeBinary(doc));
+        console.log(`  routed to forge (flat artwork): ${stats.triangles.toLocaleString()} tris`);
+        return finish(forged);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (opts.prefer === 'forge' || !/photograph|noisy mask/i.test(message)) throw err;
+        console.log('  routed to generation (photographic input)');
+      }
+    }
+
+    if (opts.model === 'meshy') {
+      const { MeshyClient } = await import('@glbforge/meshy');
+      const client = new MeshyClient();
+      const ext = input.toLowerCase().split('.').pop() ?? '';
+      const mime = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[ext];
+      const taskId = await client.createImageTo3D({
+        image_url: `data:${mime};base64,${Buffer.from(raw).toString('base64')}`,
+        should_texture: true,
+      });
+      console.log(`  meshy task ${taskId}`);
+      const task = await client.waitForTask('image-to-3d', taskId, {
+        onProgress: (t) => process.stdout.write(`\r  ${t.status.toLowerCase()} ${t.progress}%   `),
+      });
+      process.stdout.write('\n');
+      await writeFile(forged, await client.downloadModel(task, 'glb'));
+      return finish(forged);
+    }
+
+    const { FAL_MODELS, FalClient } = await import('@glbforge/meshy');
+    const model = FAL_MODELS[opts.model as keyof typeof FAL_MODELS];
+    if (!model) throw new Error(`Unknown model "${opts.model}"`);
+    const ext = input.toLowerCase().split('.').pop() ?? '';
+    const mime = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[ext];
+    const fal = new FalClient();
+    const requestId = await fal.submit(model, `data:${mime};base64,${Buffer.from(raw).toString('base64')}`);
+    console.log(`  ${model} request ${requestId}`);
+    for (;;) {
+      const st = await fal.status(model, requestId);
+      process.stdout.write(`\r  ${st.status.toLowerCase().padEnd(12)}   `);
+      if (st.status === 'COMPLETED') break;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    process.stdout.write('\n');
+    await writeFile(forged, await fal.downloadGlb(await fal.resultGlbUrl(model, requestId)));
+    return finish(forged);
+  });
+
+program
   .command('gen')
   .description('Image → true 3D via open models on fal.ai (Hunyuan3D, TRELLIS, TripoSR). Needs FAL_KEY.')
   .argument('<image>', 'path to the source image')

@@ -97,6 +97,8 @@ export interface AnalysisResult {
   textureBytesTotal: number;
   /** Estimated total GPU memory for all textures (decoded RGBA or KTX2-compressed). */
   textureVramTotal: number;
+  /** Structural fingerprint of the producing generator. */
+  generator: { guess: string; confidence: string; notes: string[] };
   profile: Profile;
   findings: Finding[];
   /** 0-100. Errors -15, warnings -5. */

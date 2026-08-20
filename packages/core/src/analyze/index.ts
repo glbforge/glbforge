@@ -3,6 +3,7 @@ import type { AnalysisResult, Profile } from '../types.js';
 import { analyzeGeometry } from './geometry.js';
 import { analyzeMaterials } from './materials.js';
 import { runRules } from '../rules.js';
+import { detectGenerator } from '../detect.js';
 
 export interface AnalyzeOptions {
   profile: Profile;
@@ -36,6 +37,7 @@ export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
     textures,
     textureBytesTotal,
     textureVramTotal,
+    generator: detectGenerator(doc),
     profile: opts.profile,
     findings: [],
     score: 100,
