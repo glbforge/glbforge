@@ -131,6 +131,7 @@ describe('FalClient', () => {
     const body = JSON.parse(String(init.body));
     expect(body.image_url).toBe('data:image/png;base64,x');
     expect(body.input_image_url).toBe('data:image/png;base64,x');
+    expect(body.textured_mesh).toBe(true); // Hunyuan paints only when asked
   });
 
   it('deep-scans nested results for the glb url', async () => {

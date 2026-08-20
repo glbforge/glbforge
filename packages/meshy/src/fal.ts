@@ -101,13 +101,17 @@ export class FalClient {
   }
 
   /** Submit an image (data URI or URL). Returns the queue request id. */
-  async submit(model: string, imageUrl: string): Promise<string> {
-    // Models disagree on the input key; send the common aliases together —
-    // unknown keys are ignored.
+  async submit(model: string, imageUrl: string, opts: { textured?: boolean } = {}): Promise<string> {
+    // Models disagree on input keys; send the common aliases together —
+    // unknown keys are ignored. Hunyuan's paint stage only runs when
+    // textured_mesh is set; TRELLIS/TripoSR texture natively.
+    const textured = opts.textured !== false;
     const res = await this.request<{ request_id?: string }>('POST', `/${model}`, {
       image_url: imageUrl,
       input_image_url: imageUrl,
       input_image_urls: [imageUrl],
+      textured_mesh: textured,
+      texture: textured,
     });
     if (!res.request_id) throw new FalError('fal did not return a request id');
     return res.request_id;
