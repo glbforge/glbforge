@@ -2,6 +2,7 @@ import { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useThree } from '@react-three/fiber';
 import {
+  Bounds,
   Center,
   Detailed,
   Environment,
@@ -52,9 +53,12 @@ export default function App() {
   return (
     <Canvas camera={{ position: [0, 0.8, 2.2], fov: 45 }} shadows dpr={[1, 2]}>
       <Suspense fallback={null}>
-        <Center>
-          <Model />
-        </Center>
+        {/* Bounds auto-frames whatever size the asset is. */}
+        <Bounds fit clip observe margin={1.2}>
+          <Center>
+            <Model />
+          </Center>
+        </Bounds>
         <Environment resolution={256}>
           {/* Simple studio: key, fill, rim, plus a bounce card below. */}
           <Lightformer position={[3, 2, 3]} scale={5} intensity={7} color="#ffffff" />

@@ -207,6 +207,46 @@ program
   });
 
 program
+  .command('watch')
+  .description('Watch a directory: new or changed GLBs are analyzed and optimized automatically.')
+  .argument('<dir>', 'directory to watch')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('--ktx2', 'encode textures as KTX2 in the outputs')
+  .action(async (dir: string, opts: { profile: string; ktx2?: boolean }) => {
+    const { watch } = await import('node:fs');
+    const { stat } = await import('node:fs/promises');
+    const { join: joinPath } = await import('node:path');
+
+    console.log(`Watching ${dir} for GLBs (profile: ${opts.profile}) — Ctrl-C to stop.`);
+    // Debounce per file: exports are written in chunks; wait for quiet.
+    const timers = new Map<string, NodeJS.Timeout>();
+    const seen = new Map<string, number>();
+
+    watch(dir, (_event, filename) => {
+      if (!filename || !/\.glb$/i.test(filename)) return;
+      if (/\.web(\.lod\d+)?\.glb$/i.test(filename)) return; // our own outputs
+      const full = joinPath(dir, filename);
+      clearTimeout(timers.get(full));
+      timers.set(full, setTimeout(async () => {
+        try {
+          const info = await stat(full);
+          if (seen.get(full) === info.mtimeMs) return;
+          seen.set(full, info.mtimeMs);
+          console.log(`\n→ ${filename}`);
+          const outPath = full.replace(/\.glb$/i, '') + '.web.glb';
+          await optimizeFile(full, outPath, opts.profile, {
+            textureFormat: opts.ktx2 ? 'ktx2' : 'webp',
+          });
+        } catch (err) {
+          console.error(`  ${filename}: ${err instanceof Error ? err.message : err}`);
+        }
+      }, 750));
+    });
+    // Keep the process alive.
+    await new Promise(() => {});
+  });
+
+program
   .command('stl')
   .description('Export a GLB as binary STL for 3D printing (scaled to mm, z-up).')
   .argument('<file>', 'path to .glb')
