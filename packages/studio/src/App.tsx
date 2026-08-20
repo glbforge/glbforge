@@ -25,15 +25,17 @@ export default function App() {
   const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
   const [providers, setProviders] = useState<{ github: boolean; google: boolean }>({ github: false, google: false });
   const [history, setHistory] = useState<Array<{ task_id: string; kind: string; created_at: number }>>([]);
-
-  const reimport = useCallback(async (taskId: string) => {
-    await run(`re-importing ${taskId.slice(0, 8)}`, async () => {
-      const bytes = await cloud.genFileBytes(taskId);
-      return api.upload(`meshy-${taskId.slice(0, 8)}.glb`, bytes, 'mobile-hero');
-    });
-  }, [run]);
+  const [notice, setNotice] = useState<string | null>(null);
   const refreshCloud = useCallback(() => cloud.me().then(setCloudAuth).catch(() => {}), []);
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('purchase') === 'success') {
+      setNotice('✓ Payment received — your credits are being added.');
+    } else if (params.get('purchase') === 'cancelled') {
+      setNotice('Checkout cancelled — no charge was made.');
+    }
+    if (params.has('purchase')) window.history.replaceState(null, '', location.pathname);
+
     detectBackend().then(async (detected) => {
       setMode(detected);
       if (detected === 'remote') {
@@ -128,6 +130,13 @@ export default function App() {
     }
   }, [refresh]);
 
+  const reimport = useCallback(async (taskId: string) => {
+    await run(`re-importing ${taskId.slice(0, 8)}`, async () => {
+      const bytes = await cloud.genFileBytes(taskId);
+      return api.upload(`meshy-${taskId.slice(0, 8)}.glb`, bytes, 'mobile-hero');
+    });
+  }, [run]);
+
   const parent = selected?.parentId ? assets.find((a) => a.id === selected.parentId) : null;
 
   return (
@@ -156,6 +165,7 @@ export default function App() {
             </span>
           )
         )}
+        {notice && <div className="notice" onClick={() => setNotice(null)}>{notice} ✕</div>}
         {busy && <div className="busy">⚙ {busy}…</div>}
         {error && <div className="error" onClick={() => setError(null)}>{error} ✕</div>}
       </header>
