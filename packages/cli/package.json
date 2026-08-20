@@ -10,15 +10,16 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@glbforge/core": "workspace:*",
+    "@glbforge/meshy": "workspace:*",
     "@gltf-transform/core": "^4.1.0",
     "@gltf-transform/extensions": "^4.1.0",
-    "@glbforge/core": "workspace:*",
     "commander": "^12.1.0",
     "meshoptimizer": "^0.22.0",
-    "picocolors": "^1.1.0",
-    "@glbforge/meshy": "workspace:*"
+    "picocolors": "^1.1.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
