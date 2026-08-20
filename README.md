@@ -88,6 +88,21 @@ Full loop, one command:
 node packages/cli/dist/index.js meshy image art.png --pbr --optimize -p mobile-hero -o hero.glb
 ```
 
+## Open-model generation (fal.ai)
+
+True image→3D via open weights on GPU inference — often 5-25x cheaper
+than commercial generation. Set `FAL_KEY` (https://fal.ai/dashboard/keys):
+
+```bash
+node packages/cli/dist/index.js gen photo.png --model hunyuan --optimize   # Hunyuan3D-2
+node packages/cli/dist/index.js gen photo.png --model trellis             # TRELLIS
+node packages/cli/dist/index.js gen photo.png --model triposr             # fastest
+```
+
+The studio's generate panel picks up every configured provider
+automatically (Meshy + the open trio side by side, with per-model
+credit costs in hosted mode).
+
 ## Rules
 
 `perf/*` budget violations fail the build; `geo/*`, `topo/*`, `mat/*`,
