@@ -24,5 +24,38 @@
     "@types/node": "^22.20.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "license": "MIT",
+  "homepage": "https://glbforge.dev",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "Analyze, optimize, extrude, and export AI-generated 3D assets for the web \u2014 budgets, lint rules, KTX2, LODs, STL.",
+  "keywords": [
+    "gltf",
+    "glb",
+    "3d",
+    "threejs",
+    "react-three-fiber",
+    "meshy",
+    "mesh-optimization",
+    "ktx2",
+    "meshopt",
+    "draco",
+    "ai",
+    "webgl"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glbforge/glbforge.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

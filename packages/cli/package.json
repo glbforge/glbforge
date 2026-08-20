@@ -23,5 +23,38 @@
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "license": "MIT",
+  "homepage": "https://glbforge.dev",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "GLBForge CLI \u2014 make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
+  "keywords": [
+    "gltf",
+    "glb",
+    "3d",
+    "threejs",
+    "react-three-fiber",
+    "meshy",
+    "mesh-optimization",
+    "ktx2",
+    "meshopt",
+    "draco",
+    "ai",
+    "webgl"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glbforge/glbforge.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

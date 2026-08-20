@@ -15,5 +15,38 @@
     "@types/node": "^22.20.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "license": "MIT",
+  "homepage": "https://glbforge.dev",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "Typed Meshy API client: image/text-to-3D, remesh, retexture, polling with backoff.",
+  "keywords": [
+    "gltf",
+    "glb",
+    "3d",
+    "threejs",
+    "react-three-fiber",
+    "meshy",
+    "mesh-optimization",
+    "ktx2",
+    "meshopt",
+    "draco",
+    "ai",
+    "webgl"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glbforge/glbforge.git",
+    "directory": "packages/meshy"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -20,5 +20,40 @@
     "@types/node": "^22.20.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "license": "MIT",
+  "homepage": "https://glbforge.dev",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "description": "GLBForge MCP server \u2014 8 tools that let AI agents take 3D assets from generation to web-ready.",
+  "keywords": [
+    "gltf",
+    "glb",
+    "3d",
+    "threejs",
+    "react-three-fiber",
+    "meshy",
+    "mesh-optimization",
+    "ktx2",
+    "meshopt",
+    "draco",
+    "ai",
+    "webgl",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glbforge/glbforge.git",
+    "directory": "packages/mcp"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
