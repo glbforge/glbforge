@@ -89,6 +89,22 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [ ] Vertical templates: product-configurator starter, marketing-hero starter (paid)
 - [ ] Seedance bridge (original vision, deferred deliberately): optimized 3D → turntable/hero video; 3D pose/camera scaffolds driving video generation
 
+## Phased plan (strategy brief, 2026-08-20) — generator → GLBForge beats generator alone
+
+- **Phase 0 (shipped)**: Meshy-aware analysis (generator fingerprinting incl. Meshy 7's
+  documented weak spots — hair clumping, repeated-pattern drift), self-feeding fixture
+  corpus (we generate Hunyuan/TRELLIS/TripoSR in-house), JSON parity, llms.txt, rich MCP
+  descriptions.
+- **Phase 1 (core shipped)**: `glbforge ship` + MCP `ship_asset` — one-call hybrid route
+  (flat art → forge; photos → generative) → optimize → budget gate, with a fidelity bound
+  reported on simplification. Open: progress streaming; pluggable retopo/UV backends.
+- **Phase 2**: measured geometry-deviation metrics (sampled surface distance, not just the
+  meshopt bound); MCP resources + previews; collision meshes; part separation; skinning/
+  animation preservation; USDZ/model-viewer scaffolds; Studio metric overlays + recipes.
+- **Phase 3**: team dashboards + regression alerts; vertical starters; hosted free-tier
+  lead-gen (local-first stays primary); rule corpus as compounding moat; video bridge only
+  if usage justifies.
+
 ## Standing principles
 
 - Deterministic core; generation is the only stochastic step

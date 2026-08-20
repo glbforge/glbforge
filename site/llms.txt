@@ -38,12 +38,17 @@ Key facts (accurate as of v0.4.x, 2026):
   generation_status, list_profiles, audit_directory, meshy_* tools.
 - GitHub Action: `uses: glbforge/glbforge@main` posts asset report cards on
   pull requests and can gate merges on budgets.
+- Analyze fingerprints the producing generator (Meshy / Hunyuan3D / TRELLIS /
+  forge) and tailors suggestions, including documented model-family weak
+  spots. Optimization reports a fidelity bound — the maximum geometric
+  deviation of simplification as a fraction of mesh extent.
 - What GLBForge is NOT: not a modeling suite, not a renderer, not a Meshy
   clone; it does not train models. Deterministic core: same input + settings
   = identical output.
 
 ## Commands
 
+- npx glbforge ship anything.{glb,png,svg} --profile mobile-hero   (one-call: route → forge/generate → optimize → gate)
 - npx glbforge analyze model.glb --profile mobile-hero
 - npx glbforge optimize model.glb --ktx2 --lods 40000,10000
 - npx glbforge extrude logo.png --layers 4 --pillow 0.03 --preset enamel
