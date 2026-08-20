@@ -233,3 +233,43 @@ describe('alpha sniffing', () => {
     expect(ids).not.toContain('mat/blend-alpha');
   });
 });
+
+describe('ktx2', () => {
+  it('encodes textures as KTX2 and requires KHR_texture_basisu', async () => {
+    const { detectKtx2Encoder, optimize: opt } = await import('../src/index.js');
+    const encoder = await detectKtx2Encoder();
+    if (!encoder) return; // encoder CLI not installed — skip silently
+
+    const sharp = (await import('sharp')).default;
+    // Non-uniform pixels: prune()'s pruneSolidTextures would (correctly)
+    // replace a solid-color texture with a material factor.
+    const rgba = Buffer.alloc(64 * 64 * 4);
+    for (let i = 0; i < 64 * 64; i++) {
+      rgba[i * 4] = i % 256; rgba[i * 4 + 1] = (i * 7) % 256;
+      rgba[i * 4 + 2] = 90; rgba[i * 4 + 3] = 255;
+    }
+    const png = await sharp(rgba, { raw: { width: 64, height: 64, channels: 4 } }).png().toBuffer();
+
+    const doc = makeDirtyQuad();
+    const texture = doc.createTexture('base').setImage(new Uint8Array(png)).setMimeType('image/png');
+    const material = doc.createMaterial('m').setBaseColorTexture(texture);
+    doc.getRoot().listMeshes()[0].listPrimitives()[0].setMaterial(material);
+
+    await opt(doc, {
+      profile: getProfile('mobile-hero'),
+      textureFormat: 'ktx2',
+      compress: false,
+    });
+
+    const tex = doc.getRoot().listTextures()[0];
+    expect(tex.getMimeType()).toBe('image/ktx2');
+    expect(
+      doc.getRoot().listExtensionsRequired().map((e) => e.extensionName),
+    ).toContain('KHR_texture_basisu');
+
+    // Analyzer reads KTX2 dimensions and uses the compressed VRAM estimate.
+    const result = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    expect(result.textures[0].width).toBe(64);
+    expect(result.textures[0].vramBytes).toBeLessThan(64 * 64 * 4);
+  }, 60_000);
+});

@@ -5,3 +5,4 @@ export { runRules, RULE_IDS } from './rules.js';
 export { optimize, type OptimizeOptions, type OptimizeSummary } from './optimize.js';
 export { createNodeIO } from './io.js';
 export { extrudeImage, type ExtrudeOptions, type ExtrudeResult } from './extrude/index.js';
+export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';

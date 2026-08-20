@@ -125,9 +125,11 @@ server.registerTool(
         .describe('Extra LOD triangle targets, e.g. [40000, 10000]'),
       textures: z.boolean().default(true),
       compress: z.boolean().default(true),
+      textureFormat: z.enum(['webp', 'ktx2']).default('webp')
+        .describe('webp = smallest file; ktx2 = GPU-resident compression, ~8x less video memory (needs basisu/toktx installed)'),
     },
   },
-  async ({ path, out, profile, targetTriangles, lods, textures, compress }) => {
+  async ({ path, out, profile, targetTriangles, lods, textures, compress, textureFormat }) => {
     const outPath = out ?? path.replace(/\.glb$/i, '') + '.web.glb';
     const prof = getProfile(profile);
     const bytes = await readFile(path);
@@ -137,7 +139,7 @@ server.registerTool(
 
     const before = analyze(doc, { profile: prof, topology: false, fileBytes: bytes.byteLength });
     const summary = await optimize(doc, {
-      profile: prof, targetTriangles, textures, compress,
+      profile: prof, targetTriangles, textures, compress, textureFormat,
     });
     const outBytes = await io.writeBinary(doc);
     await writeFile(outPath, outBytes);

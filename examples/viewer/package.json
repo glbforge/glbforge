@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node -e \"const fs=require('fs');const src='node_modules/three/examples/jsm/libs/basis';if(fs.existsSync(src))fs.cpSync(src,'public/basis',{recursive:true})\""
   },
   "dependencies": {
     "react": "^18.3.0",

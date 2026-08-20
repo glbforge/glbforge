@@ -20,6 +20,8 @@ export interface OptimizeOptions {
   targetTriangles?: number;
   /** Skip texture resize/re-encode (geometry-only pass). */
   textures?: boolean;
+  /** 'webp' (default, smallest file) or 'ktx2' (GPU-resident, ~8x less VRAM). */
+  textureFormat?: 'webp' | 'ktx2';
   /** Skip meshopt compression (emit plain quantized GLB). */
   compress?: boolean;
   log?: (msg: string) => void;
@@ -171,7 +173,11 @@ export async function optimize(
     steps.push('smooth-normals');
   }
 
-  if (opts.textures !== false && doc.getRoot().listTextures().length > 0) {
+  if (opts.textures !== false && doc.getRoot().listTextures().length > 0 && opts.textureFormat === 'ktx2') {
+    const { ktx2Compress } = await import('./ktx2.js');
+    const count = await ktx2Compress(doc, { maxSize: opts.profile.maxTextureSize, log });
+    steps.push(`textures -> ktx2 x${count} @ ${opts.profile.maxTextureSize}px`);
+  } else if (opts.textures !== false && doc.getRoot().listTextures().length > 0) {
     const cap = opts.profile.maxTextureSize;
     // Normal maps get near-lossless encoding: lossy artifacts in a normal
     // map show up as shading noise, not subtle color shifts.

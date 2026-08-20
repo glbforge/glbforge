@@ -16,7 +16,11 @@ export async function scaffoldViewer(glbPath: string, outDir: string): Promise<v
       name: basename(outDir),
       private: true,
       type: 'module',
-      scripts: { dev: 'vite', build: 'tsc -b && vite build', preview: 'vite preview' },
+      scripts: {
+        dev: 'vite', build: 'tsc -b && vite build', preview: 'vite preview',
+        // KTX2 transcoder wasm must be served locally for KTX2-encoded GLBs.
+        postinstall: "node -e \"const fs=require('fs');const src='node_modules/three/examples/jsm/libs/basis';if(fs.existsSync(src))fs.cpSync(src,'public/basis',{recursive:true})\"",
+      },
       dependencies: {
         react: '^18.3.0',
         'react-dom': '^18.3.0',
@@ -74,6 +78,7 @@ createRoot(document.getElementById('root')!).render(<App />);
     // works offline — drei's HDR presets fetch from a CDN at runtime.
     'src/App.tsx': `import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import {
   Center,
   Environment,
@@ -82,10 +87,18 @@ import {
   Stats,
   useGLTF,
 } from '@react-three/drei';
+import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+
+// Transcoder wasm is copied into public/basis by the postinstall script.
+const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
 
 function Model() {
-  // drei's useGLTF wires up the meshopt decoder automatically.
-  const { scene } = useGLTF('/model.glb');
+  const gl = useThree((state) => state.gl);
+  // drei's useGLTF wires up the meshopt decoder automatically; the extension
+  // callback adds KTX2 texture support (harmless for non-KTX2 assets).
+  const { scene } = useGLTF('/model.glb', true, true, (loader) => {
+    loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
+  });
   return <primitive object={scene} />;
 }
 
@@ -110,7 +123,8 @@ export default function App() {
   );
 }
 
-useGLTF.preload('/model.glb');
+// NOTE: no useGLTF.preload here — preload would cache a loader without the
+// KTX2 extension callback (detectSupport needs the live renderer anyway).
 `,
   };
 

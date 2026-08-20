@@ -35,7 +35,7 @@ async function optimizeFile(
   profileName: string,
   extra: {
     target?: number; textures?: boolean; compress?: boolean; lods?: string;
-    json?: boolean;
+    json?: boolean; textureFormat?: 'webp' | 'ktx2';
   } = {},
 ): Promise<boolean> {
   const profile = getProfile(profileName);
@@ -51,6 +51,7 @@ async function optimizeFile(
     targetTriangles: extra.target,
     textures: extra.textures,
     compress: extra.compress,
+    textureFormat: extra.textureFormat,
     log: extra.json ? undefined : (msg) => console.log('  ' + msg),
   });
 
@@ -137,15 +138,17 @@ program
   .option('--lods <targets>', 'extra LOD files, comma-separated triangle counts (e.g. 50000,15000)')
   .option('--no-textures', 'skip texture resize/re-encode')
   .option('--no-compress', 'skip meshopt compression')
+  .option('--ktx2', 'encode textures as KTX2/BasisU (GPU-resident, ~8x less video memory; needs basisu or toktx installed)')
   .option('--json', 'emit JSON instead of the diff table')
   .action(async (file: string, opts: {
     profile: string; out?: string; target?: number; lods?: string;
-    textures: boolean; compress: boolean; json?: boolean;
+    textures: boolean; compress: boolean; json?: boolean; ktx2?: boolean;
   }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.web.glb';
     const passed = await optimizeFile(file, outPath, opts.profile, {
       target: opts.target, textures: opts.textures,
       compress: opts.compress, lods: opts.lods, json: opts.json,
+      textureFormat: opts.ktx2 ? 'ktx2' : 'webp',
     });
     process.exitCode = passed ? 0 : 1;
   });
