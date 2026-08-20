@@ -26,6 +26,7 @@ import {
   optimize,
   PROFILES,
   stripMaterials,
+  toStl,
   type AnalysisResult,
 } from '@xui/core';
 import { MeshyClient, type TaskKind } from '@xui/meshy';
@@ -213,6 +214,36 @@ server.registerTool(
     const outBytes = await io.writeBinary(doc);
     await writeFile(out, outBytes);
     return json({ out, bytes: outBytes.byteLength, ...stats });
+  },
+);
+
+server.registerTool(
+  'export_stl',
+  {
+    description:
+      'Export a GLB as binary STL for 3D printing — scaled to millimeters, rotated z-up. ' +
+      'Reports watertightness (xui-extruded assets are watertight by construction; ' +
+      'simplified AI meshes usually are too).',
+    inputSchema: {
+      path: z.string().describe('Absolute path to the .glb'),
+      out: z.string().describe('Absolute output path for the .stl'),
+      sizeMm: z.number().positive().default(80).describe('Largest printed dimension in millimeters'),
+    },
+  },
+  async ({ path, out, sizeMm }) => {
+    const bytes = await readFile(path);
+    const io = await createNodeIO();
+    const doc = await io.readBinary(new Uint8Array(bytes));
+    const report = analyze(doc, { profile: getProfile('mobile-hero') });
+    const topo = report.geometry.topology!;
+    const { stl, triangles, sizeMm: dims } = toStl(doc, { targetSizeMm: sizeMm });
+    await writeFile(out, stl);
+    return json({
+      out, bytes: stl.byteLength, triangles, sizeMm: dims,
+      watertight: topo.boundaryEdges === 0 && topo.nonManifoldEdges === 0,
+      boundaryEdges: topo.boundaryEdges,
+      nonManifoldEdges: topo.nonManifoldEdges,
+    });
   },
 );
 

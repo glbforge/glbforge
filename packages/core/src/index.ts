@@ -7,3 +7,4 @@ export { createNodeIO } from './io.js';
 export { extrudeImage, type ExtrudeOptions, type ExtrudeResult } from './extrude/index.js';
 export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
 export { stripMaterials } from './optimize.js';
+export { toStl, type StlOptions, type StlResult } from './stl.js';

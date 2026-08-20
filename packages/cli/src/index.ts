@@ -16,7 +16,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials } from '@xui/core';
+import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials, toStl } from '@xui/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -203,6 +203,43 @@ program
         `${stats.outerLoops} shape(s), ${stats.holes} hole(s), ` +
         `${stats.triangles.toLocaleString()} tris  [mode=${stats.mode}]`,
       );
+    }
+  });
+
+program
+  .command('stl')
+  .description('Export a GLB as binary STL for 3D printing (scaled to mm, z-up).')
+  .argument('<file>', 'path to .glb')
+  .option('-o, --out <file>', 'output path (default: <name>.stl)')
+  .option('--size <mm>', 'largest printed dimension in millimeters', parseFloat, 80)
+  .option('--json', 'emit JSON stats')
+  .action(async (file: string, opts: { out?: string; size: number; json?: boolean }) => {
+    const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.stl';
+    const bytes = await readFile(file);
+    const io = await createIO();
+    const doc = await io.readBinary(new Uint8Array(bytes));
+
+    // Printability check: slicers want watertight geometry.
+    const report = analyze(doc, { profile: getProfile('mobile-hero') });
+    const topo = report.geometry.topology!;
+
+    const { stl, triangles, sizeMm } = toStl(doc, { targetSizeMm: opts.size });
+    await writeFile(outPath, stl);
+
+    const dims = sizeMm.map((v) => v.toFixed(1)).join(' x ');
+    if (opts.json) {
+      console.log(JSON.stringify({
+        outPath, bytes: stl.byteLength, triangles, sizeMm,
+        watertight: topo.boundaryEdges === 0 && topo.nonManifoldEdges === 0,
+        boundaryEdges: topo.boundaryEdges, nonManifoldEdges: topo.nonManifoldEdges,
+      }, null, 2));
+    } else {
+      console.log(`  ${outPath} (${(stl.byteLength / 1048576).toFixed(1)}MB)  ${triangles.toLocaleString()} tris, prints ${dims} mm`);
+      if (topo.boundaryEdges > 0 || topo.nonManifoldEdges > 0) {
+        console.log(`  ⚠ not watertight (${topo.boundaryEdges} boundary, ${topo.nonManifoldEdges} non-manifold edges) — most slicers will auto-repair, but check the result.`);
+      } else {
+        console.log('  ✓ watertight — print-ready');
+      }
     }
   });
 

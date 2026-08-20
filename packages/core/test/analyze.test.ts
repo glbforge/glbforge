@@ -273,3 +273,25 @@ describe('ktx2', () => {
     expect(result.textures[0].vramBytes).toBeLessThan(64 * 64 * 4);
   }, 60_000);
 });
+
+describe('toStl', () => {
+  it('exports a binary STL with correct structure and mm scaling', async () => {
+    const { extrudeImage, toStl } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 64;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const r = Math.hypot(x - 32, y - 32);
+      if (r < 24) { const i = (y * size + x) * 4; rgba[i] = rgba[i+1] = rgba[i+2] = rgba[i+3] = 255; }
+    }
+    const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+    const { doc } = await extrudeImage(new Uint8Array(png), { texture: false });
+
+    const { stl, triangles, sizeMm } = toStl(doc, { targetSizeMm: 50 });
+    // Binary STL: 80B header + u32 count + 50B per triangle.
+    expect(stl.byteLength).toBe(84 + triangles * 50);
+    const count = new DataView(stl.buffer).getUint32(80, true);
+    expect(count).toBe(triangles);
+    expect(Math.max(...sizeMm)).toBeCloseTo(50, 1);
+  });
+});
