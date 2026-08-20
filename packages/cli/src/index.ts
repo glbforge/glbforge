@@ -16,7 +16,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { analyze, extrudeImage, getProfile, optimize, PROFILES } from '@xui/core';
+import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials } from '@xui/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -80,6 +80,8 @@ async function optimizeFile(
     for (let i = 0; i < targets.length; i++) {
       const lodDoc = await io.readBinary(outBytes);
       lodDoc.setLogger(new Logger(Logger.Verbosity.ERROR));
+      // LOD files are geometry-only; the viewer reuses the primary's materials.
+      stripMaterials(lodDoc);
       await optimize(lodDoc, {
         profile, targetTriangles: targets[i],
         textures: false, compress: extra.compress,

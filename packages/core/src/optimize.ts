@@ -209,3 +209,15 @@ export async function optimize(
 
   return { steps, trianglesBefore, trianglesAfter: countTriangles(doc) };
 }
+
+/**
+ * Strip all materials from a document's primitives. Used for LOD chain
+ * files: they reuse the primary GLB's materials at runtime, so shipping
+ * textures in every LOD would multiply the payload. Follow with prune()
+ * (optimize() does) to drop the orphaned materials and textures.
+ */
+export function stripMaterials(doc: Document): void {
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) prim.setMaterial(null);
+  }
+}

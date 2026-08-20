@@ -25,6 +25,7 @@ import {
   getProfile,
   optimize,
   PROFILES,
+  stripMaterials,
   type AnalysisResult,
 } from '@xui/core';
 import { MeshyClient, type TaskKind } from '@xui/meshy';
@@ -151,6 +152,8 @@ server.registerTool(
     for (let i = 0; i < (lods?.length ?? 0); i++) {
       const lodDoc = await io.readBinary(outBytes);
       lodDoc.setLogger(new Logger(Logger.Verbosity.ERROR));
+      // LOD files are geometry-only; the viewer reuses the primary's materials.
+      stripMaterials(lodDoc);
       await optimize(lodDoc, {
         profile: prof, targetTriangles: lods![i], textures: false, compress,
       });

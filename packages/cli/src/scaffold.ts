@@ -1,4 +1,5 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 /**
@@ -10,6 +11,14 @@ export async function scaffoldViewer(glbPath: string, outDir: string): Promise<v
   await mkdir(join(outDir, 'src'), { recursive: true });
   await mkdir(join(outDir, 'public'), { recursive: true });
   await cp(glbPath, join(outDir, 'public', 'model.glb'));
+
+  // Sibling LOD files (from `xui optimize --lods`) ride along automatically.
+  const lodBase = glbPath.replace(/\.glb$/i, '');
+  const lods: number[] = [];
+  for (let i = 1; existsSync(`${lodBase}.lod${i}.glb`); i++) {
+    await cp(`${lodBase}.lod${i}.glb`, join(outDir, 'public', `model.lod${i}.glb`));
+    lods.push(i);
+  }
 
   const files: Record<string, string> = {
     'package.json': JSON.stringify({
@@ -76,12 +85,12 @@ createRoot(document.getElementById('root')!).render(<App />);
 
     // Environment is built from Lightformers (procedural) so the viewer
     // works offline — drei's HDR presets fetch from a CDN at runtime.
-    'src/App.tsx': `import { Suspense } from 'react';
+    'src/App.tsx': `import { Suspense${lods.length ? ', useMemo' : ''} } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useThree } from '@react-three/fiber';
 import {
   Center,
-  Environment,
+  ${lods.length ? 'Detailed,\n  ' : ''}Environment,
   Lightformer,
   OrbitControls,
   Stats,
@@ -92,7 +101,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 // Transcoder wasm is copied into public/basis by the postinstall script.
 const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
 
-function Model() {
+${lods.length ? modelWithLods(lods) : `function Model() {
   const gl = useThree((state) => state.gl);
   // drei's useGLTF wires up the meshopt decoder automatically; the extension
   // callback adds KTX2 texture support (harmless for non-KTX2 assets).
@@ -100,7 +109,7 @@ function Model() {
     loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
   });
   return <primitive object={scene} />;
-}
+}`}
 
 export default function App() {
   return (
@@ -131,4 +140,42 @@ export default function App() {
   for (const [rel, content] of Object.entries(files)) {
     await writeFile(join(outDir, rel), content);
   }
+}
+
+/** Model component source for scaffold output when LOD siblings exist. */
+function modelWithLods(lods: number[]): string {
+  const urls = ["'/model.glb'", ...lods.map((i) => `'/model.lod${i}.glb'`)];
+  // Distance thresholds: primary up close, then one step per LOD.
+  const distances = [0, ...lods.map((i) => i * 4)];
+  return `function Model() {
+  const gl = useThree((state) => state.gl);
+  const extend = (loader: any) => loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
+  // Primary + LOD chain. LOD files are geometry-only (xui optimize --lods
+  // strips materials), so the primary's materials are shared into them below.
+  const gltfs = useGLTF([${urls.join(', ')}], true, true, extend);
+  const [full, ...lods] = gltfs;
+
+  useMemo(() => {
+    const materials: Record<string, unknown> = {};
+    let firstMaterial: unknown = null;
+    full.scene.traverse((o: any) => {
+      if (o.isMesh) {
+        materials[o.name] = o.material;
+        firstMaterial ??= o.material;
+      }
+    });
+    for (const lod of lods) {
+      lod.scene.traverse((o: any) => {
+        if (o.isMesh) o.material = materials[o.name] ?? firstMaterial;
+      });
+    }
+  }, [gltfs]);
+
+  return (
+    <Detailed distances={[${distances.join(', ')}]}>
+      <primitive object={full.scene} />
+${lods.map((_, k) => `      <primitive object={lods[${k}].scene} />`).join('\n')}
+    </Detailed>
+  );
+}`;
 }

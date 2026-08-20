@@ -1,8 +1,9 @@
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { useThree } from '@react-three/fiber';
 import {
   Center,
+  Detailed,
   Environment,
   Lightformer,
   OrbitControls,
@@ -16,12 +17,35 @@ const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
 
 function Model() {
   const gl = useThree((state) => state.gl);
-  // drei's useGLTF wires up the meshopt decoder automatically; the extension
-  // callback adds KTX2 texture support (harmless for non-KTX2 assets).
-  const { scene } = useGLTF('/model.glb', true, true, (loader) => {
-    loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
-  });
-  return <primitive object={scene} />;
+  const extend = (loader: any) => loader.setKTX2Loader(ktx2Loader.detectSupport(gl));
+  // Primary + LOD chain. LOD files are geometry-only (xui optimize --lods
+  // strips materials), so the primary's materials are shared into them below.
+  const gltfs = useGLTF(['/model.glb', '/model.lod1.glb', '/model.lod2.glb'], true, true, extend);
+  const [full, ...lods] = gltfs;
+
+  useMemo(() => {
+    const materials: Record<string, unknown> = {};
+    let firstMaterial: unknown = null;
+    full.scene.traverse((o: any) => {
+      if (o.isMesh) {
+        materials[o.name] = o.material;
+        firstMaterial ??= o.material;
+      }
+    });
+    for (const lod of lods) {
+      lod.scene.traverse((o: any) => {
+        if (o.isMesh) o.material = materials[o.name] ?? firstMaterial;
+      });
+    }
+  }, [gltfs]);
+
+  return (
+    <Detailed distances={[0, 4, 8]}>
+      <primitive object={full.scene} />
+      <primitive object={lods[0].scene} />
+      <primitive object={lods[1].scene} />
+    </Detailed>
+  );
 }
 
 export default function App() {

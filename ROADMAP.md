@@ -27,7 +27,7 @@ commodity; the gap between "generated" and "shipped" is the product.
 ## v0.3 — Features (make it more valuable)
 
 - [x] **KTX2/BasisU** texture option (`--ktx2` / `textureFormat: 'ktx2'`): basisu or toktx backend, ETC1S for color / UASTC for normals, KHR_texture_basisu required, scaffold ships the transcoder + KTX2Loader wiring. Measured: 63.8MB → 16.0MB GPU memory on the lucky-cat fixture
-- [ ] **Runtime LODs in scaffold**: drei `<Detailed>` wiring + share textures across LOD files (texture-free LODs reusing the primary's material)
+- [x] **Runtime LODs in scaffold**: `--lods` files are now geometry-only (lod1 4.1MB→0.7MB, lod2 3.6MB→0.3MB); scaffold auto-detects `.lodN.glb` siblings and emits a `<Detailed>` viewer that shares the primary's materials at runtime (verified: 150k/40k/10k tris, all textured)
 - [ ] **STL export** (`xui export --stl`): watertight extrusions make this nearly free — unlocks 3D-printing users (logo → desk object/keychain is a real creator use case)
 - [ ] SVG input for extrude (path parsing + fill rules; raster already covers most creators)
 - [ ] `xui watch <dir>`: drop a GLB → auto analyze/optimize/report
