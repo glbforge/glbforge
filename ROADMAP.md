@@ -16,8 +16,8 @@ commodity; the gap between "generated" and "shipped" is the product.
 
 ## v0.2 — Hardening (make it trustworthy)
 
-- [ ] `git init` + **git LFS for fixtures** (they're 34–93MB — plain git will choke), MIT license
-- [ ] GitHub Actions CI: `pnpm -r build && pnpm -r test` + `xui analyze` on fixtures (dogfood the exit codes)
+- [x] `git init` + **git LFS for fixtures** (they're 34–93MB — plain git will choke), MIT license
+- [x] GitHub Actions CI: build + tests + CLI dogfood (extrude → analyze, exit-code enforced); fixture specs self-skip on LFS pointer files
 - [ ] `--json` output for `optimize` and `extrude` (parity with `analyze`; agents/CI need it)
 - [ ] Multi-material asset support in optimize: `dedup materials` → `palette` → `join` (draw-call reduction; our fixtures were all single-prim — assets from other generators won't be)
 - [ ] Rule expansion: normal-map Y-convention check, alpha-mode heuristic (decode alpha channel), KTX2-awareness
