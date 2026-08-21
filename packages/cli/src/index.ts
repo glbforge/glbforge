@@ -16,7 +16,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { analyze, extrudeImage, getProfile, optimize, PROFILES, stripMaterials, toStl } from '@glbforge/core';
+import { alignmentScore, analyze, extrudeImage, getProfile, optimize, PROFILES, renderViews, stripMaterials, toStl } from '@glbforge/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -385,6 +385,58 @@ program
     });
     // Keep the process alive.
     await new Promise(() => {});
+  });
+
+program
+  .command('align')
+  .description('Score how faithfully a candidate mesh matches a reference (rigid alignment; proportion IoU, chamfer, F-scores). E.g. measure optimization fidelity: align model.web.glb model.glb')
+  .argument('<candidate>', 'candidate .glb')
+  .argument('<reference>', 'reference .glb')
+  .option('--samples <n>', 'surface samples per mesh', (v) => parseInt(v, 10), 15000)
+  .option('--json', 'emit JSON')
+  .action(async (candidate: string, reference: string, opts: { samples: number; json?: boolean }) => {
+    const io = await createIO();
+    const candDoc = await io.readBinary(new Uint8Array(await readFile(candidate)));
+    const refDoc = await io.readBinary(new Uint8Array(await readFile(reference)));
+    const score = alignmentScore(candDoc, refDoc, { samples: opts.samples });
+    if (opts.json) return void console.log(JSON.stringify(score, null, 2));
+    console.log(`  proportion IoU   ${(score.proportion * 100).toFixed(1)}%`);
+    console.log(`  chamfer          ${(score.chamfer * 100).toFixed(3)}% of extent`);
+    console.log(`  F-score @1%      ${(score.fscore1 * 100).toFixed(1)}%`);
+    console.log(`  F-score @2%      ${(score.fscore2 * 100).toFixed(1)}%`);
+    if (score.rotation !== 0) console.log(`  (aligned via octahedral rotation #${score.rotation})`);
+  });
+
+program
+  .command('dataset')
+  .description('Render every GLB in a directory from a rig of known cameras — (image, mesh, camera) training pairs for fine-tuning image-to-3D models.')
+  .argument('<dir>', 'directory of .glb files')
+  .option('-o, --out <dir>', 'output dataset directory', 'dataset')
+  .option('--size <px>', 'render resolution', (v) => parseInt(v, 10), 512)
+  .action(async (dir: string, opts: { out: string; size: number }) => {
+    const { readdir, mkdir, cp } = await import('node:fs/promises');
+    const { join: joinPath, basename } = await import('node:path');
+    const io = await createIO();
+    const files = (await readdir(dir)).filter((f) => /\.glb$/i.test(f) && !/\.web(\.lod\d+)?\.glb$/i.test(f));
+    const manifest: string[] = [];
+    for (const file of files) {
+      const name = basename(file, '.glb');
+      const sampleDir = joinPath(opts.out, name);
+      await mkdir(sampleDir, { recursive: true });
+      const doc = await io.readBinary(new Uint8Array(await readFile(joinPath(dir, file))));
+      const views = await renderViews(doc, { size: opts.size });
+      const cameraIndex: Record<string, unknown> = {};
+      for (const view of views) {
+        await writeFile(joinPath(sampleDir, `${view.name}.png`), view.png);
+        cameraIndex[view.name] = view.camera;
+      }
+      await writeFile(joinPath(sampleDir, 'cameras.json'), JSON.stringify(cameraIndex, null, 2));
+      await cp(joinPath(dir, file), joinPath(sampleDir, 'mesh.glb'));
+      manifest.push(JSON.stringify({ name, views: views.length, mesh: `${name}/mesh.glb` }));
+      console.log(`  ${name}: ${views.length} views`);
+    }
+    await writeFile(joinPath(opts.out, 'manifest.jsonl'), manifest.join('\n') + '\n');
+    console.log(`  dataset: ${files.length} sample(s) -> ${opts.out}/`);
   });
 
 program

@@ -98,9 +98,14 @@ commodity; the gap between "generated" and "shipped" is the product.
 - **Phase 1 (core shipped)**: `glbforge ship` + MCP `ship_asset` — one-call hybrid route
   (flat art → forge; photos → generative) → optimize → budget gate, with a fidelity bound
   reported on simplification. Open: progress streaming; pluggable retopo/UV backends.
-- **Phase 2**: measured geometry-deviation metrics (sampled surface distance, not just the
-  meshopt bound); MCP resources + previews; collision meshes; part separation; skinning/
-  animation preservation; USDZ/model-viewer scaffolds; Studio metric overlays + recipes.
+- **Phase 2 (in progress)**: [x] measured geometry-deviation metrics SHIPPED — the training/
+  eval harness: `glbforge align` (point-to-surface chamfer + F-scores + part-level IoU after
+  octahedral rigid alignment; validated: identity ≈ perfect, our optimizer's 232k→150k
+  simplification measures 0.81% chamfer, inside its reported 1% fidelityBound) and
+  `glbforge dataset` (deterministic software renderer: 10 known-camera views + mesh +
+  cameras.json per asset — fine-tuning pairs, ~1s/asset, zero GPU). Open: MCP resources +
+  previews; collision meshes; part separation; skinning preservation; USDZ scaffolds;
+  Studio metric overlays.
 - **Phase 3**: team dashboards + regression alerts; vertical starters; hosted free-tier
   lead-gen (local-first stays primary); rule corpus as compounding moat; video bridge only
   if usage justifies.

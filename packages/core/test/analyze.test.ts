@@ -386,3 +386,33 @@ describe('pillow relief + presets', () => {
       .toContain('KHR_materials_transmission');
   });
 });
+
+describe('alignment harness', () => {
+  it('scores identity as near-perfect and decimation as high-fidelity', async () => {
+    const { alignmentScore, extrudeImage, optimize: opt } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 96;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const r = Math.hypot(x - 48, y - 48);
+      if (r < 36 && r > 14) { const i = (y * size + x) * 4; rgba[i] = rgba[i+1] = rgba[i+2] = rgba[i+3] = 255; }
+    }
+    const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+    const { doc: reference } = await extrudeImage(new Uint8Array(png), { texture: false, pillow: 0.04 });
+    const { doc: identical } = await extrudeImage(new Uint8Array(png), { texture: false, pillow: 0.04 });
+
+    // Identity: deterministic forge = identical mesh = near-perfect scores.
+    const same = alignmentScore(identical, reference, { samples: 6000 });
+    expect(same.proportion).toBeGreaterThan(0.9);
+    expect(same.fscore1).toBeGreaterThan(0.99);
+    expect(same.chamfer).toBeLessThan(0.001);
+
+    // Aggressive decimation: coarser but still high-fidelity to the source.
+    const { doc: decimated } = await extrudeImage(new Uint8Array(png), { texture: false, pillow: 0.04 });
+    await opt(decimated, { profile: (await import('../src/index.js')).getProfile('mobile-hero'), targetTriangles: 800, textures: false, compress: false });
+    const dec = alignmentScore(decimated, reference, { samples: 6000 });
+    expect(dec.fscore2).toBeGreaterThan(0.75); // 98% decimation of a curved surface: measured ~0.80
+    expect(dec.proportion).toBeGreaterThan(0.6);
+    expect(dec.chamfer).toBeGreaterThan(same.chamfer); // decimation must cost something
+  }, 60_000);
+});

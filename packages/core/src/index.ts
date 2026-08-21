@@ -9,3 +9,5 @@ export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
 export { stripMaterials } from './optimize.js';
 export { toStl, type StlOptions, type StlResult } from './stl.js';
 export { detectGenerator, type GeneratorGuess, type GeneratorProfile } from './detect.js';
+export { alignmentScore, sampleSurface, triangleSoup, type AlignmentScore } from './harness/align.js';
+export { renderViews, defaultRig, type RenderedView, type RenderCamera } from './harness/render.js';
