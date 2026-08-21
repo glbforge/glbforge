@@ -58,6 +58,14 @@ Key facts (accurate as of v0.4.x, 2026):
 - npx glbforge scaffold model.web.glb -o viewer
 - npx glbforge ui
 
+## Policies
+
+- Terms & refunds: https://glbforge.dev/terms/ (failed generations auto-refund;
+  unused credits refundable 14 days; consumed credits final)
+- Privacy: https://glbforge.dev/privacy/ (in-browser tools never upload files;
+  only sign-in, credits, and explicitly-submitted generation images touch servers;
+  no trackers; user content is never used for model training)
+
 ## Links
 
 - Site: https://glbforge.dev

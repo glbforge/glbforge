@@ -178,6 +178,7 @@ export default function App() {
               <span className="acct-login">{cloudAuth.user.login}</span>
               <span className="acct-credits">{cloudAuth.user.credits} credits</span>
               <button className="acct-btn" onClick={() => void cloud.checkout('starter').catch((e) => setError(String(e.message ?? e)))}>buy</button>
+              <a className="acct-terms" href="/terms/" target="_blank" rel="noreferrer">terms</a>
               <button className="acct-btn" onClick={() => void cloud.logout().then(refreshCloud)}>out</button>
             </div>
           ) : (

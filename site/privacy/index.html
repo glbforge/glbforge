@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GLBForge — Privacy Policy</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬢</text></svg>" />
+  <style>
+    :root { --bg:#0e0f12; --panel:#16181d; --line:#262a33; --text:#e8eaf0; --dim:#8b91a0; --accent:#ff8a3d; }
+    * { box-sizing: border-box; margin: 0; }
+    body { background: var(--bg); color: var(--text); font: 16px/1.7 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; padding: 40px 22px 80px; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+    h1 { font-size: 30px; margin-bottom: 4px; } .date { color: var(--dim); font-size: 14px; margin-bottom: 30px; }
+    h2 { font-size: 20px; margin: 28px 0 8px; }
+    p, li { max-width: 70ch; } ul { padding-left: 22px; margin: 8px 0; }
+    .hero-fact { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 14px 16px; margin: 18px 0; }
+    table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+    th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; font-size: 14px; }
+    th { color: var(--dim); font-weight: 600; }
+  </style>
+</head>
+<body><div class="wrap">
+  <p><a href="/">⬢ GLBForge</a></p>
+  <h1>Privacy Policy</h1>
+  <p class="date">Effective: August 20, 2026</p>
+
+  <div class="hero-fact">
+    <strong>The short version:</strong> the studio's analysis, optimization, forging, and STL
+    tools run entirely in your browser — <strong>those files never leave your device</strong>.
+    The only data that touches our servers is what's needed for sign-in, credits, and the
+    images you explicitly submit for AI generation.
+  </div>
+
+  <h2>What we collect, and why</h2>
+  <table>
+    <tr><th>Data</th><th>Why</th><th>Where it lives</th></tr>
+    <tr><td>OAuth identity (GitHub/Google user id, username or email)</td><td>Your account and sign-in</td><td>Cloudflare (our database)</td></tr>
+    <tr><td>Credit balance and purchase records</td><td>Operating the prepaid credit system</td><td>Cloudflare; payment details stay with Stripe</td></tr>
+    <tr><td>Generation task records (task ids, model used, timestamps)</td><td>Delivering your results and your generation history</td><td>Cloudflare</td></tr>
+    <tr><td>Images you submit for generation</td><td>Passed to the AI provider you chose to produce your model</td><td>Transiently on our worker; processed by <a href="https://www.meshy.ai/privacy">Meshy</a> or <a href="https://fal.ai/privacy">fal.ai</a> per their policies</td></tr>
+  </table>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising, no analytics trackers, no sale of personal data.</li>
+    <li>No tracking cookies — we set one sign-in session cookie and one short-lived cookie
+    during the OAuth redirect. That's all.</li>
+    <li>Files you drop into the in-browser studio are stored only in your own browser
+    (IndexedDB) so they survive reloads; we cannot see them.</li>
+    <li>We do not use your uploads or generations to train models.</li>
+  </ul>
+
+  <h2>Payments</h2>
+  <p>Purchases are processed by Stripe; we receive confirmation of payment and the pack
+  purchased, never your card details. See <a href="https://stripe.com/privacy">Stripe's
+  privacy policy</a>.</p>
+
+  <h2>Retention &amp; deletion</h2>
+  <p>Account, credit, and task records are kept while your account exists. Email
+  <a href="mailto:support@glbforge.dev">support@glbforge.dev</a> to delete your account and its
+  data; unused paid credits will be refunded per the <a href="/terms/">refund policy</a>.</p>
+
+  <h2>Changes &amp; contact</h2>
+  <p>Material changes will be dated at the top of this page.
+  Questions: <a href="mailto:support@glbforge.dev">support@glbforge.dev</a>.</p>
+</div></body>
+</html>

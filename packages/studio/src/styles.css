@@ -130,3 +130,5 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
   .mode-badge, .notice { font-size: 11px; padding: 2px 8px; }
   .account { font-size: 11px; }
 }
+
+.acct-terms { color: var(--dim); font-size: 11px; }
