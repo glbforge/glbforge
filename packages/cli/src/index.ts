@@ -252,6 +252,11 @@ program
         const io = await createIO();
         await writeFile(forged, await io.writeBinary(doc));
         console.log(`  routed to forge (flat artwork): ${stats.triangles.toLocaleString()} tris`);
+        const { collectSample } = await import('./collect.js');
+        await collectSample({
+          provenance: 'forge', glbPath: forged, sourceImagePath: input,
+          meta: { generator: 'glbforge-extrude', via: 'ship', triangles: stats.triangles },
+        });
         return finish(forged);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -275,6 +280,11 @@ program
       });
       process.stdout.write('\n');
       await writeFile(forged, await client.downloadModel(task, 'glb'));
+      const { collectSample } = await import('./collect.js');
+      await collectSample({
+        provenance: 'meshy-eval-only', glbPath: forged, sourceImagePath: input,
+        meta: { generator: 'meshy-image-to-3d', via: 'ship' },
+      });
       return finish(forged);
     }
 
@@ -294,6 +304,12 @@ program
     }
     process.stdout.write('\n');
     await writeFile(forged, await fal.downloadGlb(await fal.resultGlbUrl(model, requestId)));
+    const { collectSample } = await import('./collect.js');
+    await collectSample({
+      provenance: 'open-models', glbPath: forged, sourceImagePath: input,
+      meta: { generator: model, requestId, via: 'ship',
+              licenseNote: opts.model === 'hunyuan' ? 'VERIFY Tencent community license before training' : 'MIT model output' },
+    });
     return finish(forged);
   });
 
@@ -328,6 +344,13 @@ program
     const glb = await client.downloadGlb(await client.resultGlbUrl(model, requestId));
     await writeFile(opts.out, glb);
     console.log(`  saved ${opts.out} (${(glb.byteLength / 1048576).toFixed(1)}MB)`);
+    const { collectSample } = await import('./collect.js');
+    await collectSample({
+      provenance: opts.model === 'hunyuan' ? 'open-models' : 'open-models',
+      glbPath: opts.out, sourceImagePath: image,
+      meta: { generator: model, requestId, textured: opts.texture,
+              licenseNote: opts.model === 'hunyuan' ? 'VERIFY Tencent community license before training' : 'MIT model output' },
+    });
     if (opts.optimize) {
       const passed = await optimizeFile(opts.out, opts.out.replace(/\.glb$/i, '') + '.web.glb', opts.profile);
       process.exitCode = passed ? 0 : 1;

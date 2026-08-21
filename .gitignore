@@ -9,3 +9,4 @@ examples/viewer/node_modules/
 examples/*.glb
 examples/viewer/public/*.glb
 .claude/
+training/

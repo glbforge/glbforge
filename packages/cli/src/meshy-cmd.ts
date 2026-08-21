@@ -31,10 +31,16 @@ async function downloadTo(
   client: MeshyClient,
   task: MeshyTask,
   outPath: string,
+  sourceImagePath?: string,
 ): Promise<void> {
   const bytes = await client.downloadModel(task, 'glb');
   await writeFile(outPath, bytes);
   console.log(`  saved ${outPath} (${(bytes.byteLength / 1048576).toFixed(1)}MB)`);
+  const { collectSample } = await import('./collect.js');
+  await collectSample({
+    provenance: 'meshy-eval-only', glbPath: outPath, sourceImagePath,
+    meta: { generator: 'meshy', taskId: task.id },
+  });
 }
 
 export function registerMeshyCommands(
@@ -70,7 +76,7 @@ export function registerMeshyCommands(
       const task = await client.waitForTask('image-to-3d', taskId, {
         onProgress: progressLine,
       });
-      await downloadTo(client, task, opts.out);
+      await downloadTo(client, task, opts.out, image);
       if (opts.optimize) {
         const passed = await optimizeFile(
           opts.out,
