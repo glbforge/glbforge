@@ -78,7 +78,7 @@ function Compare({ beforeUrl, afterUrl, split }: { beforeUrl: string; afterUrl: 
   );
 }
 
-export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null }) {
+export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null; lowPower?: boolean }) {
   const [split, setSplit] = useState(0.5);
   const [ground, setGround] = useState<{ y: number; radius: number } | null>(null);
   const onGround = useMemo(() => (y: number, radius: number) => setGround({ y, radius }), []);
@@ -105,8 +105,8 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
       <Canvas
         key={props.asset.id + (compareUrl ?? '')}
         camera={{ position: [0, 0.6, 2.4], fov: 45 }}
-        dpr={[1, 2]}
-        gl={{ localClippingEnabled: true }}
+        dpr={props.lowPower ? [1, 1.5] : [1, 2]}
+        gl={{ localClippingEnabled: true, antialias: !props.lowPower, powerPreference: 'high-performance' }}
       >
         <Suspense fallback={null}>
           <Bounds fit clip observe margin={1.25}>
@@ -116,7 +116,7 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
                 : <Single url={url} onGround={onGround} />}
             </Center>
           </Bounds>
-          {!compareUrl && ground && (
+          {!compareUrl && ground && !props.lowPower && (
             <ContactShadows
               position={[0, ground.y, 0]}
               scale={ground.radius * 2.4}

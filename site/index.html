@@ -32,7 +32,7 @@
     a:hover { text-decoration: underline; }
     .wrap { max-width: 1060px; margin: 0 auto; padding: 0 22px; }
 
-    nav { display: flex; align-items: center; gap: 22px; padding: 18px 0; }
+    nav { display: flex; align-items: center; gap: 22px; padding: 18px 0; flex-wrap: wrap; }
     .brand { font-weight: 800; font-size: 18px; color: var(--text); }
     .brand span { color: var(--accent); }
     nav .links { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
@@ -125,7 +125,7 @@
         <p class="hero-note">Node 20+ · MIT · runs locally, nothing uploaded</p>
       </div>
       <div>
-        <model-viewer src="/models/plush.glb" camera-controls auto-rotate auto-rotate-delay="0"
+        <model-viewer src="/models/plush.glb" camera-controls auto-rotate auto-rotate-delay="0" ar ar-modes="webxr scene-viewer"
           shadow-intensity="0.6" exposure="1.1" interaction-prompt="none"></model-viewer>
         <div class="mv-caption">a PNG logo, forged to layered 3D in one second — <code>glbforge extrude --layers 4 --pillow</code> · drag to orbit</div>
       </div>
@@ -156,12 +156,12 @@
       <p class="lede">Image-to-3D models produce mush from flat graphics. GLBForge traces the silhouette exactly, stacks the colors in layered depth, pillows the surface, and hands you a watertight mesh you can ship — or print.</p>
       <div class="duo">
         <div>
-          <model-viewer src="/models/neon.glb" camera-controls auto-rotate interaction-prompt="none"
+          <model-viewer src="/models/neon.glb" camera-controls auto-rotate interaction-prompt="none" ar ar-modes="webxr scene-viewer"
             shadow-intensity="0.5" exposure="1.05" loading="lazy"></model-viewer>
           <div class="mv-caption">neon preset — layers glow in their own colors</div>
         </div>
         <div>
-          <model-viewer src="/models/cat.glb" camera-controls auto-rotate interaction-prompt="none"
+          <model-viewer src="/models/cat.glb" camera-controls auto-rotate interaction-prompt="none" ar ar-modes="webxr scene-viewer"
             shadow-intensity="0.6" exposure="1.1" loading="lazy"></model-viewer>
           <div class="mv-caption">Meshy generation: 73MB raw → this 3.2MB web asset, one flag</div>
         </div>

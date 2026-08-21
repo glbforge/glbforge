@@ -55,13 +55,25 @@ const toDetail = (a: LocalAsset): AssetDetail => ({
   report: a.report as unknown as AssetDetail['report'],
 });
 
+/** Constrained device: coarse pointer / low reported memory / mobile UA. */
+const CONSTRAINED =
+  typeof navigator !== 'undefined' &&
+  (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ||
+    ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) <= 4);
+
 async function ingest(
   name: string, bytes: Uint8Array, profile: string, parentId?: string,
 ): Promise<LocalAsset> {
+  if (CONSTRAINED && bytes.byteLength > 120 * 1024 * 1024) {
+    throw new Error('This file is too large to process on a mobile device — use a desktop or `npx glbforge ui`.');
+  }
   const io = await createIO();
   const doc = await io.readBinary(bytes);
+  // The welded-topology pass is O(vertices) with heavy allocation — skip it
+  // on constrained devices for large files (the report notes the skip).
+  const topology = CONSTRAINED ? bytes.byteLength < 8 * 1024 * 1024 : bytes.byteLength < 40 * 1024 * 1024;
   const report = analyze(doc, {
-    profile: getProfile(profile), filePath: name, fileBytes: bytes.byteLength,
+    profile: getProfile(profile), filePath: name, fileBytes: bytes.byteLength, topology,
   });
   const asset: LocalAsset = {
     id: String(nextId++), name, bytes, report, parentId,

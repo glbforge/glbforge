@@ -18,10 +18,22 @@ export default function App() {
   const refresh = useCallback(async (selectId?: string) => {
     const list = await api.list();
     setAssets(list);
-    if (selectId) setSelected(await api.get(selectId));
+    if (selectId) {
+      setSelected(await api.get(selectId));
+      setMobileTab('inspect'); // completed work lands in front of the user
+    }
   }, []);
 
   const [mode, setMode] = useState<'remote' | 'local' | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'assets' | 'inspect'>('assets');
+  useEffect(() => {
+    const mq = matchMedia('(max-width: 900px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const [cloudAuth, setCloudAuth] = useState<{ available: boolean; user: CloudUser | null }>({ available: false, user: null });
   const [providers, setProviders] = useState<{ github: boolean; google: boolean }>({ github: false, google: false });
   const [generators, setGenerators] = useState<Record<string, boolean>>({});
@@ -120,6 +132,7 @@ export default function App() {
   const select = useCallback(async (id: string) => {
     setSelected(await api.get(id));
     setCompare(false);
+    setMobileTab('inspect');
   }, []);
 
   const run = useCallback(async (label: string, task: () => Promise<AssetDetail | void>) => {
@@ -178,28 +191,48 @@ export default function App() {
         {busy && <div className="busy">⚙ {busy}…</div>}
         {error && <div className="error" onClick={() => setError(null)}>{error} ✕</div>}
       </header>
-      <div className="panes">
-        <AssetRail
-          assets={assets} selectedId={selected?.id ?? null} onSelect={select} onRun={run}
-          meshyAvailable={meshy} tasks={tasks} onGenerate={generate}
-          generators={generators} genCosts={genCosts}
-          onDismissTask={(id) => setTasks((prev) => prev.filter((t) => t.taskId !== id))}
-          history={history.filter((h) => !assets.some((a) => a.name.includes(h.task_id.slice(0, 8))))}
-          onReimport={reimport}
-        />
-        <Viewport
-          asset={selected}
-          compareWith={compare && parent ? parent.id : null}
-        />
-        <Inspector
-          asset={selected}
-          parent={parent ?? null}
-          compare={compare}
-          onCompareChange={setCompare}
-          onRun={run}
-          onSelect={select}
-        />
-      </div>
+      {(() => {
+        const rail = (
+          <AssetRail
+            assets={assets} selectedId={selected?.id ?? null} onSelect={select} onRun={run}
+            meshyAvailable={meshy} tasks={tasks} onGenerate={generate}
+            generators={generators} genCosts={genCosts}
+            onDismissTask={(id) => setTasks((prev) => prev.filter((t) => t.taskId !== id))}
+            history={history.filter((h) => !assets.some((a) => a.name.includes(h.task_id.slice(0, 8))))}
+            onReimport={reimport}
+          />
+        );
+        const viewport = (
+          <Viewport
+            asset={selected}
+            compareWith={compare && parent ? parent.id : null}
+            lowPower={isMobile}
+          />
+        );
+        const inspector = (
+          <Inspector
+            asset={selected}
+            parent={parent ?? null}
+            compare={compare}
+            onCompareChange={setCompare}
+            onRun={run}
+            onSelect={select}
+          />
+        );
+        if (!isMobile) {
+          return <div className="panes">{rail}{viewport}{inspector}</div>;
+        }
+        return (
+          <div className="panes-mobile">
+            <div className="viewport-slot">{viewport}</div>
+            <div className="tabbar">
+              <button className={mobileTab === 'assets' ? 'tab active' : 'tab'} onClick={() => setMobileTab('assets')}>Assets</button>
+              <button className={mobileTab === 'inspect' ? 'tab active' : 'tab'} onClick={() => setMobileTab('inspect')}>Inspect</button>
+            </div>
+            <div className="mobile-panel">{mobileTab === 'assets' ? rail : inspector}</div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

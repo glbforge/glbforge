@@ -113,3 +113,20 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
 
 .notice { color: var(--good); font-size: 13px; border: 1px solid var(--line);
   border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+
+/* --- mobile layout (≤900px): viewport on top, tabbed panels below --- */
+.panes-mobile { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.viewport-slot { flex: 1.25; min-height: 0; display: flex; }
+.viewport-slot > .viewport { flex: 1; }
+.tabbar { display: flex; border-top: 1px solid var(--line); background: var(--panel); flex: none; }
+.tab { width: auto; flex: 1; background: none; color: var(--dim); border: 0; border-radius: 0;
+  padding: 10px; font-weight: 600; }
+.tab.active { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.mobile-panel { flex: 1; min-height: 0; overflow-y: auto; background: var(--panel); }
+.mobile-panel .rail, .mobile-panel .inspector { border: 0; height: 100%; }
+@media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 46px; padding: 6px 10px; gap: 8px; }
+  .brand { font-size: 14px; }
+  .mode-badge, .notice { font-size: 11px; padding: 2px 8px; }
+  .account { font-size: 11px; }
+}
