@@ -556,7 +556,7 @@ export function createServer(): McpServer {
       description:
         'Export a GLB as USDZ for iOS AR Quick Look: binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures ' +
         '(WebP is transcoded; KTX2 is rejected), store-only 64-byte-aligned zip. Skinned assets get a UsdSkel ' +
-        'skeleton with the first clip sampled at 30 fps (morph targets not yet). Use on the optimized .web.glb. Returns a thumbnail.',
+        'skeleton with the first clip sampled at 30 fps; morph targets become UsdSkel blend shapes. Use on the optimized .web.glb. Returns a thumbnail.',
       inputSchema: {
         path: z.string().describe('Absolute path to the .glb'),
         out: z.string().describe('Absolute output path for the .usdz'),

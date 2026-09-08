@@ -8,6 +8,7 @@
  * interpolation modes. Deterministic.
  */
 import { Animation, Node, Skin } from '@gltf-transform/core';
+import type { Mesh } from '@gltf-transform/core';
 import { readFloat } from './accessors.js';
 import type { UsdPrim, UsdProperty } from './usd-ir.js';
 
@@ -136,6 +137,9 @@ export interface SkeletonExport {
   warnings: string[];
 }
 
+/** A mesh with morph targets bound to this skeleton: its blend shape names (in target order) and the node driving weights. */
+export interface BlendShapeSource { names: string[]; node: Node; mesh: Mesh }
+
 export const SKEL_FPS = 30;
 
 /**
@@ -145,10 +149,12 @@ export const SKEL_FPS = 30;
  * transforms are the inverse of glTF's inverse bind matrices.
  */
 export function buildSkeleton(
-  skin: Skin, animations: Animation[], rootPath: string, name: string,
+  skin: Skin | null, animations: Animation[], rootPath: string, name: string, blendSources: BlendShapeSource[] = [],
 ): SkeletonExport {
   const warnings: string[] = [];
-  const joints = skin.listJoints();
+  // Morph-only assets still need a skeleton for UsdSkel to apply blend
+  // shapes: a single identity joint every vertex binds to with weight 1.
+  const joints = skin ? skin.listJoints() : [];
   const jointSet = new Set(joints);
   const parentOf = (node: Node): Node | null => {
     let p = node.listParents().find((x): x is Node => x instanceof Node) ?? null;
@@ -189,31 +195,47 @@ export function buildSkeleton(
     const local = pj ? mul(invert(world(pj)), world(joints[orig])) : world(joints[orig]);
     restTransforms.set(local, k * 16);
   });
-  const ibmAcc = skin.getInverseBindMatrices();
+  const ibmAcc = skin?.getInverseBindMatrices();
   const ibm = ibmAcc ? readFloat(ibmAcc) : null;
   const bindTransforms = new Float64Array(joints.length * 16);
   order.forEach((orig, k) => {
     const m = ibm ? Array.from(ibm.subarray(orig * 16, orig * 16 + 16)) : IDENTITY;
     bindTransforms.set(invert(m), k * 16);
   });
+  if (!joints.length) { jointTokens.push('root'); }
+  const jointCount = Math.max(1, joints.length);
+  const bindOut = joints.length ? bindTransforms : new Float64Array(IDENTITY);
+  const restOut = joints.length ? restTransforms : new Float64Array(IDENTITY);
 
   const skeletonPath = `${rootPath}/${name}`;
   const props: UsdProperty[] = [
-    { kind: 'attribute', name: 'bindTransforms', typeName: 'matrix4d[]', uniform: true, value: bindTransforms },
+    { kind: 'attribute', name: 'bindTransforms', typeName: 'matrix4d[]', uniform: true, value: bindOut },
     { kind: 'attribute', name: 'joints', typeName: 'token[]', uniform: true, value: jointTokens },
-    { kind: 'attribute', name: 'restTransforms', typeName: 'matrix4d[]', uniform: true, value: restTransforms },
+    { kind: 'attribute', name: 'restTransforms', typeName: 'matrix4d[]', uniform: true, value: restOut },
   ];
   const children: UsdPrim[] = [];
   let frames = 0;
 
-  // --- Clip: the first animation that drives a joint or one of its ancestors.
+  // --- Clip: the first animation that drives a joint, one of its ancestors, or a morph weight.
   const chainNodes = new Set<Node>();
   for (const j of joints) { let n: Node | null = j; while (n) { chainNodes.add(n); n = n.listParents().find((x): x is Node => x instanceof Node) ?? null; } }
-  const clips = animations.filter((a) => a.listChannels().some((c) => c.getTargetNode() && chainNodes.has(c.getTargetNode()!)));
+  const morphNodes = new Set(blendSources.map((b) => b.node));
+  const drives = (a: Animation) => a.listChannels().some((c) => {
+    const n = c.getTargetNode();
+    return !!n && ((c.getTargetPath() === 'weights' && morphNodes.has(n)) || (c.getTargetPath() !== 'weights' && chainNodes.has(n)));
+  });
+  const clips = animations.filter(drives);
   if (clips.length > 1) warnings.push(`${clips.length} animation clips drive this skeleton; exported "${clips[0].getName() || 'clip 0'}" (UsdSkel carries one SkelAnimation per skeleton).`);
   const clip = clips[0];
+  const blendNames = blendSources.flatMap((b) => b.names);
+  const staticWeights = () => new Float32Array(blendSources.flatMap((b) => {
+    const w = b.mesh.getWeights();
+    return b.names.map((_, i) => w[i] ?? 0);
+  }));
+  const animProps: UsdProperty[] = [];
   if (clip) {
     const channels = clip.listChannels().filter((c) => c.getTargetNode() && chainNodes.has(c.getTargetNode()!) && c.getTargetPath() !== 'weights');
+    const weightChannels = clip.listChannels().filter((c) => c.getTargetNode() && c.getTargetPath() === 'weights' && morphNodes.has(c.getTargetNode()!));
     let duration = 0;
     const samplers = channels.map((c) => {
       const s = c.getSampler()!;
@@ -221,9 +243,15 @@ export function buildSkeleton(
       duration = Math.max(duration, times[times.length - 1] ?? 0);
       return { node: c.getTargetNode()!, path: c.getTargetPath(), times, values: readFloat(s.getOutput()!), interpolation: s.getInterpolation() };
     });
+    const weightSamplers = weightChannels.map((c) => {
+      const s = c.getSampler()!;
+      const times = readFloat(s.getInput()!);
+      duration = Math.max(duration, times[times.length - 1] ?? 0);
+      return { node: c.getTargetNode()!, times, values: readFloat(s.getOutput()!), interpolation: s.getInterpolation() };
+    });
     frames = Math.max(1, Math.round(duration * SKEL_FPS) + 1);
     const times = Array.from({ length: frames }, (_, i) => i);
-    const translations: Float32Array[] = [], rotations: Float32Array[] = [], scales: Float32Array[] = [];
+    const translations: Float32Array[] = [], rotations: Float32Array[] = [], scales: Float32Array[] = [], blendWeights: Float32Array[] = [];
     for (let fIdx = 0; fIdx < frames; fIdx++) {
       const t = fIdx / SKEL_FPS;
       const localAt = new Map<Node, Mat>();
@@ -249,7 +277,8 @@ export function buildSkeleton(
         globalAt.set(n, m);
         return m;
       };
-      const tArr = new Float32Array(joints.length * 3), rArr = new Float32Array(joints.length * 4), sArr = new Float32Array(joints.length * 3);
+      const tArr = new Float32Array(jointCount * 3), rArr = new Float32Array(jointCount * 4), sArr = new Float32Array(jointCount * 3);
+      if (!joints.length) { rArr[3] = 1; sArr.fill(1); }
       order.forEach((orig, k) => {
         const pj = parentJoint[orig];
         const m = pj ? mul(invert(global(pj)), global(joints[orig])) : global(joints[orig]);
@@ -257,22 +286,47 @@ export function buildSkeleton(
         tArr.set(d.t, k * 3); rArr.set(d.q, k * 4); sArr.set(d.s, k * 3);
       });
       translations.push(tArr); rotations.push(rArr); scales.push(sArr);
+      if (blendNames.length) {
+        const w = staticWeights();
+        let offset = 0;
+        for (const b of blendSources) {
+          const ws = weightSamplers.find((s) => s.node === b.node);
+          if (ws) {
+            const v = sampleChannel(ws.times, ws.values, b.names.length, ws.interpolation, t);
+            for (let i = 0; i < b.names.length; i++) w[offset + i] = v[i];
+          }
+          offset += b.names.length;
+        }
+        blendWeights.push(w);
+      }
     }
+    animProps.push(
+      { kind: 'attribute', name: 'joints', typeName: 'token[]', uniform: true, value: jointTokens },
+      { kind: 'attribute', name: 'rotations', typeName: 'quatf[]', samples: { times, values: rotations } },
+      { kind: 'attribute', name: 'scales', typeName: 'half3[]', samples: { times, values: scales } },
+      { kind: 'attribute', name: 'translations', typeName: 'float3[]', samples: { times, values: translations } },
+    );
+    if (blendNames.length) {
+      animProps.push(
+        { kind: 'attribute', name: 'blendShapes', typeName: 'token[]', uniform: true, value: blendNames },
+        { kind: 'attribute', name: 'blendShapeWeights', typeName: 'float[]', samples: { times, values: blendWeights } },
+      );
+    }
+  } else if (blendNames.length) {
+    // No clip: still author the static morph weights so the rest pose shows them.
+    animProps.push(
+      { kind: 'attribute', name: 'blendShapes', typeName: 'token[]', uniform: true, value: blendNames },
+      { kind: 'attribute', name: 'blendShapeWeights', typeName: 'float[]', value: staticWeights() },
+    );
+  }
+  if (animProps.length) {
     const animPath = `${skeletonPath}/Anim`;
-    children.push({
-      name: 'Anim', path: animPath, typeName: 'SkelAnimation', children: [],
-      properties: [
-        { kind: 'attribute', name: 'joints', typeName: 'token[]', uniform: true, value: jointTokens },
-        { kind: 'attribute', name: 'rotations', typeName: 'quatf[]', samples: { times, values: rotations } },
-        { kind: 'attribute', name: 'scales', typeName: 'half3[]', samples: { times, values: scales } },
-        { kind: 'attribute', name: 'translations', typeName: 'float3[]', samples: { times, values: translations } },
-      ],
-    });
+    children.push({ name: 'Anim', path: animPath, typeName: 'SkelAnimation', children: [], properties: animProps });
     props.push({ kind: 'relationship', name: 'skel:animationSource', targets: [animPath] });
   }
 
   return {
-    skeletonPrim: { name, path: skeletonPath, typeName: 'Skeleton', apiSchemas: clip ? ['SkelBindingAPI'] : undefined, properties: props, children },
+    skeletonPrim: { name, path: skeletonPath, typeName: 'Skeleton', apiSchemas: animProps.length ? ['SkelBindingAPI'] : undefined, properties: props, children },
     skeletonPath, jointRemap: remap, frames, warnings,
   };
 }

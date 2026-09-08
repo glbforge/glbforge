@@ -13,7 +13,7 @@ import { readFloat } from './accessors.js';
 import { computeSmoothNormals } from './normals.js';
 import { writeUsda, type UsdAttribute, type UsdLayer, type UsdPrim, type UsdProperty } from './usd-ir.js';
 import { writeUsdc } from './usdc.js';
-import { buildSkeleton, SKEL_FPS } from './usd-skel.js';
+import { buildSkeleton, SKEL_FPS, type BlendShapeSource } from './usd-skel.js';
 import { storeZip, type ZipEntry } from './zip.js';
 
 /** Re-encode a texture for USDZ (PNG or JPEG only). Node's default uses sharp. */
@@ -80,6 +80,25 @@ export function buildUsdLayer(
   const materials = root.listMaterials();
   const matName = (m: Material) => ident('Mat_' + materials.indexOf(m));
   const matPath = (m: Material) => `/${rootName}/Materials/${matName(m)}`;
+  // Primitives without a material would render unbound — RealityKit shows
+  // its magenta "missing material" pattern — so bind a neutral default.
+  const needsDefault = root.listMeshes().some((m) => m.listPrimitives().some((p) => !p.getMaterial()));
+  const defaultPath = `/${rootName}/Materials/Default`;
+  const defaultMaterial: UsdPrim | null = needsDefault ? {
+    name: 'Default', path: defaultPath, typeName: 'Material',
+    properties: [{ kind: 'attribute', name: 'outputs:surface', typeName: 'token', connect: `${defaultPath}/PBRShader.outputs:surface` }],
+    children: [{
+      name: 'PBRShader', path: `${defaultPath}/PBRShader`, typeName: 'Shader', children: [],
+      properties: [
+        { kind: 'attribute', name: 'info:id', typeName: 'token', uniform: true, value: 'UsdPreviewSurface' },
+        { kind: 'attribute', name: 'inputs:diffuseColor', typeName: 'color3f', value: [0.8, 0.8, 0.8] },
+        { kind: 'attribute', name: 'inputs:roughness', typeName: 'float', value: 0.6 },
+        { kind: 'attribute', name: 'inputs:metallic', typeName: 'float', value: 0 },
+        { kind: 'attribute', name: 'inputs:useSpecularWorkflow', typeName: 'int', value: 0 },
+        { kind: 'attribute', name: 'outputs:surface', typeName: 'token' },
+      ],
+    }],
+  } : null;
   const materialPrims: UsdPrim[] = materials.map((mat) => {
     const path = matPath(mat);
     const name = matName(mat);
@@ -163,21 +182,53 @@ export function buildUsdLayer(
     };
   });
 
-  // --- Skeletons: one per skin, under a SkelRoot ---
+  // --- Skeletons: one per skin, under a SkelRoot; morph-only meshes get a one-joint skeleton ---
   const skins = root.listSkins();
-  const skeletons = new Map<import('@gltf-transform/core').Skin, ReturnType<typeof buildSkeleton>>();
+  const skeletons = new Map<import('@gltf-transform/core').Skin | null, ReturnType<typeof buildSkeleton>>();
   let frames = 0;
+  // Blend shape sources grouped by the skeleton they bind to (null = morph-only).
+  const blendBySkin = new Map<import('@gltf-transform/core').Skin | null, BlendShapeSource[]>();
+  const blendNamesOf = new Map<Primitive, string[]>();
+  {
+    let meshIdx = 0;
+    const seen = new Set<Primitive>();
+    const walk = (node: Node) => {
+      const mesh = node.getMesh();
+      if (mesh) {
+        const skin = node.getSkin() && skins.includes(node.getSkin()!) ? node.getSkin() : null;
+        mesh.listPrimitives().forEach((prim, pi) => {
+          if (seen.has(prim) || !prim.listTargets().length) return;
+          seen.add(prim);
+          const base = ident(node.getName() || `Node_${meshIdx}`) + `_${meshIdx}_Prim_${pi}`;
+          const names = prim.listTargets().map((t, ti) => ident(t.getName() || `target_${ti}`).replace(/^(\d)/, '_$1') + `_${base}`);
+          blendNamesOf.set(prim, names);
+          const list = blendBySkin.get(skin) ?? [];
+          list.push({ names, node, mesh });
+          blendBySkin.set(skin, list);
+        });
+        meshIdx++;
+      }
+      node.listChildren().forEach(walk);
+    };
+    scene.listChildren().forEach(walk);
+  }
   skins.forEach((skin, i) => {
-    const sk = buildSkeleton(skin, root.listAnimations(), `/${rootName}`, i === 0 ? 'Skel' : `Skel_${i}`);
+    const sk = buildSkeleton(skin, root.listAnimations(), `/${rootName}`, i === 0 ? 'Skel' : `Skel_${i}`, blendBySkin.get(skin) ?? []);
     skeletons.set(skin, sk);
     frames = Math.max(frames, sk.frames);
     warnings.push(...sk.warnings);
   });
+  if (blendBySkin.has(null)) {
+    const sk = buildSkeleton(null, root.listAnimations(), `/${rootName}`, skins.length ? 'Skel_morph' : 'Skel', blendBySkin.get(null)!);
+    skeletons.set(null, sk);
+    frames = Math.max(frames, sk.frames);
+    warnings.push(...sk.warnings);
+  }
 
   // --- Meshes: one Xform per mesh-bearing node, world transform baked ---
   const nodePrims: UsdPrim[] = [];
   let meshCount = 0, triangles = 0, nodeIndex = 0;
-  const primBlock = (prim: Primitive, pi: number, parentPath: string, xformName: string, skin: import('@gltf-transform/core').Skin | null = null): UsdPrim | null => {
+  const primBlock = (prim: Primitive, pi: number, parentPath: string, xformName: string, skin: import('@gltf-transform/core').Skin | null = null, nameOverride?: string): UsdPrim | null => {
     if (prim.getMode() !== Primitive.Mode.TRIANGLES) { warnings.push(`${xformName}: primitive ${pi} is not a triangle list; skipped.`); return null; }
     const posAcc = prim.getAttribute('POSITION');
     if (!posAcc) return null;
@@ -195,7 +246,7 @@ export function buildUsdLayer(
     for (let i = 0; i < triCount * 3; i++) indices[i] = idx[i];
     const st = uv ? new Float32Array(count * 2) : null;
     if (uv && st) for (let i = 0; i < count; i++) { st[i * 2] = uv[i * 2]; st[i * 2 + 1] = 1 - uv[i * 2 + 1]; } // glTF v is top-down; USD st is bottom-up
-    const name = ident('Prim_' + pi);
+    const name = nameOverride ?? ident('Prim_' + pi);
     const props: UsdProperty[] = [
       attr('subdivisionScheme', 'token', { uniform: true, value: 'none' }),
       attr('doubleSided', 'bool', { value: !!mat?.getDoubleSided() }),
@@ -207,24 +258,46 @@ export function buildUsdLayer(
     if (st) props.push(attr('primvars:st', 'texCoord2f[]', { value: st, interpolation: 'vertex' }));
     if (mat) props.push({ kind: 'relationship', name: 'material:binding', targets: [matPath(mat)] });
     const apiSchemas: string[] = [];
-    const sk = skin ? skeletons.get(skin) : undefined;
+    const children: UsdPrim[] = [];
+    const primPath = `${parentPath}/${name}`;
+    const blendNames = blendNamesOf.get(prim);
+    const sk = skin ? skeletons.get(skin) : blendNames ? skeletons.get(null) : undefined;
     const jointsAcc = prim.getAttribute('JOINTS_0'), weightsAcc = prim.getAttribute('WEIGHTS_0');
-    if (sk && jointsAcc && weightsAcc) {
+    if (sk) {
       apiSchemas.push('SkelBindingAPI');
-      const j = jointsAcc.getArray()!, w = readFloat(weightsAcc);
-      const jointIndices = new Int32Array(count * 4), jointWeights = new Float32Array(count * 4);
-      for (let i = 0; i < count * 4; i++) { jointIndices[i] = w[i] > 0 ? sk.jointRemap[j[i]] : 0; jointWeights[i] = w[i]; }
-      if (prim.getAttribute('JOINTS_1')) warnings.push(`${xformName}: more than 4 joint influences per vertex; USDZ export keeps the first 4.`);
       props.push(attr('primvars:skel:geomBindTransform', 'matrix4d', { value: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }));
-      props.push(attr('primvars:skel:jointIndices', 'int[]', { value: jointIndices, elementSize: 4, interpolation: 'vertex' }));
-      props.push(attr('primvars:skel:jointWeights', 'float[]', { value: jointWeights, elementSize: 4, interpolation: 'vertex' }));
+      if (skin && jointsAcc && weightsAcc) {
+        const j = jointsAcc.getArray()!, w = readFloat(weightsAcc);
+        const jointIndices = new Int32Array(count * 4), jointWeights = new Float32Array(count * 4);
+        for (let i = 0; i < count * 4; i++) { jointIndices[i] = w[i] > 0 ? sk.jointRemap[j[i]] : 0; jointWeights[i] = w[i]; }
+        if (prim.getAttribute('JOINTS_1')) warnings.push(`${xformName}: more than 4 joint influences per vertex; USDZ export keeps the first 4.`);
+        props.push(attr('primvars:skel:jointIndices', 'int[]', { value: jointIndices, elementSize: 4, interpolation: 'vertex' }));
+        props.push(attr('primvars:skel:jointWeights', 'float[]', { value: jointWeights, elementSize: 4, interpolation: 'vertex' }));
+      } else {
+        // Morph-only mesh: everything rides the synthetic root joint.
+        props.push(attr('primvars:skel:jointIndices', 'int[]', { value: new Int32Array(count), elementSize: 1, interpolation: 'vertex' }));
+        props.push(attr('primvars:skel:jointWeights', 'float[]', { value: new Float32Array(count).fill(1), elementSize: 1, interpolation: 'vertex' }));
+      }
       props.push({ kind: 'relationship', name: 'skel:skeleton', targets: [sk.skeletonPath] });
+      if (blendNames) {
+        // BlendShape prims: dense per-vertex offsets (pointIndices omitted = all points, in order).
+        prim.listTargets().forEach((target, ti) => {
+          const dAcc = target.getAttribute('POSITION');
+          const offsets = dAcc ? readFloat(dAcc).subarray(0, count * 3) : new Float32Array(count * 3);
+          const bsProps: UsdProperty[] = [attr('offsets', 'vector3f[]', { uniform: true, value: offsets })];
+          const nAcc = target.getAttribute('NORMAL');
+          if (nAcc) bsProps.push(attr('normalOffsets', 'vector3f[]', { uniform: true, value: readFloat(nAcc).subarray(0, count * 3) }));
+          children.push({ name: blendNames[ti], path: `${primPath}/${blendNames[ti]}`, typeName: 'BlendShape', properties: bsProps, children: [] });
+        });
+        props.push(attr('skel:blendShapes', 'token[]', { uniform: true, value: blendNames }));
+        props.push({ kind: 'relationship', name: 'skel:blendShapeTargets', targets: blendNames.map((n) => `${primPath}/${n}`) });
+      }
     }
-    if (mat) apiSchemas.push('MaterialBindingAPI');
-    if (prim.listTargets().length) warnings.push(`${xformName}: morph targets are not exported yet (UsdSkel blend shapes pending).`);
+    apiSchemas.push('MaterialBindingAPI');
+    if (!mat) props.push({ kind: 'relationship', name: 'material:binding', targets: [defaultPath] });
     triangles += triCount;
     meshCount++;
-    return { name, path: `${parentPath}/${name}`, typeName: 'Mesh', apiSchemas: apiSchemas.length ? apiSchemas : undefined, properties: props, children: [] };
+    return { name, path: primPath, typeName: 'Mesh', apiSchemas, properties: props, children };
   };
   const visit = (node: Node): void => {
     const mesh = node.getMesh();
@@ -235,8 +308,8 @@ export function buildUsdLayer(
       const xformName = ident(node.getName() || `Skinned_${nodeIndex}`) + `_${nodeIndex}`;
       nodeIndex++;
       mesh.listPrimitives().forEach((prim, pi) => {
-        const p = primBlock(prim, pi, `/${rootName}`, xformName, skin);
-        if (p) { p.name = `${xformName}_${p.name}`; p.path = `/${rootName}/${p.name}`; nodePrims.push(p); }
+        const p = primBlock(prim, pi, `/${rootName}`, xformName, skin, `${xformName}_Prim_${pi}`);
+        if (p) nodePrims.push(p);
       });
     } else if (mesh) {
       const m = node.getWorldMatrix();
@@ -258,14 +331,15 @@ export function buildUsdLayer(
     for (const child of node.listChildren()) visit(child);
   };
   for (const child of scene.listChildren()) visit(child);
-  if (!skins.length && root.listAnimations().length) {
+  if (!skeletons.size && root.listAnimations().length) {
     warnings.push('Node animations without a skin are not exported (UsdSkel carries joint animation only); the pose is static.');
   }
 
+  const allMaterials = defaultMaterial ? [...materialPrims, defaultMaterial] : materialPrims;
   const rootPrim: UsdPrim = {
-    name: rootName, path: `/${rootName}`, typeName: skins.length ? 'SkelRoot' : 'Xform', properties: [],
+    name: rootName, path: `/${rootName}`, typeName: skeletons.size ? 'SkelRoot' : 'Xform', properties: [],
     children: [
-      ...(materialPrims.length ? [{ name: 'Materials', path: `/${rootName}/Materials`, typeName: 'Scope', properties: [], children: materialPrims }] : []),
+      ...(allMaterials.length ? [{ name: 'Materials', path: `/${rootName}/Materials`, typeName: 'Scope', properties: [], children: allMaterials }] : []),
       ...[...skeletons.values()].map((s) => s.skeletonPrim),
       ...nodePrims,
     ],
@@ -315,7 +389,7 @@ export async function toUsdz(doc: Document, opts: UsdzOptions = {}): Promise<Usd
   return {
     usdz: storeZip(entries),
     format,
-    skeletons: root.listSkins().length,
+    skeletons: root.listSkins().length + (root.listMeshes().some((m) => m.listPrimitives().some((p) => p.listTargets().length)) && !root.listSkins().length ? 1 : 0),
     frames,
     files: entries.map((e) => ({ name: e.name, bytes: e.data.length })),
     meshes, triangles,

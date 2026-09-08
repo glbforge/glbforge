@@ -55,7 +55,12 @@ export function makeRiggedCylinder(rings = 24, segments = 32): Document {
     .setOutput(acc('VEC4', new Float32Array([0, 0, 0, 1, 0, 0, s, s])))
     .setInterpolation('LINEAR');
   const channel = doc.createAnimationChannel().setTargetNode(upper).setTargetPath('rotation').setSampler(sampler);
-  doc.createAnimation('bend').addSampler(sampler).addChannel(channel);
+  const wSampler = doc.createAnimationSampler()
+    .setInput(acc('SCALAR', new Float32Array([0, 0.5, 1])))
+    .setOutput(acc('SCALAR', new Float32Array([0, 1, 0])))
+    .setInterpolation('LINEAR');
+  const wChannel = doc.createAnimationChannel().setTargetNode(meshNode).setTargetPath('weights').setSampler(wSampler);
+  doc.createAnimation('bend').addSampler(sampler).addChannel(channel).addSampler(wSampler).addChannel(wChannel);
 
   doc.createScene().addChild(root).addChild(meshNode);
   return doc;

@@ -73,7 +73,21 @@ for prim in cand.Traverse():
             xf = q.ComputeJointLocalTransforms(cand.GetEndTimeCode())
             m = xf[-1]; rq = m.ExtractRotationQuat()
             rot = f' upper@{int(cand.GetEndTimeCode())}=({rq.GetReal():.4g}, ' + ', '.join(f'{c:.4g}' for c in rq.GetImaginary()) + ')'
-        print(f'skel: joints={len(joints)} frames={frames}{rot}')
+        bs = ''
+        if aq:
+            names = list(aq.GetBlendShapeOrder())
+            if names:
+                w = aq.ComputeBlendShapeWeights(15)
+                bs = f' blendShapes={len(names)} weight@15={w[0]:.4g}'
+                # every mesh bound to this skeleton must resolve its blend shapes
+                for mp in cand.Traverse():
+                    b = UsdSkel.BindingAPI(mp)
+                    if mp.HasAPI(UsdSkel.BindingAPI) and b.GetBlendShapesAttr().HasAuthoredValue():
+                        targets = b.GetBlendShapeTargetsRel().GetTargets()
+                        if len(targets) != len(b.GetBlendShapesAttr().Get()): errors.append(f'{mp.GetPath()}: blendShapes/targets length mismatch')
+                        for tp in targets:
+                            if not cand.GetPrimAtPath(tp).IsA(UsdSkel.BlendShape): errors.append(f'{tp}: not a BlendShape')
+        print(f'skel: joints={len(joints)} frames={frames}{rot}{bs}')
 if errors:
     print('\n'.join(errors[:40])); print(f'{len(errors)} difference(s)'); sys.exit(1)
 print(f'OK: {len(ref_prims)} prims identical between {cand_path} and {ref_path}')

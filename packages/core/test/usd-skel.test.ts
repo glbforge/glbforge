@@ -44,7 +44,18 @@ describe('UsdSkel export', () => {
     expect(ji.elementSize).toBe(4);
     expect(ji.value.length).toBe(24 * 32 * 4);
     expect(mesh.properties.some((p) => p.kind === 'relationship' && p.name === 'skel:skeleton')).toBe(true);
-    expect(warnings.join(' ')).toMatch(/morph targets/);
+
+    // Morph target → BlendShape prim under the mesh, listed on the mesh and driven by the clip.
+    const bs = mesh.children.find((p) => p.typeName === 'BlendShape')!;
+    expect(bs.name).toMatch(/^bulge_/);
+    const offsets = bs.properties.find((p) => p.name === 'offsets') as { value: Float32Array };
+    expect(offsets.value.length).toBe(24 * 32 * 3);
+    expect((mesh.properties.find((p) => p.name === 'skel:blendShapes') as { value: string[] }).value).toEqual([bs.name]);
+    const bw = anim.properties.find((p) => p.name === 'blendShapeWeights') as { samples: { values: Float32Array[] } };
+    expect(bw.samples.values[0][0]).toBe(0);
+    expect(bw.samples.values[15][0]).toBeCloseTo(1, 5);   // peak at 0.5 s
+    expect(bw.samples.values[30][0]).toBeCloseTo(0, 5);
+    expect(warnings.join(' ')).not.toMatch(/morph targets/);
 
     const usda = writeUsda(layer);
     expect(usda).toContain('def SkelRoot');
@@ -77,7 +88,7 @@ describe('UsdSkel export', () => {
         throw new Error(`usd-oracle failed:\n${e.stdout ?? ''}\n${(e.stderr ?? '').split('\n').slice(-6).join('\n')}`);
       }
       expect(out).toMatch(/^OK:/m);
-      expect(out).toMatch(/skel: joints=2 frames=31 upper@30=\(0\.7071?\d*, 0, 0, 0\.7071?\d*\)/);
+      expect(out).toMatch(/skel: joints=2 frames=31 upper@30=\(0\.7071?\d*, 0, 0, 0\.7071?\d*\) blendShapes=1 weight@15=1/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

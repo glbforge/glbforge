@@ -566,7 +566,7 @@ program
 
 program
   .command('usdz')
-  .description('Export a GLB as USDZ for iOS AR Quick Look (binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Skinned assets export a UsdSkel skeleton with the first animation clip sampled at 30 fps.')
+  .description('Export a GLB as USDZ for iOS AR Quick Look (binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Skinned assets export a UsdSkel skeleton with the first animation clip sampled at 30 fps; morph targets become blend shapes.')
   .argument('<file>', 'path to .glb (an optimized .web.glb works — WebP is transcoded)')
   .option('-o, --out <file>', 'output path (default: <name>.usdz)')
   .option('--jpeg', 'encode opaque color textures as JPEG (smaller) instead of PNG')

@@ -137,8 +137,11 @@ parents-first with bind and rest transforms, `SkelBindingAPI` joint
 indices/weights on the meshes, and the first animation clip sampled at 30 fps
 into a `SkelAnimation` (translations, quaternion rotations, half scales). The
 oracle test asks Pixar's UsdSkel to recompute joint transforms from the
-result. Morph targets are not exported yet. KTX2 inputs are rejected with
-guidance. Also `export_usdz` on the MCP
+result. Morph targets become UsdSkel `BlendShape` prims with the weight
+track sampled alongside (a morph-only mesh gets a one-joint skeleton so
+UsdSkel applies them). Primitives without a material get a neutral default
+one, since an unbound mesh renders as RealityKit's magenta "missing material"
+pattern. KTX2 inputs are rejected with guidance. Also `export_usdz` on the MCP
 server and an **Export USDZ** button in the Studio (in-browser too — textures
 transcode through a canvas). Reference it from `<model-viewer ios-src="model.usdz">` for the AR
 button on iOS. Verified on an iPhone in AR Quick Look: flat-material and
