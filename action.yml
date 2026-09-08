@@ -199,10 +199,14 @@ runs:
         node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" > "$REPORT_DIR/comment.md"
         echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
 
+    # The PR step can fail for reasons outside the asset's control (most
+    # often the repo setting "Allow GitHub Actions to create and approve pull
+    # requests" being off). Never let that swallow the report comment.
     - id: pr
       if: >-
         inputs.optimize == 'true' && inputs.open-pr == 'true' && steps.optimize.outputs.optimized > 0 &&
         github.event.pull_request.head.repo.full_name == github.repository
+      continue-on-error: true
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ inputs.token }}
@@ -216,7 +220,7 @@ runs:
 
     - if: >-
         inputs.optimize == 'true' && steps.optimize.outputs.optimized > 0 &&
-        (inputs.open-pr != 'true' || github.event.pull_request.head.repo.full_name != github.repository)
+        (inputs.open-pr != 'true' || github.event.pull_request.head.repo.full_name != github.repository || steps.pr.outcome == 'failure')
       uses: actions/upload-artifact@v4
       with:
         name: glbforge-optimized
@@ -230,6 +234,7 @@ runs:
       env:
         REPORT_DIR: ${{ steps.analyze.outputs.dir }}
         PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        PR_FAILED: ${{ steps.pr.outcome == 'failure' }}
         OPTIMIZED: ${{ steps.optimize.outputs.optimized }}
         FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
         OPTIMIZE: ${{ inputs.optimize }}
@@ -243,6 +248,8 @@ runs:
             body += `\n\n➡️ **Optimized assets are ready to merge:** ${process.env.PR_URL}`;
           } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.FORK === 'true') {
             body += '\n\n➡️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact (fork PRs cannot receive a bot branch).';
+          } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.PR_FAILED === 'true') {
+            body += '\n\n⚠️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact — opening a PR failed. Usually this means **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** is off, or the job lacks `contents: write` + `pull-requests: write`.';
           }
           const { owner, repo } = context.repo;
           const issue_number = context.payload.pull_request.number;
