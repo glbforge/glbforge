@@ -144,9 +144,9 @@ one, since an unbound mesh renders as RealityKit's magenta "missing material"
 pattern. KTX2 inputs are rejected with guidance. Also `export_usdz` on the MCP
 server and an **Export USDZ** button in the Studio (in-browser too — textures
 transcode through a canvas). Reference it from `<model-viewer ios-src="model.usdz">` for the AR
-button on iOS. Verified on an iPhone in AR Quick Look: flat-material and
-fully textured (JPEG color, PNG normal and metallic/roughness) exports both
-open and render correctly.
+button on iOS. Verified on an iPhone in AR Quick Look: flat-material,
+fully textured (JPEG color, PNG normal and metallic/roughness), skinned +
+animated, and blend-shape exports all open and play correctly.
 
 ## `glbforge init` — make a project agent-ready
 
