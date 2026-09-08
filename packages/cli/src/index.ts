@@ -21,7 +21,7 @@ import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, extrud
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
-import { registerInitCommand } from './init.js';
+import { cliVersion, registerInitCommand } from './init.js';
 import { loadDotEnv } from './env.js';
 
 loadDotEnv();
@@ -108,7 +108,7 @@ async function optimizeFile(
 const program = new Command()
   .name('glbforge')
   .description('GLBForge — make AI-generated 3D assets web-ready: analyze, optimize, extrude, scaffold.')
-  .version('0.4.0');
+  .version(cliVersion());
 
 program
   .command('analyze')

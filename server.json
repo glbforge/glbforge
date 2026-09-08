@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "dev.glbforge/glbforge",
-  "description": "Make AI-generated 3D assets web-ready: analyze budgets, optimize, forge logos to 3D, export STL.",
+  "description": "Make AI-generated 3D assets web-ready: budget analysis with rendered previews, perceptually verified optimization (measured SSIM), forge logos to 3D, STL/USDZ export, generation via fal.ai/Meshy.",
   "repository": {
     "url": "https://github.com/glbforge/glbforge",
     "source": "github"
   },
-  "version": "0.4.1",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@glbforge/mcp",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "transport": {
         "type": "stdio"
       },

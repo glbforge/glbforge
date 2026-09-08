@@ -1,6 +1,6 @@
 {
   "name": "@glbforge/mcp",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "type": "module",
   "bin": {
     "glbforge-mcp": "dist/index.js"
@@ -32,7 +32,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge MCP server \u2014 8 tools that let AI agents take 3D assets from generation to web-ready.",
+  "description": "GLBForge MCP server — 8 tools that let AI agents take 3D assets from generation to web-ready.",
   "keywords": [
     "gltf",
     "glb",

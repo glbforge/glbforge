@@ -1,6 +1,6 @@
 {
   "name": "@glbforge/core",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -35,7 +35,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "Analyze, optimize, extrude, and export AI-generated 3D assets for the web \u2014 budgets, lint rules, KTX2, LODs, STL.",
+  "description": "Analyze, optimize, extrude, and export AI-generated 3D assets for the web — budgets, lint rules, KTX2, LODs, STL.",
   "keywords": [
     "gltf",
     "glb",

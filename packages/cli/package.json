@@ -1,6 +1,6 @@
 {
   "name": "glbforge",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "bin": {
     "glbforge": "dist/index.js"
@@ -37,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge CLI \u2014 make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
+  "description": "GLBForge CLI — make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
   "keywords": [
     "gltf",
     "glb",

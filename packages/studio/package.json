@@ -1,7 +1,7 @@
 {
   "name": "@glbforge/studio",
-  "version": "0.4.0",
-  "description": "GLBForge Studio \u2014 local web UI for the GLBForge pipeline, served by `glbforge ui`.",
+  "version": "0.5.0",
+  "description": "GLBForge Studio — local web UI for the GLBForge pipeline, served by `glbforge ui`.",
   "type": "module",
   "license": "MIT",
   "homepage": "https://glbforge.dev",
