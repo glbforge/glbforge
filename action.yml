@@ -140,13 +140,14 @@ runs:
         CLI: ${{ steps.cli.outputs.bin }}
         CLI_VERSION: ${{ steps.cli.outputs.version }}
         CACHE_DIR: ${{ runner.temp }}/glbforge-cache
+        STAGE_DIR: ${{ runner.temp }}/glbforge-out
         USE_CACHE: ${{ inputs.cache }}
         REPLACE: ${{ inputs.replace }}
         VERIFY: ${{ inputs.verify }}
         ALL: ${{ inputs.optimize-all }}
       run: |
         set -euo pipefail
-        mkdir -p "$CACHE_DIR"
+        mkdir -p "$CACHE_DIR" "$STAGE_DIR"
         OPTIMIZED=0; HITS=0
         VERIFY_FLAG=""; [ "$VERIFY" = "true" ] || VERIFY_FLAG="--no-verify"
         while IFS= read -r f; do
@@ -174,6 +175,9 @@ runs:
               cp "$TMP_OUT" "$CACHE_DIR/$KEY.glb"; cp "$REPORT_DIR/$SAFE.after.json" "$CACHE_DIR/$KEY.json"
             fi
           fi
+          # Stage a copy for the artifact fallback: the PR action restores the
+          # working tree after pushing its branch, so the file won't be here later.
+          mkdir -p "$STAGE_DIR/$(dirname "$OUT")" && cp "$OUT" "$STAGE_DIR/$OUT"
           # Record where the output landed (the CLI JSON carries the temp path).
           node -e "
             const fs=require('fs'); const p='$REPORT_DIR/$SAFE.after.json';
@@ -199,10 +203,14 @@ runs:
         node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" > "$REPORT_DIR/comment.md"
         echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
 
+    # The PR step can fail for reasons outside the asset's control (most
+    # often the repo setting "Allow GitHub Actions to create and approve pull
+    # requests" being off). Never let that swallow the report comment.
     - id: pr
       if: >-
         inputs.optimize == 'true' && inputs.open-pr == 'true' && steps.optimize.outputs.optimized > 0 &&
         github.event.pull_request.head.repo.full_name == github.repository
+      continue-on-error: true
       uses: peter-evans/create-pull-request@v7
       with:
         token: ${{ inputs.token }}
@@ -216,20 +224,19 @@ runs:
 
     - if: >-
         inputs.optimize == 'true' && steps.optimize.outputs.optimized > 0 &&
-        (inputs.open-pr != 'true' || github.event.pull_request.head.repo.full_name != github.repository)
+        (inputs.open-pr != 'true' || github.event.pull_request.head.repo.full_name != github.repository || steps.pr.outcome == 'failure')
       uses: actions/upload-artifact@v4
       with:
         name: glbforge-optimized
-        path: |
-          **/*.web.glb
-          **/*.web.lod*.glb
-        if-no-files-found: ignore
+        path: ${{ runner.temp }}/glbforge-out
+        if-no-files-found: warn
 
     - if: steps.analyze.outputs.count > 0
       uses: actions/github-script@v7
       env:
         REPORT_DIR: ${{ steps.analyze.outputs.dir }}
         PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        PR_FAILED: ${{ steps.pr.outcome == 'failure' }}
         OPTIMIZED: ${{ steps.optimize.outputs.optimized }}
         FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
         OPTIMIZE: ${{ inputs.optimize }}
@@ -243,6 +250,8 @@ runs:
             body += `\n\n➡️ **Optimized assets are ready to merge:** ${process.env.PR_URL}`;
           } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.FORK === 'true') {
             body += '\n\n➡️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact (fork PRs cannot receive a bot branch).';
+          } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.PR_FAILED === 'true') {
+            body += '\n\n⚠️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact — opening a PR failed. Usually this means **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** is off (for organizations it must be enabled at the org level first, then the repo), or the job lacks `contents: write` + `pull-requests: write`.';
           }
           const { owner, repo } = context.repo;
           const issue_number = context.payload.pull_request.number;
