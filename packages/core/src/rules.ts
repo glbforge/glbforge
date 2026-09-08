@@ -229,6 +229,20 @@ const RULES: Record<string, Rule> = {
     };
   },
 
+  'scene/animated-asset': (r) => {
+    if (!r.scene.skins && !r.scene.animations) return null;
+    const parts = [];
+    if (r.scene.skins) parts.push(`${r.scene.skins} skin${r.scene.skins > 1 ? 's' : ''}`);
+    if (r.scene.animations) parts.push(`${r.scene.animations} animation clip${r.scene.animations > 1 ? 's' : ''}`);
+    return {
+      ruleId: 'scene/animated-asset',
+      severity: 'info',
+      message: `Deforming asset: ${parts.join(', ')}. Optimization preserves skins, joint boundaries, morph targets, and clips (bone-aware simplification).`,
+      suggestion: 'Budget triangles with animation in mind — deformation costs per frame. STL/USDZ exports bake the bind pose (static).',
+      data: { skins: r.scene.skins, animations: r.scene.animations },
+    };
+  },
+
   'scene/scale-sanity': (r) => {
     const b = r.geometry.bounds;
     if (!b) return null;
