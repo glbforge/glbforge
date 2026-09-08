@@ -47,5 +47,9 @@ the same registration into another checkout.
   (`pnpm pack` + `npm publish --provenance`; never `pnpm publish` in CI). Bump
   all five package versions together; update `server.json` and the MCP registry
   (`dev.glbforge/glbforge`, domain key in `~/.config/glbforge/`) afterwards.
+- **USDZ crate writer** (`core/src/usdc.ts`) targets crate 0.8.0; Pixar flags anything
+  older as deprecated. Validate changes with `test/usd-oracle.py`: `pip install
+  usd-core` in a venv and run core tests with `GLBFORGE_PXR_PYTHON=<venv>/bin/python`.
+  `USD_WRITE_NEW_USDC_FILES_AS_VERSION=0.8.0` + `Sdf.Layer.Export` gives byte references.
 - **Docs to keep in sync when scope changes**: `README.md`, `site/llms.txt`
   (AI-facing scope statement), `packages/mcp/README.md`, `ROADMAP.md`.

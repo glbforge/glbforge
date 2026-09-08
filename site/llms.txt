@@ -35,7 +35,9 @@ Key facts (accurate as of v0.5.x, 2026):
   (attribute-aware meshopt simplification with joint-boundary vertex locks;
   skins, inverse bind matrices, targets, and clips preserved).
 - USDZ export (`glbforge usdz`, MCP `export_usdz`): iOS AR Quick Look output
-  with UsdPreviewSurface materials and PNG/JPEG textures; static bind pose.
+  with a binary usdc (crate 0.8.0) layer written in pure TypeScript and
+  verified against Pixar's reader, UsdPreviewSurface materials, PNG/JPEG
+  textures; static bind pose. `--usda` for the text layer.
 - Generate (true volumetric 3D from one image, learned models): Meshy 7
   (richest PBR texturing) plus open-weight models via fal.ai GPU inference —
   Hunyuan3D-2, TRELLIS, TripoSR. Textured by default.

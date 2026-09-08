@@ -1,12 +1,15 @@
 /**
  * Binary USD ("crate", .usdc) writer for the subset of USD that GLBForge
- * emits. Targets crate file version 0.3.0 — the last fully uncompressed
- * layout (tokens, structural sections, and arrays all stored raw), which
- * every USD reader since 2016 (Pixar, Apple RealityKit / AR Quick Look,
- * Blender, three.js' USD loaders) accepts. Byte layout was verified
- * section-by-section against files written by Pixar's own crate writer with
- * USD_WRITE_NEW_USDC_FILES_AS_VERSION=0.3.0. Deterministic: same layer, same
- * bytes.
+ * emits. Targets crate file version 0.8.0 — what Pixar's own writer emits
+ * today and the oldest version its reader does not flag as deprecated. The
+ * structural sections use the crate's compressed encodings: token indices
+ * through Pixar's 2-bit-code delta integer compression, then TfFastCompression
+ * (a chunk byte + an LZ4 block). We emit literal-only LZ4 blocks — valid LZ4,
+ * zero compression — because the structural sections are a few KB while the
+ * float arrays (which crate stores raw anyway) are the bulk. Every section's
+ * byte layout was verified against files written by Pixar's writer and the
+ * result is checked by test/usd-oracle.py with Pixar's reader. Deterministic:
+ * same layer, same bytes.
  *
  * File layout: bootstrap (88 bytes) · values · TOKENS · STRINGS · FIELDS ·
  * FIELDSETS · PATHS · SPECS · table of contents.
@@ -122,23 +125,23 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
       const at = out.length;
       if (base === 'token' || base === 'string' || base === 'asset') {
         const items = v as string[];
-        out.u32(1); out.u32(items.length);
+        out.u64(items.length);
         for (const s of items) out.u32(tok(s));
         return rep(base === 'token' ? T.Token : base === 'asset' ? T.AssetPath : T.String, at, IS_ARRAY);
       }
       const xs = v as ArrayLike<number>;
       if (base === 'int') {
-        out.u32(1); out.u32(xs.length);
+        out.u64(xs.length);
         for (let i = 0; i < xs.length; i++) out.i32(xs[i]);
         return rep(T.Int, at, IS_ARRAY);
       }
       if (base === 'float' || width === 0) {
-        out.u32(1); out.u32(xs.length);
+        out.u64(xs.length);
         for (let i = 0; i < xs.length; i++) out.f32(xs[i]);
         return rep(T.Float, at, IS_ARRAY);
       }
       const count = Math.floor(xs.length / width);
-      out.u32(1); out.u32(count);
+      out.u64(count);
       for (let i = 0; i < count * width; i++) out.f32(xs[i]);
       return rep(width === 2 ? T.Vec2f : width === 3 ? T.Vec3f : T.Vec4f, at, IS_ARRAY);
     }
@@ -223,51 +226,61 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
     body();
     toc.push({ name, start, size: out.length - start });
   };
+  const compressedBlock = (bytes: Uint8Array) => { const c = tfCompress(bytes); out.u64(c.length); out.raw(c); };
+  const compressedInts = (ints: number[]) => compressedBlock(compressInts(ints));
 
   section('TOKENS', () => {
     const bytes = enc.encode(tokens.join('\0') + '\0');
+    const c = tfCompress(bytes);
     out.u64(tokens.length);
     out.u64(bytes.length);
-    out.raw(bytes);
+    out.u64(c.length);
+    out.raw(c);
   });
   section('STRINGS', () => {
     out.u64(strings.length);
-    for (const s of strings) out.u32(s);
+    for (const i of strings) out.u32(i);
   });
   section('FIELDS', () => {
     out.u64(fields.length);
-    for (const fld of fields) { out.u32(0xffffffff); out.u32(fld.token); out.u64(fld.rep); }
+    compressedInts(fields.map((f) => f.token));
+    const reps = new Uint8Array(fields.length * 8);
+    const dv = new DataView(reps.buffer);
+    fields.forEach((f, i) => dv.setBigUint64(i * 8, f.rep, true));
+    compressedBlock(reps);
   });
   section('FIELDSETS', () => {
     out.u64(fieldSets.length);
-    for (const i of fieldSets) out.u32(i);
+    compressedInts(fieldSets.map((i) => (i === 0xffffffff ? -1 : i)));
   });
   section('PATHS', () => {
-    out.u64(paths.length);
-    const writeSiblings = (nodes: PathNode[]) => {
+    // Pre-order flattening; each entry's jump says where its sibling is.
+    const pathIndexes: number[] = [], elementTokens: number[] = [], jumps: number[] = [];
+    const flatten = (nodes: PathNode[]) => {
       for (let i = 0; i < nodes.length; i++) {
         const n = nodes[i];
         const hasChild = n.children.length > 0;
         const hasSibling = i < nodes.length - 1;
-        out.u32(n.index); out.u32(n.token);
-        out.u8((hasChild ? HAS_CHILD : 0) | (hasSibling ? HAS_SIBLING : 0) | (n.isProp ? IS_PRIM_PROPERTY : 0));
-        out.u8(0); out.u8(0); out.u8(0);
-        if (hasChild) {
-          if (hasSibling) {
-            const patchAt = out.length; out.u64(0);
-            writeSiblings(n.children);
-            out.patchU64(patchAt, out.length);
-          } else {
-            writeSiblings(n.children);
-          }
-        }
+        const at = pathIndexes.length;
+        pathIndexes.push(n.index);
+        elementTokens.push(n.isProp ? -n.token : n.token);
+        jumps.push(0); // patched below when both child and sibling exist
+        if (hasChild) flatten(n.children);
+        jumps[at] = hasChild && hasSibling ? pathIndexes.length - at : hasChild ? -1 : hasSibling ? 0 : -2;
       }
     };
-    writeSiblings([root]);
+    flatten([root]);
+    out.u64(paths.length);
+    out.u64(pathIndexes.length);
+    compressedInts(pathIndexes);
+    compressedInts(elementTokens);
+    compressedInts(jumps);
   });
   section('SPECS', () => {
     out.u64(specs.length);
-    for (const s of specs) { out.u32(s.path); out.u32(s.fieldSet); out.u32(s.type); }
+    compressedInts(specs.map((s) => s.path));
+    compressedInts(specs.map((s) => s.fieldSet));
+    compressedInts(specs.map((s) => s.type));
   });
 
   // --- Table of contents + bootstrap ----------------------------------------
@@ -279,7 +292,69 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
   }
   const file = out.done();
   file.set(enc.encode('PXR-USDC'), 0);
-  file[8] = 0; file[9] = 3; file[10] = 0; // crate version 0.3.0
+  file[8] = 0; file[9] = 8; file[10] = 0; // crate version 0.8.0
   new DataView(file.buffer).setBigUint64(16, BigInt(tocOffset), true);
   return file;
+}
+
+/**
+ * A literal-only LZ4 block: one sequence carrying every byte as a literal.
+ * Valid per the LZ4 block format (the final sequence has no match), so any
+ * LZ4 decoder accepts it; it just does not shrink anything.
+ */
+export function lz4LiteralBlock(bytes: Uint8Array): Uint8Array {
+  const n = bytes.length;
+  const head: number[] = [];
+  if (n < 15) head.push(n << 4);
+  else {
+    head.push(0xf0);
+    let rest = n - 15;
+    while (rest >= 255) { head.push(255); rest -= 255; }
+    head.push(rest);
+  }
+  const outBytes = new Uint8Array(head.length + n);
+  outBytes.set(head, 0); outBytes.set(bytes, head.length);
+  return outBytes;
+}
+
+/** TfFastCompression framing: a chunk-count byte (0 = single block) then the LZ4 block. */
+export function tfCompress(bytes: Uint8Array): Uint8Array {
+  const block = lz4LiteralBlock(bytes);
+  const outBytes = new Uint8Array(block.length + 1);
+  outBytes[0] = 0; outBytes.set(block, 1);
+  return outBytes;
+}
+
+/**
+ * Usd_IntegerCompression (32-bit): delta-code each value against the
+ * previous one; the most common delta costs 0 bytes (code 0), others cost
+ * 1/2/4 bytes (codes 1/2/3). Layout: int32 commonValue · 2-bit codes packed
+ * four per byte, low bits first · the non-common deltas in order.
+ */
+export function compressInts(values: number[]): Uint8Array {
+  const n = values.length;
+  const deltas = new Int32Array(n);
+  let prev = 0;
+  for (let i = 0; i < n; i++) { deltas[i] = (values[i] - prev) | 0; prev = values[i] | 0; }
+  const freq = new Map<number, number>();
+  for (const d of deltas) freq.set(d, (freq.get(d) ?? 0) + 1);
+  let common = 0, best = -1;
+  for (const [d, c] of freq) if (c > best || (c === best && d < common)) { best = c; common = d; }
+  const codesLen = (n * 2 + 7) >> 3;
+  const data: number[] = [];
+  const codes = new Uint8Array(codesLen);
+  for (let i = 0; i < n; i++) {
+    const d = deltas[i];
+    let code: number;
+    if (d === common) code = 0;
+    else if (d >= -128 && d <= 127) { code = 1; data.push(d & 0xff); }
+    else if (d >= -32768 && d <= 32767) { code = 2; data.push(d & 0xff, (d >> 8) & 0xff); }
+    else { code = 3; data.push(d & 0xff, (d >> 8) & 0xff, (d >> 16) & 0xff, (d >>> 24) & 0xff); }
+    codes[i >> 2] |= code << ((i & 3) * 2);
+  }
+  const outBytes = new Uint8Array(4 + codesLen + data.length);
+  new DataView(outBytes.buffer).setInt32(0, common, true);
+  outBytes.set(codes, 4);
+  outBytes.set(data, 4 + codesLen);
+  return outBytes;
 }

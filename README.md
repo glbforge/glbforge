@@ -117,13 +117,20 @@ preserved, weights normalized, deterministic).
 npx glbforge usdz model.web.glb          # → model.usdz (PNG textures; --jpeg for smaller)
 ```
 
-Writes an ASCII USD layer with `UsdPreviewSurface` materials (base color,
-metallic/roughness via channel outputs, normal, occlusion, emissive, alpha
-mask/blend), transcodes WebP textures to PNG/JPEG, and packs a store-only
-zip with 64-byte-aligned payloads as the spec requires. Static export: skins
-and clips are baked to the bind pose; KTX2 inputs are rejected with guidance.
-Also `export_usdz` on the MCP server. Reference it from
-`<model-viewer ios-src="model.usdz">` for the AR button on iOS.
+Writes a **binary USD (usdc, crate 0.8.0) layer** with `UsdPreviewSurface`
+materials (base color, metallic/roughness via channel outputs, normal,
+occlusion, emissive, alpha mask/blend), transcodes WebP textures to
+PNG/JPEG, and packs a store-only zip with 64-byte-aligned payloads as the
+spec requires. The crate writer is GLBForge's own, pure TypeScript — its byte
+layout was verified section-by-section against files from Pixar's writer,
+and `test/usd-oracle.py` opens the usdc and its usda twin with Pixar's USD
+and checks every prim, value, connection, and relationship for equality
+(set `GLBFORGE_PXR_PYTHON` to a python with `usd-core` to run it). On the
+Meshy fixture the layer is 5.4MB binary vs 13.4MB ASCII. `--usda` writes
+the text layer instead. Static export: skins and clips are baked to the bind
+pose; KTX2 inputs are rejected with guidance. Also `export_usdz` on the MCP
+server. Reference it from `<model-viewer ios-src="model.usdz">` for the AR
+button on iOS.
 
 ## `glbforge init` — make a project agent-ready
 

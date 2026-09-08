@@ -49,7 +49,7 @@ describe('USDZ export', () => {
     // Crate bootstrap: magic, version 0.3.0, table of contents with the six sections.
     const crate = a.usdz.subarray(entries[0].offset, entries[0].offset + entries[0].size);
     expect(Buffer.from(crate.subarray(0, 8)).toString()).toBe('PXR-USDC');
-    expect(Array.from(crate.subarray(8, 11))).toEqual([0, 3, 0]);
+    expect(Array.from(crate.subarray(8, 11))).toEqual([0, 8, 0]);
     const tocOffset = Number(new DataView(crate.buffer, crate.byteOffset).getBigUint64(16, true));
     const sections = Number(new DataView(crate.buffer, crate.byteOffset).getBigUint64(tocOffset, true));
     expect(sections).toBe(6);

@@ -17,7 +17,8 @@ Everything below is what remains, most urgent first.
 - [ ] Stripe live-mode flip + Meshy ToS resale check + `support@glbforge.dev` routing (pre-existing; gates real money)
 
 **Near-term engineering (follow-through on v0.5.0)**
-- [ ] USDZ: binary `usdc` writer — the ASCII layer is ~14MB at 150k tris; then UsdSkel for skinned/animated exports (today: static bind pose)
+- [x] USDZ: binary `usdc` writer (2026-09-08) — crate 0.8.0 in pure TS (literal-only LZ4 + Pixar integer compression for structural sections, raw arrays); verified byte-layout against Pixar's writer and value-for-value against Pixar's reader (test/usd-oracle.py, `GLBFORGE_PXR_PYTHON`). Layer 5.4MB vs 13.4MB ASCII on the Meshy fixture
+- [ ] USDZ: UsdSkel for skinned/animated exports (today: static bind pose); real LZ4 matching in the crate writer if structural sections ever matter (they are KBs)
 - [ ] Action: expose `lods` and `target-triangles` inputs; `replace: true` and `optimize-all` paths have only been dry-run locally (sibling mode is what PR #2 exercised)
 - [ ] Perceptual verification for LOD chains: report SSIM per LOD as info (LODs are intentionally lossy, so no gate) so agents can pick switch distances from measured numbers
 - [ ] Studio: metrics overlay on the compare slider + a `compare` panel — the SSIM/heatmap data now exists in core, the UI doesn't show it yet
