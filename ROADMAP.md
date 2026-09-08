@@ -31,7 +31,7 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [x] **STL export** (`glbforge stl`, MCP `export_stl`): binary STL, mm-scaled, z-up, watertightness verdict in output. Verified: beveled logo → 70mm watertight keychain; lucky cat → 60mm figurine
 - [x] SVG input for extrude: sharp rasterizes at high density into the existing trace pipeline (vector fidelity is trace-grid-limited either way); verified watertight on a test SVG
 - [x] `glbforge watch <dir>`: drop a GLB → auto analyze/optimize (debounced, own outputs excluded); verified live
-- [x] Scaffold auto-framing via `<Bounds fit clip observe>`. Deferred: env presets, `<model-viewer>`/USDZ AR export
+- [x] Scaffold auto-framing via `<Bounds fit clip observe>`. Deferred: env presets. USDZ AR export shipped 2026-09-07 (see Pipeline depth)
 - [x] Meshy surface area: remesh + retexture endpoints (client/CLI/MCP, mock-tested) + `glbforge meshy balance` (live-validated). Deferred: auto-rigging passthrough
 
 ## v0.4 — Distribution (make it findable)
@@ -41,6 +41,7 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [ ] Per-package READMEs, docs site or GitHub README gallery with before/after numbers and screenshots
 - [ ] Submit MCP server to registries / awesome-mcp lists; Meshy community (Discord) showcase
 - [x] **GitHub Action** (`uses: glbforge/glbforge@main`): analyzes changed GLB/glTF in PRs, posts a sticky report-card comment, gates on budget. Live-tested on PR #1 — score table + findings + fix hint posted by the bot
+- [x] **Action optimize mode** (2026-09-07): `optimize: true` optimizes failing changed assets (sibling `.web.glb` or `replace: true`), caches outputs by content hash + profile + CLI version via actions/cache (exact hits — deterministic), opens/updates a PR against the PR branch (peter-evans/create-pull-request) with a before/after + SSIM table; fork PRs get a workflow artifact; gate passes when the optimized output passes. Logic dry-run locally (cache hit byte-identical; gate 0 after optimize). Needs a live PR run to confirm the bot-branch plumbing
 - [ ] Launch content: the numbers sell it (89MB→5.5MB, 40KB beveled logo). three.js forum, r/threejs, X creative-coding
 
 ## Pre-launch: Forge upgrades + hosted demo
@@ -68,16 +69,20 @@ commodity; the gap between "generated" and "shipped" is the product.
 - [x] MCP prompts (guided workflows): web-ready-mobile-hero, logo-keychain, audit-and-fix-folder
 - [x] `audit_directory` tool — session-style multi-file analysis ("optimize everything failing in ./exports")
 - [x] Machine-actionable findings: analyze_glb returns `nextActions` (concrete follow-up tool calls)
+- [x] **Perceptual verification** (2026-09-07): `optimize`/`ship` render 4 fixed cameras before and after (software rasterizer, 2x SSAA, smooth shading, textured), score SSIM, gate the weakest view on the profile's `minSsim` floor. Failing SSIM = error finding `fidelity/perceptual` + non-zero exit; passing = info finding carrying the number. `glbforge verify a.glb b.glb`. Calibrated on the Meshy fixture: budget pass 0.958, 40k 0.896, 10k 0.73. Cameras are fixed to the reference frame (no re-framing into a pass). Also fixed: renderer/STL/align read raw quantized int16 positions from optimized GLBs (`readFloat` helper)
 - [ ] Progress streaming for long tools (MCP progress notifications); polling tools cover generation today
-- [ ] MCP resources for intermediate artifacts (reports, LODs, previews)
-- [ ] `render_preview` (multi-angle PNGs) — needs headless GL; evaluate `gl`/puppeteer cost
+- [x] **Agent-friendly MCP** (2026-09-07): compact cards (verdict, key numbers, top-3 findings, nextActions, drillDown) as text + `structuredContent`; `inspect_report` drill-down (findings filterable by rule prefix/severity, textures, materials, topology, geometry, scene, all); every GLB-touching tool returns a PNG (`preview: thumbnail|turntable|none`) from the software rasterizer; `render_preview` standalone; server split into `createServer()` + stdio bin, tested via the SDK's in-memory client (12 specs). Follow-up same day: `compare_glb` + reference|result|change-heatmap sheet on failing SSIM (`diffHeatmap` in core), `capabilities` tool (keys, KTX2 encoder, versions), tool annotations (readOnlyHint), sha256 on every written file, every error always in the compact card, `ship_asset` takes targetTriangles/lods; repo got its own CLAUDE.md
+- [ ] MCP resources for intermediate artifacts (reports, LODs) — previews now ship inline as image blocks
+- [x] **`glbforge init`** (2026-09-07): CLAUDE.md section between `<!-- glbforge:start/end -->` markers, `glb:*` npm scripts + devDependency, MCP registration merged into `.mcp.json` / `.cursor/mcp.json`; idempotent (second run = all unchanged), `--dry-run`, tested (3 specs). Plus `glbforge audit <dir>` (core `auditDirectory`, shared with the MCP tool) as the `glb:check` gate
 - [ ] Documented composition patterns with filesystem/image-gen/Blender MCP servers
 - [ ] Studio: "copy MCP command for this asset" (npx mode)
 
 ## Pipeline depth (review-sourced)
 
 - [ ] Fixture zoo + per-generator rules for Hunyuan/TRELLIS/TripoSR/Tripo/Rodin (we now generate these in-house — self-feeding corpus)
-- [ ] Animation/skinning: preserve + intelligently simplify skinned meshes (current focus is static)
+- [x] **Animation/skinning** (2026-09-07): deforming prims (JOINTS_0 or morph targets) take `simplifyDeformingPrimitive` — meshopt `simplifyWithAttributes` with WEIGHTS_n + normalized per-target delta magnitude as attributes, vertex locks on dominant-joint edges, LockBorder, shared compaction remap for all attributes + targets. Skins/IBMs/clips untouched. `scene/animated-asset` info rule. Tested on a rigged cylinder (blend band survives, weights normalized, deterministic, GLB round trip)
+- [x] **USDZ export** (2026-09-07): `glbforge usdz` / MCP `export_usdz` — usda + UsdPreviewSurface (baseColor/MR channel outputs/normal/occlusion/emissive/alpha), WebP→PNG/JPEG via sharp, own store-only zip writer (64-byte aligned, fixed timestamps, deterministic). Static bind pose. Needs an on-device Quick Look check
+- [x] **Versioned budget profiles + methodology** (2026-09-07): `Profile.version` + per-cap `rationale`; `PROFILE_VERSIONS` keeps every published version frozen (tested); `getProfile('mobile-hero@1')` pins, bare name = latest; labels `name@N` in CLI/Action/MCP; `list_profiles rationale=true`; docs/BUDGETS.md + glbforge.dev/budgets (model behind the numbers, score computation, SSIM calibration, changelog)
 - [ ] Scene-level budgets: analyze a set of GLBs against a shared budget
 - [ ] UV unwrap / retopo / normal baking as optional pluggable backends (keep pure-Node default)
 - [ ] Studio: metrics overlay on the compare slider; recipe presets mirroring MCP prompts
@@ -103,7 +108,8 @@ commodity; the gap between "generated" and "shipped" is the product.
   octahedral rigid alignment; validated: identity ≈ perfect, our optimizer's 232k→150k
   simplification measures 0.81% chamfer, inside its reported 1% fidelityBound) and
   `glbforge dataset` (deterministic software renderer: 10 known-camera views + mesh +
-  cameras.json per asset — fine-tuning pairs, ~1s/asset, zero GPU). Open: MCP resources +
+  cameras.json per asset — fine-tuning pairs, ~1s/asset, zero GPU; now smooth-shaded from
+  vertex normals) + perceptual SSIM verification wired into every optimize. Open: MCP resources +
   previews; collision meshes; part separation; skinning preservation; USDZ scaffolds;
   Studio metric overlays.
 - **Phase 3**: team dashboards + regression alerts; vertical starters; hosted free-tier

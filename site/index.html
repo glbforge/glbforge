@@ -147,7 +147,7 @@
         <div class="card"><h3><span class="ico">◆</span>Forge</h3><p>Logos, wordmarks, SVGs → watertight 3D. Layered colors, puffy-sticker relief, enamel/chrome/neon/acrylic presets. Instant, free, exact silhouette.</p></div>
         <div class="card"><h3><span class="ico">⎔</span>Generate</h3><p>Meshy image/text-to-3D built in — every generation lands already analyzed and one click from web-ready. Bring your own key.</p></div>
         <div class="card"><h3><span class="ico">⬇</span>Export</h3><p>Web-ready GLB, print-ready STL (mm-scaled, watertightness verdict), React Three Fiber viewer scaffold with LOD switching.</p></div>
-        <div class="card"><h3><span class="ico">✓</span>Budgets as contracts</h3><p><code>mobile-hero</code>, <code>desktop-hero</code>, <code>product-configurator</code> — opinionated caps that describe what ships comfortably, not what merely loads.</p></div>
+        <div class="card"><h3><span class="ico">✓</span>Budgets as contracts</h3><p><code>mobile-hero</code>, <code>desktop-hero</code>, <code>product-configurator</code> — opinionated, <a href="/budgets/">versioned caps with a published methodology</a>; pin <code>mobile-hero@1</code> in CI and it never moves under you.</p></div>
       </div>
     </section>
 
@@ -184,7 +184,7 @@
 
     <section id="agents">
       <h2>Built for agents and CI, not just humans</h2>
-      <p class="lede">The same pipeline is an MCP server — Claude Code, Cursor, and friends can take an asset from generation to web-ready inside one conversation — and a GitHub Action that posts report cards on pull requests.</p>
+      <p class="lede">The same pipeline is an MCP server — Claude Code, Cursor, and friends can take an asset from generation to web-ready inside one conversation, looking at rendered previews of their own output — and a GitHub Action that posts report cards on pull requests and opens a PR with the optimized, perceptually verified files.</p>
       <div class="duo">
         <pre><span class="c"># MCP server (Claude Code):</span>
 <span class="a">claude mcp add glbforge</span> -- npx -y @glbforge/mcp
@@ -198,7 +198,9 @@
 - uses: <span class="a">glbforge/glbforge@main</span>
   with:
     profile: <span class="g">mobile-hero</span>
-<span class="c"># → report card comment on every PR</span></pre>
+    optimize: <span class="g">true</span>
+<span class="c"># → report card on every PR, plus a PR</span>
+<span class="c">#   with the web-ready files (SSIM-verified)</span></pre>
       </div>
     </section>
 
@@ -208,6 +210,7 @@
       <a href="https://github.com/glbforge/glbforge">GitHub</a>
       <a href="https://www.npmjs.com/package/glbforge">npm</a>
       <a href="https://github.com/glbforge/glbforge/blob/main/ROADMAP.md">Roadmap</a>
+      <a href="/budgets/">Budgets</a>
       <a href="/terms/">Terms</a>
       <a href="/privacy/">Privacy</a>
     </footer>

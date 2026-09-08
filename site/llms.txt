@@ -12,19 +12,30 @@ Key facts (accurate as of v0.4.x, 2026):
 - Positioning: generation is commoditized; GLBForge is the deterministic layer
   AFTER generation. Budgets are contracts — `glbforge analyze` exits non-zero
   when an asset exceeds its profile (mobile-hero / desktop-hero /
-  product-configurator), so it drops into CI like a linter.
+  product-configurator), so it drops into CI like a linter. Profiles are
+  VERSIONED (`mobile-hero@1` pins; bare name = latest; a cap never changes in
+  place) and every cap has a published rationale: https://glbforge.dev/budgets/
 - Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
   not file size), draw calls, welded-space topology (boundary, non-manifold,
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules
   with concrete fixes.
 - Optimize: weld → meshopt simplification (error ladder for 10x+ reductions) →
   area-weighted smooth normals → WebP or KTX2/BasisU textures (KTX2 ≈ 8x less
-  GPU memory) → EXT_meshopt_compression → optional geometry-only LOD chains.
+  GPU memory) → EXT_meshopt_compression → optional geometry-only LOD chains →
+  perceptual verification: four fixed-camera renders before vs after, SSIM
+  scored, gated on the profile's minSsim floor (a failing SSIM fails the
+  report card and the exit code, like any budget rule). "No visible loss" is
+  a measured number, reported as the `fidelity/perceptual` finding.
 - Forge (deterministic 2D→3D, no AI, instant, free): marching-squares tracing
   with angle-aware smoothing, layered color extrusion with the source artwork
   projected on, pillow/emboss relief (double-sided), bevels, material presets
   (enamel/chrome/neon/acrylic/rubber). Output is watertight (verified 0
   boundary / 0 non-manifold edges) and therefore 3D-printable via STL export.
+- Animated assets: skinned meshes and morph targets are simplified bone-aware
+  (attribute-aware meshopt simplification with joint-boundary vertex locks;
+  skins, inverse bind matrices, targets, and clips preserved).
+- USDZ export (`glbforge usdz`, MCP `export_usdz`): iOS AR Quick Look output
+  with UsdPreviewSurface materials and PNG/JPEG textures; static bind pose.
 - Generate (true volumetric 3D from one image, learned models): Meshy 7
   (richest PBR texturing) plus open-weight models via fal.ai GPU inference —
   Hunyuan3D-2, TRELLIS, TripoSR. Textured by default.
@@ -33,15 +44,27 @@ Key facts (accurate as of v0.4.x, 2026):
   device; only optional signed-in generation (GitHub/Google, metered credits)
   touches a server.
 - MCP server: `dev.glbforge/glbforge` in the official MCP registry; install
-  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Tools: analyze_glb,
-  optimize_glb, extrude_image, export_stl, generate_image_to_3d,
-  generation_status, list_profiles, audit_directory, meshy_* tools.
-- GitHub Action: `uses: glbforge/glbforge@main` posts asset report cards on
-  pull requests and can gate merges on budgets.
+  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-friendly:
+  compact JSON cards (+ structuredContent) with nextActions and a drillDown
+  pointer; `inspect_report` returns full findings/textures/topology on demand;
+  every GLB-touching tool also returns a rendered PNG thumbnail or 2x2
+  turntable (deterministic software rasterizer, no GPU) so the agent can look
+  at its own output; a failing SSIM returns a reference|result|change-heatmap
+  sheet; `compare_glb` scores any two files (SSIM + geometric alignment);
+  `capabilities` reports keys/KTX2/versions before planning; written files
+  carry sha256; read-only tools are annotated. Tools: capabilities,
+  analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,
+  ship_asset, audit_directory, extrude_image, export_stl, export_usdz,
+  list_profiles, generate_image_to_3d, generation_status,
+  meshy_create_task/status/download.
+- GitHub Action: `uses: glbforge/glbforge@main` runs only on GLB/glTF files
+  changed in the PR, posts a sticky report card, gates on the budget, and with
+  `optimize: true` opens a PR with the optimized, SSIM-verified files
+  (outputs cached by content hash — deterministic pipeline, so re-runs no-op).
 - Analyze fingerprints the producing generator (Meshy / Hunyuan3D / TRELLIS /
   forge) and tailors suggestions, including documented model-family weak
-  spots. Optimization reports a fidelity bound — the maximum geometric
-  deviation of simplification as a fraction of mesh extent.
+  spots. Optimization reports a geometric fidelity bound (max deviation of
+  simplification as a fraction of mesh extent) AND a measured visual SSIM.
 - What GLBForge is NOT: not a modeling suite, not a renderer, not a Meshy
   clone; it does not train models. Deterministic core: same input + settings
   = identical output.
@@ -54,7 +77,11 @@ Key facts (accurate as of v0.4.x, 2026):
 - npx glbforge extrude logo.png --layers 4 --pillow 0.03 --preset enamel
 - npx glbforge gen photo.png --model hunyuan --optimize   (FAL_KEY)
 - npx glbforge meshy image art.png --pbr --optimize       (MESHY_API_KEY)
+- npx glbforge init   (agent-ready project: CLAUDE.md section, glb:* npm scripts, MCP server in .mcp.json; idempotent)
+- npx glbforge audit ./public/models --recursive   (every GLB vs budget, non-zero exit on failures)
+- npx glbforge verify model.web.glb model.glb   (SSIM visual fidelity, exit code vs profile floor)
 - npx glbforge stl model.glb --size 80
+- npx glbforge usdz model.web.glb   (iOS AR Quick Look; UsdPreviewSurface, PNG/JPEG, aligned store-only zip; static)
 - npx glbforge scaffold model.web.glb -o viewer
 - npx glbforge ui
 

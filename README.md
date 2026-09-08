@@ -41,13 +41,34 @@ node packages/cli/dist/index.js ui model.glb   # GLBForge Studio on localhost:51
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,
 `--json`, `--no-topology`. Exits non-zero when the asset is over budget — wire
 it into CI like a linter. `optimize` flags: `--target <tris>`, `--lods a,b`,
-`--no-textures`, `--no-compress`.
+`--no-textures`, `--no-compress`, `--no-verify`.
 
 Measured on the included Meshy 7 fixture (4K textures, 1.99M tris):
 **89.4MB → 5.5MB (93.8% smaller), score 25 → 100, ~7s.** Pipeline:
 dedup → weld → meshopt-simplify to budget (error ladder) → fill missing
 normals → texture resize + WebP (normal maps near-lossless) → prune →
-EXT_meshopt_compression.
+EXT_meshopt_compression → **perceptual verification**.
+
+### "No visible loss" is measured, not claimed
+
+Every `optimize`/`ship` renders the asset from four fixed cameras before and
+after (deterministic software rasterizer, 2x supersampled, smooth shading,
+base-color textures) and scores the pairs with SSIM. The weakest view must
+clear the profile's `minSsim` floor (mobile-hero 0.94, product-configurator
+0.95, desktop-hero 0.96) or the report card gets an error-severity
+`fidelity/perceptual` finding and the command exits non-zero, exactly like a
+budget violation. A passing run records the number as an info finding, so
+the score ships with the report everywhere (CLI, `--json`, MCP, Studio).
+
+```
+  visual fidelity ✓ SSIM 96.7%  weakest view 95.8% @ verify_135 · floor 94.0% · geometric deviation ≤ 0.1%
+```
+
+On the fixture: the budget pass (1.99M → 150k tris) measures 0.958; forcing
+40k tris drops to 0.896 (fails, and it should — hair strands merge); 10k
+measures 0.73. `glbforge verify <candidate> <reference>` scores any two
+files the same way. The cameras are fixed to the reference's bounds so a
+shifted or shrunken result cannot re-frame itself into a good score.
 
 ## Packages
 
@@ -56,7 +77,7 @@ EXT_meshopt_compression.
 | `@glbforge/core`  | pure analysis library: stats, topology, rules, budgets |
 | `glbforge` (CLI)   | `glbforge` command-line interface                          |
 | `@glbforge/meshy` | typed Meshy REST client: tasks, polling w/ backoff, downloads |
-| `@glbforge/mcp`   | MCP server: analyze_glb, optimize_glb, meshy_create_task/status/download, list_profiles |
+| `@glbforge/mcp`   | MCP server: compact report cards + `inspect_report` drill-down, rendered previews from every tool, optimize/ship/forge/STL, generation |
 
 ## MCP server
 
@@ -67,9 +88,94 @@ EXT_meshopt_compression.
 claude mcp add glbforge -- node /path/to/XUI/packages/mcp/dist/index.js
 ```
 
-Generation tools are deliberately split into create/status/download — Meshy
-tasks take minutes, and agents poll at their own pace instead of holding a
-tool call open.
+Built for agents: results are compact cards (verdict, key numbers, every
+error plus top findings, `nextActions`, a `drillDown` pointer) with
+`inspect_report` for the full findings/textures/topology on demand; every
+tool that touches a GLB returns a rendered thumbnail or 2x2 turntable, and a
+failing optimization returns a reference | result | change-heatmap sheet so
+the agent sees where the loss is (`compare_glb` for any two files).
+`capabilities` says which providers have keys and whether KTX2 is available
+before a plan is made; every written file reports its `sha256`; read-only
+tools carry `readOnlyHint` so clients can auto-approve them. Generation tools are deliberately split into
+create/status/download — tasks take minutes, and agents poll at their own
+pace instead of holding a tool call open.
+
+## Animated assets
+
+Skinned meshes and morph targets go through a bone-aware path: meshoptimizer's
+attribute-aware simplifier sees the skin weights (and per-target morph
+deltas) as vertex attributes, vertices on dominant-joint boundaries are
+locked, and every attribute — `JOINTS_n`, `WEIGHTS_n`, each target — is
+compacted with the same remap. Skins, inverse bind matrices, and animation
+clips survive untouched; `analyze` reports `scene/animated-asset`. Tested on
+a rigged cylinder with a rotation clip and a morph target (blend band
+preserved, weights normalized, deterministic).
+
+## USDZ for iOS AR
+
+```bash
+npx glbforge usdz model.web.glb          # → model.usdz (PNG textures; --jpeg for smaller)
+```
+
+Writes an ASCII USD layer with `UsdPreviewSurface` materials (base color,
+metallic/roughness via channel outputs, normal, occlusion, emissive, alpha
+mask/blend), transcodes WebP textures to PNG/JPEG, and packs a store-only
+zip with 64-byte-aligned payloads as the spec requires. Static export: skins
+and clips are baked to the bind pose; KTX2 inputs are rejected with guidance.
+Also `export_usdz` on the MCP server. Reference it from
+`<model-viewer ios-src="model.usdz">` for the AR button on iOS.
+
+## `glbforge init` — make a project agent-ready
+
+```bash
+npx glbforge init            # in your project; idempotent
+```
+
+Writes a marker-delimited section into `CLAUDE.md` (what the budget is,
+which scripts and MCP tools to use, the forge-vs-generate routing rule, and
+that "no visible loss" is measured), adds `glb:check` / `glb:analyze` /
+`glb:optimize` / `glb:ship` / `glb:verify` / `glb:studio` npm scripts (plus
+`glbforge` as a devDependency), and registers the MCP server in `.mcp.json`
+(`--client cursor|both` for `.cursor/mcp.json`). Existing content, other MCP
+servers, and your own scripts are preserved; a second run reports everything
+unchanged. Flags: `--profile`, `--assets <dir>`, `--local`, `--dry-run`,
+`--force`, `--no-claude-md`, `--no-scripts`, `--no-mcp`. From then on any
+agent session in that project picks GLBForge up automatically.
+
+`glb:check` runs `glbforge audit <dir>`: every GLB in the folder against the
+budget, non-zero exit if any fails — the pre-commit / CI gate.
+
+## GitHub Action
+
+```yaml
+# .github/workflows/assets.yml
+on: pull_request
+permissions: { contents: write, pull-requests: write }
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, lfs: true }
+      - uses: glbforge/glbforge@main
+        with:
+          profile: mobile-hero
+          optimize: true      # open a PR with the web-ready files
+```
+
+Runs only on GLB/glTF files changed in the pull request. Every run posts a
+sticky report-card comment and gates the check on the budget. With
+`optimize: true` it also optimizes each failing asset (`<name>.web.glb`
+beside the original, or in place with `replace: true`), verifies it
+perceptually, and opens or updates a pull request against the PR branch with
+the results — before/after table, visual SSIM, and the pipeline steps. Same
+input, profile, and CLI version always produce identical bytes, so outputs
+are cached by content hash (`cache: true`) and re-runs are no-ops. Fork PRs
+cannot receive a bot branch; their outputs are uploaded as a workflow
+artifact instead. In optimize mode the gate passes when the optimized output
+passes, so the fix is always one merge away. Inputs: `profile`,
+`fail-on-budget`, `optimize`, `optimize-all`, `replace`, `verify`, `cache`,
+`open-pr`, `pr-branch`, `version`, `token`.
 
 ## Meshy API key
 
@@ -119,8 +225,11 @@ a concrete fix. See `packages/core/src/rules.ts`.
 - **Topology in welded space.** Boundary/non-manifold counts are computed
   after unifying position-duplicate vertices, so unwelded exports don't
   produce garbage numbers.
-- **Budgets are profiles, not advice.** An asset passes or fails a named
-  target (`mobile-hero` etc.). Determinism makes it automatable.
+- **Budgets are profiles, not advice.** An asset passes or fails a named,
+  versioned target (`mobile-hero@1` pins; bare `mobile-hero` = latest; a cap
+  never changes in place). The methodology behind every cap and the version
+  changelog are in [docs/BUDGETS.md](docs/BUDGETS.md) / glbforge.dev/budgets.
+  Determinism makes it automatable.
 
 ## Fixtures
 
