@@ -11,6 +11,7 @@ export interface PersistedAsset {
   parentId: string | null;
   report: unknown;
   ts: number;
+  fidelitySheet?: string | null;
 }
 
 const DB_NAME = 'glbforge-studio';

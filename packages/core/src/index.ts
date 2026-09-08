@@ -23,6 +23,7 @@ export {
   renderViews, renderRaw, computeFrame, defaultRig, verifyRig, thumbnailRig, sharpTextureDecoder,
   type RenderedView, type RawView, type RenderCamera, type RenderFrame, type RenderOptions, type TextureDecoder,
 } from './harness/render.js';
+export { composeSheet, renderSheetPng, type SheetImage } from './harness/sheet.js';
 export {
   perceptualDiff, perceptualSnapshot, perceptualCompare, compareViews, ssim, diffHeatmap, applyPerceptualVerdict,
   PERCEPTUAL_RULE, type PerceptualResult, type PerceptualVerdict, type PerceptualOptions, type ViewScore,

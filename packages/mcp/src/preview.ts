@@ -4,7 +4,7 @@
  * the same file always yields the same bytes.
  */
 import type { Document } from '@gltf-transform/core';
-import { diffHeatmap, renderRaw, sharpTextureDecoder, thumbnailRig, verifyRig, type RawView } from '@glbforge/core';
+import { renderRaw, renderSheetPng, sharpTextureDecoder, thumbnailRig, verifyRig, type RawView } from '@glbforge/core';
 
 export type PreviewKind = 'thumbnail' | 'turntable' | 'none';
 
@@ -52,30 +52,11 @@ export async function renderPreview(doc: Document, kind: PreviewKind, size = 256
   };
 }
 
-/**
- * Three panels for one camera: reference | candidate | change heatmap. This is
- * what an agent needs when SSIM fails — WHERE the loss is, not just how much.
- */
+/** Three panels for one camera: reference | candidate | change heatmap (see core's renderSheetPng). */
 export async function renderComparison(reference: RawView, candidate: RawView, labels = ['reference', 'result', 'change']): Promise<Preview> {
-  const sharp = (await import('sharp')).default;
-  const size = reference.size;
-  const heat = diffHeatmap(reference, candidate);
-  const panels = [reference, candidate, heat];
-  const raw = { width: size, height: size, channels: 4 as const };
-  const label = (text: string, i: number) => ({
-    input: Buffer.from(`<svg width="${size}" height="20"><rect width="${size}" height="20" fill="#000" fill-opacity="0.55"/><text x="6" y="14" font-family="Helvetica,Arial,sans-serif" font-size="12" fill="#fff">${text}</text></svg>`),
-    left: i * size, top: 0,
-  });
-  const png = await sharp({ create: { width: size * 3, height: size, channels: 4, background: BACKGROUND } })
-    .composite([
-      ...panels.map((v, i) => ({ input: Buffer.from(v.rgba), raw, left: i * size, top: 0 })),
-      ...labels.map(label),
-    ])
-    .png().toBuffer();
+  const { png, sheet } = await renderSheetPng(reference, candidate, labels);
   return {
-    image: { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
-    png: new Uint8Array(png),
-    views: [reference.name, candidate.name, heat.name],
-    width: size * 3, height: size,
+    image: { type: 'image', data: Buffer.from(png).toString('base64'), mimeType: 'image/png' },
+    png, views: sheet.views, width: sheet.width, height: sheet.height,
   };
 }

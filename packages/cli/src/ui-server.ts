@@ -12,7 +12,9 @@ import {
   getProfile,
   optimize,
   PROFILES,
+  renderSheetPng,
   toStl,
+  toUsdz,
   type AnalysisResult,
   type PerceptualVerdict,
 } from '@glbforge/core';
@@ -26,6 +28,8 @@ interface Asset {
   /** Set on optimized variants: the asset they were derived from. */
   parentId?: string;
   steps?: string[];
+  /** reference | result | change PNG for optimized variants. */
+  fidelitySheet?: Uint8Array;
 }
 
 const assets = new Map<string, Asset>();
@@ -47,7 +51,13 @@ async function ingest(
     fileBytes: bytes.byteLength,
   });
   if (perceptual) applyPerceptualVerdict(report, perceptual);
-  const asset: Asset = { id: String(nextId++), name, bytes, report, parentId, steps };
+  let fidelitySheet: Uint8Array | undefined;
+  if (perceptual?.rendered) {
+    const r = perceptual.rendered;
+    const i = Math.max(0, r.reference.findIndex((v) => v.name === perceptual.worstView));
+    fidelitySheet = (await renderSheetPng(r.reference[i], r.candidate[i])).png;
+  }
+  const asset: Asset = { id: String(nextId++), name, bytes, report, parentId, steps, fidelitySheet };
   assets.set(asset.id, asset);
   return asset;
 }
@@ -61,6 +71,7 @@ const summary = (a: Asset) => ({
   triangles: a.report.geometry.triangles,
   parentId: a.parentId ?? null,
   steps: a.steps ?? null,
+  fidelitySheet: a.fidelitySheet ? `/api/assets/${a.id}/fidelity.png` : null,
 });
 
 export async function startUiServer(opts: {
@@ -130,6 +141,7 @@ export async function startUiServer(opts: {
         profile: getProfile(profile),
         textureFormat: ktx2 ? 'ktx2' : 'webp',
         targetTriangles,
+        keepViews: true,
       });
       const outBytes = await io.writeBinary(doc);
       const variant = await ingest(
@@ -183,6 +195,27 @@ export async function startUiServer(opts: {
   });
 
   // --- Meshy bridge (active only when a key is configured) ---
+  app.get('/api/assets/:id/fidelity.png', (req, res) => {
+    const asset = assets.get(req.params.id);
+    if (!asset?.fidelitySheet) return res.status(404).json({ error: 'no fidelity sheet for this asset' });
+    res.type('image/png').send(Buffer.from(asset.fidelitySheet));
+  });
+
+  app.get('/api/assets/:id/usdz', async (req, res) => {
+    try {
+      const asset = assets.get(req.params.id);
+      if (!asset) return res.status(404).json({ error: 'no such asset' });
+      const io = await createNodeIO();
+      const doc = await io.readBinary(asset.bytes);
+      const { usdz } = await toUsdz(doc, { colorFormat: req.query.jpeg === '0' ? 'png' : 'jpeg' });
+      res.type('model/vnd.usdz+zip')
+        .set('Content-Disposition', `attachment; filename="${asset.name.replace(/\.glb$/i, '')}.usdz"`)
+        .send(Buffer.from(usdz));
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+  });
+
   app.get('/api/meshy/available', (_req, res) =>
     res.json({
       available: !!process.env.MESHY_API_KEY || !!process.env.FAL_KEY,

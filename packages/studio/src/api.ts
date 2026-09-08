@@ -15,6 +15,7 @@ export interface Finding {
   ruleId: string;
   severity: 'error' | 'warn' | 'info';
   message: string;
+  data?: Record<string, unknown>;
   suggestion?: string;
 }
 
@@ -35,7 +36,11 @@ export interface Report {
   findings: Finding[];
 }
 
-export type AssetDetail = AssetSummary & { report: Report };
+export type AssetDetail = AssetSummary & {
+  report: Report;
+  /** reference | result | change-heatmap sheet (PNG URL or data URL), set on optimized variants. */
+  fidelitySheet?: string | null;
+};
 
 // Browsers send no Content-Type for ArrayBuffer bodies; Express's raw
 // parser needs one to engage.
@@ -92,6 +97,12 @@ export const api = {
       ? await (await local()).stlBlob(id, size)
       : await fetch(`/api/assets/${id}/stl?size=${size}`).then((r) => r.blob());
     triggerDownload(blob, name.replace(/\.glb$/i, '') + '.stl');
+  },
+  downloadUsdz: async (id: string, name: string, jpeg = true) => {
+    const blob = backend === 'local'
+      ? await (await local()).usdzBlob(id, jpeg)
+      : await fetch(`/api/assets/${id}/usdz?jpeg=${jpeg ? 1 : 0}`).then((r) => r.blob());
+    triggerDownload(blob, name.replace(/\.glb$/i, '') + '.usdz');
   },
   downloadGlb: async (id: string, name: string) => {
     const blob = backend === 'local'

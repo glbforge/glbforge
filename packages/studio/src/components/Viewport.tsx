@@ -78,7 +78,7 @@ function Compare({ beforeUrl, afterUrl, split }: { beforeUrl: string; afterUrl: 
   );
 }
 
-export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null; lowPower?: boolean }) {
+export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null; lowPower?: boolean; sheetUrl?: string | null }) {
   const [split, setSplit] = useState(0.5);
   const [ground, setGround] = useState<{ y: number; radius: number } | null>(null);
   const onGround = useMemo(() => (y: number, radius: number) => setGround({ y, radius }), []);
@@ -134,6 +134,11 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
         </Suspense>
         <OrbitControls makeDefault enableDamping />
       </Canvas>
+      {props.sheetUrl && (
+        <div className="sheet-overlay" title="reference · result · change heatmap (weakest fixed camera, black = same, yellow→red = more change)">
+          <img src={props.sheetUrl} alt="reference, result, and change heatmap" />
+        </div>
+      )}
       {compareUrl && (
         <div className="compare-slider">
           <input

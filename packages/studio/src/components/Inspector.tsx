@@ -37,11 +37,38 @@ function BudgetRow({ label, value, max, format }: {
   );
 }
 
+/** Measured visual fidelity: the SSIM of the weakest fixed-camera view vs the profile floor. */
+function FidelityRow({ asset }: { asset: AssetDetail }) {
+  const f = asset.report.findings.find((x) => x.ruleId === 'fidelity/perceptual');
+  const d = f?.data as { ssimMin?: number; ssimMean?: number; threshold?: number; worstView?: string } | undefined;
+  if (!f || !d?.ssimMin || !d.threshold) return null;
+  const pct = (n: number) => (n * 100).toFixed(1) + '%';
+  const passed = f.severity !== 'error';
+  return (
+    <div className="budget-row fidelity">
+      <div className="budget-head">
+        <span>Visual fidelity (SSIM)</span>
+        <span className="val">{pct(d.ssimMin)} · floor {pct(d.threshold)}</span>
+      </div>
+      <div className="bar">
+        <div className={`bar-fill ${passed ? '' : 'over'}`} style={{ width: `${Math.min(100, d.ssimMin * 100)}%` }} />
+        <div className="bar-mark" style={{ left: `${d.threshold * 100}%` }} title={`floor ${pct(d.threshold)}`} />
+      </div>
+      <div className="hint" style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2 }}>
+        {passed ? 'no visible loss by measurement' : 'visibly lossy — raise the target or pick a roomier profile'}
+        {d.worstView ? ` · weakest ${d.worstView.replace('verify_', '')}°` : ''}
+      </div>
+    </div>
+  );
+}
+
 export function Inspector(props: {
   asset: AssetDetail | null;
   parent: AssetSummary | null;
   compare: boolean;
   onCompareChange: (on: boolean) => void;
+  heatmap: boolean;
+  onHeatmapChange: (on: boolean) => void;
   onRun: (label: string, task: () => Promise<AssetDetail | void>) => Promise<void>;
   onSelect: (id: string) => void;
 }) {
@@ -78,6 +105,7 @@ export function Inspector(props: {
         <BudgetRow label="Texture payload" value={r.textureBytesTotal} max={r.profile.maxTextureBytes} format={mb} />
         <BudgetRow label="GPU memory (est.)" value={r.textureVramTotal} max={r.profile.maxTextureVramBytes} format={mb} />
         <BudgetRow label="Draw calls" value={r.geometry.drawCallEstimate} max={r.profile.maxDrawCalls} format={num} />
+        <FidelityRow asset={asset} />
       </div>
 
       {props.parent && (
@@ -89,6 +117,12 @@ export function Inspector(props: {
             <input type="checkbox" checked={props.compare} onChange={(e) => props.onCompareChange(e.target.checked)} />
             compare in viewport
           </label>
+          {asset.fidelitySheet && (
+            <label className="check" style={{ margin: '0 0 8px' }}>
+              <input type="checkbox" checked={props.heatmap} onChange={(e) => props.onHeatmapChange(e.target.checked)} />
+              change heatmap (reference · result · change)
+            </label>
+          )}
           <button className="ghost" onClick={() => props.onSelect(props.parent!.id)}>view original</button>
         </>
       )}
@@ -120,6 +154,7 @@ export function Inspector(props: {
           Re-analyze with {profile}
         </button>
         <button className="ghost" onClick={() => void api.downloadStl(asset.id, asset.name)}>⬇ Export STL (80mm)</button>
+        <button className="ghost" onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬇ Export USDZ (iOS AR)</button>
         <button className="ghost" onClick={() => void api.downloadGlb(asset.id, asset.name)}>⬇ Download GLB</button>
         {meshy && <div style={{ color: 'var(--dim)', fontSize: 11 }}>Meshy connected — drop an image on the rail to forge or generate.</div>}
       </div>

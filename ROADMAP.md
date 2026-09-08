@@ -22,7 +22,7 @@ Everything below is what remains, most urgent first.
 - [x] Action: `lods` and `target-triangles` inputs (2026-09-08) — both in the cache key, LOD files cached/staged/committed alongside, report rows carry each LOD's real triangle count and flag targets the simplifier could not reach. `replace: true` and `optimize-all` still only dry-run locally
 - [x] LOD targets on seam-heavy / non-manifold meshes (2026-09-08): `buildLod` strips materials, welds by position, tries meshopt, and when topology stalls it (stacked forge layers share coplanar faces → 2.4k non-manifold edges → locked vertices) falls back to grid vertex clustering (binary-searched resolution, centroid positions, smooth normals regenerated). Sunburst LODs: 20k → 19,846, 5k → 4,764 (was stuck at ~48k); Meshy fixture unchanged (meshopt reaches 40k/10k). Reports say `grid-clustered`
 - [ ] Perceptual verification for LOD chains: report SSIM per LOD as info (LODs are intentionally lossy, so no gate) so agents can pick switch distances from measured numbers
-- [ ] Studio: metrics overlay on the compare slider + a `compare` panel — the SSIM/heatmap data now exists in core, the UI doesn't show it yet
+- [x] Studio (2026-09-08): visual-fidelity row (SSIM vs floor, weakest view) in the inspector; change-heatmap toggle overlays the reference · result · change sheet on the viewport (drawn via canvas in-browser, sharp on `glbforge ui`); USDZ export button (in-browser canvas transcode to PNG/JPEG, crate 0.8.0). Verified in both backends
 - [ ] `init`: config paths for more clients (Codex, Windsurf, Zed); Cursor path is unit-tested only
 - [ ] MCP progress notifications for long tools; MCP resources for intermediate artifacts (reports, LODs)
 - [ ] Documented composition patterns with filesystem / image-gen / Blender MCP servers
@@ -117,7 +117,7 @@ Everything below is what remains, most urgent first.
 - [x] **Versioned budget profiles + methodology** (2026-09-07): `Profile.version` + per-cap `rationale`; `PROFILE_VERSIONS` keeps every published version frozen (tested); `getProfile('mobile-hero@1')` pins, bare name = latest; labels `name@N` in CLI/Action/MCP; `list_profiles rationale=true`; docs/BUDGETS.md + glbforge.dev/budgets (model behind the numbers, score computation, SSIM calibration, changelog)
 - [ ] Scene-level budgets: analyze a set of GLBs against a shared budget
 - [ ] UV unwrap / retopo / normal baking as optional pluggable backends (keep pure-Node default)
-- [ ] Studio: metrics overlay on the compare slider; recipe presets mirroring MCP prompts
+- [x] Studio: fidelity metrics + change heatmap shipped 2026-09-08 (see Status). Still open: recipe presets mirroring MCP prompts
 
 ## v1.0 — Product bets (choose after usage data)
 

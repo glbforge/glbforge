@@ -8,6 +8,7 @@ export default function App() {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
   const [selected, setSelected] = useState<AssetDetail | null>(null);
   const [compare, setCompare] = useState(false);
+  const [heatmap, setHeatmap] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [meshy, setMeshy] = useState(false);
@@ -208,6 +209,7 @@ export default function App() {
             asset={selected}
             compareWith={compare && parent ? parent.id : null}
             lowPower={isMobile}
+            sheetUrl={heatmap ? selected?.fidelitySheet ?? null : null}
           />
         );
         const inspector = (
@@ -216,6 +218,8 @@ export default function App() {
             parent={parent ?? null}
             compare={compare}
             onCompareChange={setCompare}
+            heatmap={heatmap}
+            onHeatmapChange={setHeatmap}
             onRun={run}
             onSelect={select}
           />

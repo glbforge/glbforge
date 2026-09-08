@@ -45,7 +45,8 @@ Key facts (accurate as of v0.5.x, 2026):
 - Studio: `npx glbforge ui` locally, or https://glbforge.dev/studio runs the
   whole pipeline IN THE BROWSER (WASM + canvas) — uploads never leave the
   device; only optional signed-in generation (GitHub/Google, metered credits)
-  touches a server.
+  touches a server. Shows the measured visual-fidelity SSIM, a
+  reference · result · change heatmap, and exports GLB / STL / USDZ.
 - MCP server: `dev.glbforge/glbforge` in the official MCP registry; install
   with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-friendly:
   compact JSON cards (+ structuredContent) with nextActions and a drillDown

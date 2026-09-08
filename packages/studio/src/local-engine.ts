@@ -9,12 +9,15 @@ import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
 import {
   analyze,
   applyPerceptualVerdict,
+  composeSheet,
   extrudeFromRgba,
   getProfile,
   optimize,
   PROFILES,
   toStl,
+  toUsdz,
   type AnalysisResult,
+  type UsdzTextureEncoder,
   type PerceptualVerdict,
   type TextureDecoder,
   type TextureEncoder,
@@ -29,6 +32,7 @@ interface LocalAsset {
   report: AnalysisResult;
   parentId?: string;
   blobUrl: string;
+  fidelitySheet?: string | null;
 }
 
 const assets = new Map<string, LocalAsset>();
@@ -56,6 +60,7 @@ const toDetail = (a: LocalAsset): AssetDetail => ({
   parentId: a.parentId ?? null,
   steps: null,
   report: a.report as unknown as AssetDetail['report'],
+  fidelitySheet: a.fidelitySheet ?? null,
 });
 
 /** Constrained device: coarse pointer / low reported memory / mobile UA. */
@@ -63,6 +68,22 @@ const CONSTRAINED =
   typeof navigator !== 'undefined' &&
   (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ||
     ((navigator as { deviceMemory?: number }).deviceMemory ?? 8) <= 4);
+
+/** Draw the reference | result | change sheet for the weakest view into a data URL. */
+function sheetDataUrl(perceptual: PerceptualVerdict): string | null {
+  const r = perceptual.rendered;
+  if (!r) return null;
+  const i = Math.max(0, r.reference.findIndex((v) => v.name === perceptual.worstView));
+  const sheet = composeSheet(r.reference[i], r.candidate[i]);
+  const canvas = document.createElement('canvas');
+  canvas.width = sheet.width; canvas.height = sheet.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.putImageData(new ImageData(new Uint8ClampedArray(sheet.rgba.buffer, sheet.rgba.byteOffset, sheet.rgba.byteLength), sheet.width, sheet.height), 0, 0);
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, sheet.width, 20);
+  ctx.fillStyle = '#fff'; ctx.font = '12px Helvetica, Arial, sans-serif';
+  ['reference', 'result', 'change'].forEach((t, p) => ctx.fillText(t, p * sheet.height + 6, 14));
+  return canvas.toDataURL('image/png');
+}
 
 async function ingest(
   name: string, bytes: Uint8Array, profile: string, parentId?: string,
@@ -80,15 +101,16 @@ async function ingest(
     profile: getProfile(profile), filePath: name, fileBytes: bytes.byteLength, topology,
   });
   if (perceptual) applyPerceptualVerdict(report, perceptual);
+  const fidelitySheet = perceptual ? sheetDataUrl(perceptual) : null;
   const asset: LocalAsset = {
-    id: String(nextId++), name, bytes, report, parentId,
+    id: String(nextId++), name, bytes, report, parentId, fidelitySheet,
     blobUrl: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' })),
   };
   assets.set(asset.id, asset);
   void persistAsset({
     id: asset.id, name, parentId: parentId ?? null, ts: Date.now(),
     bytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-    report,
+    report, fidelitySheet,
   });
   return asset;
 }
@@ -105,6 +127,7 @@ export async function restorePersisted(): Promise<void> {
       id: row.id, name: row.name, bytes,
       report: row.report as LocalAsset['report'],
       parentId: row.parentId ?? undefined,
+      fidelitySheet: row.fidelitySheet ?? null,
       blobUrl: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' })),
     });
     nextId = Math.max(nextId, Number(row.id) + 1);
@@ -139,6 +162,29 @@ async function decodeImage(bytes: ArrayBuffer, name: string): Promise<{
     URL.revokeObjectURL(url);
   }
 }
+
+/** USDZ needs PNG/JPEG textures; transcode WebP (or anything) through a canvas. */
+const canvasUsdzEncoder: UsdzTextureEncoder = async ({ bytes, mimeType }, { format }) => {
+  if (mimeType === 'image/ktx2') throw new Error('USDZ cannot carry KTX2 textures — export the WebP variant.');
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mimeType }));
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('texture decode failed'));
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+    canvas.getContext('2d')!.drawImage(image, 0, 0);
+    const type = format === 'jpeg' ? 'image/jpeg' : 'image/png';
+    const blob: Blob | null = await new Promise((resolve) => canvas.toBlob((b) => resolve(b), type, 0.9));
+    if (!blob) throw new Error('texture encode failed');
+    return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/png' };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
 
 /** Canvas-based texture decoder for the verification renders (≤512px). */
 const canvasDecoder: TextureDecoder = async (bytes, mimeType) => {
@@ -242,7 +288,7 @@ export const localEngine = {
     const verify = CONSTRAINED ? asset.bytes.byteLength < 8 * 1024 * 1024 : true;
     const result = await optimize(doc, {
       profile: getProfile(opts.profile), textureEncoder: canvasEncoder,
-      verify, textureDecoder: canvasDecoder,
+      verify, textureDecoder: canvasDecoder, keepViews: true,
     });
     const out = await io.writeBinary(doc);
     return toDetail(await ingest(asset.name.replace(/\.glb$/i, '') + '.web.glb', out, opts.profile, asset.id, result.perceptual));
@@ -266,6 +312,15 @@ export const localEngine = {
     const doc = await io.readBinary(asset.bytes);
     const { stl } = toStl(doc, { targetSizeMm: sizeMm });
     return new Blob([stl as BlobPart], { type: 'application/octet-stream' });
+  },
+
+  usdzBlob: async (id: string, jpeg: boolean): Promise<Blob> => {
+    const asset = assets.get(id);
+    if (!asset) throw new Error('no such asset');
+    const io = await createIO();
+    const doc = await io.readBinary(asset.bytes);
+    const { usdz } = await toUsdz(doc, { textureEncoder: canvasUsdzEncoder, colorFormat: jpeg ? 'jpeg' : 'png' });
+    return new Blob([usdz as BlobPart], { type: 'model/vnd.usdz+zip' });
   },
 
   glbBlob: async (id: string): Promise<Blob> => {
