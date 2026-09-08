@@ -176,7 +176,7 @@ describe('agent-friendly MCP surface', () => {
     expect(parse(stl).watertight).toBe(true);
     expect(image(stl)).toBeDefined();
     const usdz = (await client.callTool({ name: 'export_usdz', arguments: { path: out, out: join(dir, 'forged.usdz'), preview: 'none' } })) as Result;
-    expect(parse(usdz).files[0].name).toBe('model.usda');
+    expect(parse(usdz).files[0].name).toBe('model.usdc');
     expect(parse(usdz).textures).toBeGreaterThan(0);
   }, 60_000);
 });

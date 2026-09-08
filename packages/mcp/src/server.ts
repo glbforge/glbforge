@@ -556,23 +556,24 @@ export function createServer(): McpServer {
     {
       annotations: WRITES_FILES,
       description:
-        'Export a GLB as USDZ for iOS AR Quick Look: UsdPreviewSurface materials, PNG/JPEG textures ' +
+        'Export a GLB as USDZ for iOS AR Quick Look: binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures ' +
         '(WebP is transcoded; KTX2 is rejected), store-only 64-byte-aligned zip. Static: skins and clips ' +
         'are baked to the bind pose. Use on the optimized .web.glb. Returns a thumbnail.',
       inputSchema: {
         path: z.string().describe('Absolute path to the .glb'),
         out: z.string().describe('Absolute output path for the .usdz'),
         jpeg: z.boolean().default(false).describe('Encode opaque color textures as JPEG (smaller) instead of PNG'),
+        format: z.enum(['usdc', 'usda']).default('usdc').describe('Layer encoding: binary crate (default, small) or ASCII usda (debugging)'),
         preview: previewField('the exported asset'),
       },
     },
-    async ({ path, out, jpeg, preview }) => {
+    async ({ path, out, jpeg, format, preview }) => {
       const { doc } = await readDoc(path);
-      const result = await toUsdz(doc, { colorFormat: jpeg ? 'jpeg' : 'png' });
+      const result = await toUsdz(doc, { colorFormat: jpeg ? 'jpeg' : 'png', format });
       await writeFile(out, result.usdz);
       const image = await renderPreview(doc, preview as PreviewKind);
       return reply({
-        out, bytes: result.usdz.byteLength, sha256: sha256(result.usdz), files: result.files,
+        out, bytes: result.usdz.byteLength, sha256: sha256(result.usdz), format: result.format, files: result.files,
         meshes: result.meshes, triangles: result.triangles, materials: result.materials, textures: result.textures,
         warnings: result.warnings,
         hint: 'Serve it and reference from <model-viewer ios-src>; iOS Safari opens it in AR Quick Look.',

@@ -568,17 +568,18 @@ program
 
 program
   .command('usdz')
-  .description('Export a GLB as USDZ for iOS AR Quick Look (UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Static: skins/clips are baked to the bind pose.')
+  .description('Export a GLB as USDZ for iOS AR Quick Look (binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Static: skins/clips are baked to the bind pose.')
   .argument('<file>', 'path to .glb (an optimized .web.glb works — WebP is transcoded)')
   .option('-o, --out <file>', 'output path (default: <name>.usdz)')
   .option('--jpeg', 'encode opaque color textures as JPEG (smaller) instead of PNG')
+  .option('--usda', 'write the layer as ASCII usda instead of binary usdc (debugging; ~10x larger)')
   .option('--json', 'emit JSON')
-  .action(async (file: string, opts: { out?: string; jpeg?: boolean; json?: boolean }) => {
+  .action(async (file: string, opts: { out?: string; jpeg?: boolean; usda?: boolean; json?: boolean }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.usdz';
     const io = await createIO();
     const doc = await io.readBinary(new Uint8Array(await readFile(file)));
     doc.setLogger(new Logger(Logger.Verbosity.ERROR));
-    const result = await toUsdz(doc, { colorFormat: opts.jpeg ? 'jpeg' : 'png' });
+    const result = await toUsdz(doc, { colorFormat: opts.jpeg ? 'jpeg' : 'png', format: opts.usda ? 'usda' : 'usdc' });
     await writeFile(outPath, result.usdz);
     if (opts.json) {
       console.log(JSON.stringify({ outPath, bytes: result.usdz.byteLength, ...result, usdz: undefined }, null, 2));

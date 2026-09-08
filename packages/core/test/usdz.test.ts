@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { extrudeImage, getProfile, optimize, toUsdz } from '../src/index.js';
 import { listZip, crc32 } from '../src/zip.js';
 
@@ -30,7 +34,8 @@ describe('USDZ export', () => {
 
     const entries = listZip(a.usdz);
     expect(entries.length).toBe(a.files.length);
-    expect(entries[0].name).toBe('model.usda');
+    expect(entries[0].name).toBe('model.usdc');
+    expect(a.format).toBe('usdc');
     for (const e of entries) {
       expect(e.method).toBe(0);            // stored
       expect(e.offset % 64).toBe(0);       // 64-byte aligned payloads
@@ -41,7 +46,22 @@ describe('USDZ export', () => {
     expect(Buffer.from(png.subarray(1, 4)).toString()).toBe('PNG');
     expect(crc32(png)).toBeTypeOf('number');
 
-    const usda = Buffer.from(a.usdz.subarray(entries[0].offset, entries[0].offset + entries[0].size)).toString('utf8');
+    // Crate bootstrap: magic, version 0.3.0, table of contents with the six sections.
+    const crate = a.usdz.subarray(entries[0].offset, entries[0].offset + entries[0].size);
+    expect(Buffer.from(crate.subarray(0, 8)).toString()).toBe('PXR-USDC');
+    expect(Array.from(crate.subarray(8, 11))).toEqual([0, 3, 0]);
+    const tocOffset = Number(new DataView(crate.buffer, crate.byteOffset).getBigUint64(16, true));
+    const sections = Number(new DataView(crate.buffer, crate.byteOffset).getBigUint64(tocOffset, true));
+    expect(sections).toBe(6);
+    const names = Array.from({ length: 6 }, (_, i) => Buffer.from(crate.subarray(tocOffset + 8 + i * 32, tocOffset + 8 + i * 32 + 16)).toString().replace(/\0+$/, ''));
+    expect(names).toEqual(['TOKENS', 'STRINGS', 'FIELDS', 'FIELDSETS', 'PATHS', 'SPECS']);
+
+    // The ASCII twin carries the same layer; it is what humans (and this test) read.
+    const text = await toUsdz(doc, { format: 'usda' });
+    const tEntries = listZip(text.usdz);
+    expect(tEntries[0].name).toBe('model.usda');
+    expect(text.usdz.byteLength).toBeGreaterThan(a.usdz.byteLength); // crate is the compact one
+    const usda = Buffer.from(text.usdz.subarray(tEntries[0].offset, tEntries[0].offset + tEntries[0].size)).toString('utf8');
     expect(usda.startsWith('#usda 1.0')).toBe(true);
     expect(usda).toContain('upAxis = "Y"');
     expect(usda).toContain('UsdPreviewSurface');
@@ -55,6 +75,24 @@ describe('USDZ export', () => {
     expect(a.materials).toBeGreaterThan(0);
     expect(a.warnings).toEqual([]);
   }, 60_000);
+
+  it('matches Pixar USD\'s reading of the usda twin exactly (oracle; needs GLBFORGE_PXR_PYTHON)', async () => {
+    const python = process.env.GLBFORGE_PXR_PYTHON;
+    if (!python) return; // pip install usd-core, then GLBFORGE_PXR_PYTHON=/path/to/python
+    const { doc } = await extrudeImage(await ringPng(), { pillow: 0.03, preset: 'enamel', layers: 2 });
+    await optimize(doc, { profile: getProfile('mobile-hero'), targetTriangles: 2000, verify: false });
+    const dir = await mkdtemp(join(tmpdir(), 'glbforge-usd-'));
+    try {
+      const bin = await toUsdz(doc);
+      const txt = await toUsdz(doc, { format: 'usda' });
+      await writeFile(join(dir, 'bin.usdz'), bin.usdz);
+      await writeFile(join(dir, 'txt.usdz'), txt.usdz);
+      const out = execFileSync(python, [new URL('./usd-oracle.py', import.meta.url).pathname, join(dir, 'bin.usdz'), join(dir, 'txt.usdz')], { encoding: 'utf8' });
+      expect(out).toMatch(/^OK:/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   it('rejects KTX2 textures with guidance and reports skinned assets as static', async () => {
     const { doc } = await extrudeImage(await ringPng(), { texture: false });
