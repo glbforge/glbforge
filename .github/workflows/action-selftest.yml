@@ -4,7 +4,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write        # the optimize job opens a PR with web-ready assets
   pull-requests: write
 
 jobs:
@@ -22,8 +22,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      # The action under test, built from this very checkout.
+      # The action under test, built from this very checkout. Optimize mode
+      # is a no-op unless the PR changes a GLB; then it opens a PR against
+      # the PR branch with the optimized files (cached by content hash).
       - uses: ./
         with:
           use-local: 'true'
           fail-on-budget: 'false'
+          optimize: 'true'

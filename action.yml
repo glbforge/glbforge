@@ -1,7 +1,8 @@
 name: 'GLBForge Report'
 description: >-
   Analyze GLB/glTF assets changed in a pull request against a web performance
-  budget and post a report card comment. Lighthouse-style CI for 3D assets.
+  budget, post a report card comment, and optionally optimize them and open a
+  pull request with the web-ready files. Lighthouse-style CI for 3D assets.
 branding:
   icon: 'box'
   color: 'orange'
@@ -11,8 +12,32 @@ inputs:
     description: 'Budget profile: mobile-hero | desktop-hero | product-configurator'
     default: 'mobile-hero'
   fail-on-budget:
-    description: 'Fail the check when any changed asset is over budget'
+    description: >-
+      Fail the check when a changed asset is over budget. With optimize=true an
+      asset only counts as failing when its optimized output is ALSO over
+      budget (or visibly lossy) — the fix is in the opened PR.
     default: 'true'
+  optimize:
+    description: 'Optimize every changed asset that is over budget and open a PR with the results'
+    default: 'false'
+  optimize-all:
+    description: 'With optimize=true: also optimize assets that already pass the budget'
+    default: 'false'
+  replace:
+    description: 'With optimize=true: overwrite the original file instead of writing <name>.web.glb beside it'
+    default: 'false'
+  verify:
+    description: 'Perceptual verification (SSIM of fixed-camera renders before vs after) during optimization'
+    default: 'true'
+  cache:
+    description: 'Cache optimized outputs keyed on input content + profile + CLI version (deterministic pipeline: a hit is exact)'
+    default: 'true'
+  open-pr:
+    description: 'With optimize=true: open/update a PR against the source branch. Forks cannot be pushed to, so outputs are uploaded as an artifact instead.'
+    default: 'true'
+  pr-branch:
+    description: 'Branch for the optimized assets (default: glbforge/optimize-<pr number>)'
+    default: ''
   version:
     description: 'glbforge CLI version/dist-tag to install from npm'
     default: 'latest'
@@ -20,8 +45,22 @@ inputs:
     description: 'Build the CLI from this repository instead of npm (GLBForge self-test)'
     default: 'false'
   token:
-    description: 'Token used to post the PR comment'
+    description: 'Token used to post the PR comment and open the optimization PR (needs contents: write + pull-requests: write for PRs)'
     default: ${{ github.token }}
+
+outputs:
+  count:
+    description: 'Number of changed GLB/glTF assets analyzed'
+    value: ${{ steps.analyze.outputs.count }}
+  failed:
+    description: 'Number of assets failing the budget after any optimization'
+    value: ${{ steps.gate.outputs.failed }}
+  optimized:
+    description: 'Number of assets optimized'
+    value: ${{ steps.optimize.outputs.optimized }}
+  pr-url:
+    description: 'URL of the optimization PR, when one was opened or updated'
+    value: ${{ steps.pr.outputs.pull-request-url }}
 
 runs:
   using: composite
@@ -33,9 +72,11 @@ runs:
           pnpm install --frozen-lockfile
           pnpm -r build
           echo "bin=node $GITHUB_WORKSPACE/packages/cli/dist/index.js" >> "$GITHUB_OUTPUT"
+          echo "version=local-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
         else
           npm install -g "glbforge@${{ inputs.version }}"
           echo "bin=glbforge" >> "$GITHUB_OUTPUT"
+          echo "version=$(glbforge --version)" >> "$GITHUB_OUTPUT"
         fi
 
     - id: analyze
@@ -44,6 +85,7 @@ runs:
         BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PROFILE: ${{ inputs.profile }}
         CLI: ${{ steps.cli.outputs.bin }}
+        CLI_VERSION: ${{ steps.cli.outputs.version }}
       run: |
         set -euo pipefail
         REPORT_DIR="$(mktemp -d)"
@@ -52,6 +94,8 @@ runs:
         git fetch --no-tags --depth=1 origin "$BASE_SHA" 2>/dev/null || true
         FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA"...HEAD -- '*.glb' '*.gltf' '*.GLB' || true)
         COUNT=0; FAILED=0
+        : > "$REPORT_DIR/files.txt"
+        HASHES=""
         for f in $FILES; do
           [ -f "$f" ] || continue
           COUNT=$((COUNT + 1))
@@ -68,25 +112,138 @@ runs:
               FAILED=$((FAILED + 1))   # analyzed fine, over budget (exit 1 by contract)
             else
               echo "{\"file\":{\"path\":\"$f\"},\"error\":$(node -e "console.log(JSON.stringify(require('fs').readFileSync('$REPORT_DIR/$SAFE.err','utf8').trim()))")}" > "$REPORT_DIR/$SAFE.json"
+              continue
             fi
           fi
+          echo "$f" >> "$REPORT_DIR/files.txt"
+          HASHES="$HASHES$(sha256sum "$f" | cut -c1-64)"
         done
         echo "count=$COUNT" >> "$GITHUB_OUTPUT"
         echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
-        if [ "$COUNT" -gt 0 ]; then
-          node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" > "$REPORT_DIR/comment.md"
-        fi
+        # Cache key = content of every analyzable changed asset + profile + CLI version.
+        echo "cache-key=glbforge-$(printf '%s|%s|%s' "$HASHES" "$PROFILE" "$CLI_VERSION" | sha256sum | cut -c1-32)" >> "$GITHUB_OUTPUT"
+
+    - if: inputs.optimize == 'true' && inputs.cache == 'true' && steps.analyze.outputs.count > 0
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/glbforge-cache
+        key: ${{ steps.analyze.outputs.cache-key }}
+        restore-keys: |
+          glbforge-
+
+    - id: optimize
+      if: inputs.optimize == 'true' && steps.analyze.outputs.count > 0
+      shell: bash
+      env:
+        REPORT_DIR: ${{ steps.analyze.outputs.dir }}
+        PROFILE: ${{ inputs.profile }}
+        CLI: ${{ steps.cli.outputs.bin }}
+        CLI_VERSION: ${{ steps.cli.outputs.version }}
+        CACHE_DIR: ${{ runner.temp }}/glbforge-cache
+        USE_CACHE: ${{ inputs.cache }}
+        REPLACE: ${{ inputs.replace }}
+        VERIFY: ${{ inputs.verify }}
+        ALL: ${{ inputs.optimize-all }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$CACHE_DIR"
+        OPTIMIZED=0; HITS=0
+        VERIFY_FLAG=""; [ "$VERIFY" = "true" ] || VERIFY_FLAG="--no-verify"
+        while IFS= read -r f; do
+          [ -n "$f" ] || continue
+          SAFE=$(echo "$f" | tr '/' '_')
+          PASSED=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$REPORT_DIR/$SAFE.json','utf8')).passed)")
+          if [ "$PASSED" = "true" ] && [ "$ALL" != "true" ]; then continue; fi
+          if [ "$REPLACE" = "true" ]; then OUT="$f"; else OUT="${f%.*}.web.glb"; fi
+          KEY="$(sha256sum "$f" | cut -c1-64)-$(printf '%s|%s|%s' "$PROFILE" "$CLI_VERSION" "$VERIFY" | sha256sum | cut -c1-16)"
+          if [ "$USE_CACHE" = "true" ] && [ -f "$CACHE_DIR/$KEY.glb" ] && [ -f "$CACHE_DIR/$KEY.json" ]; then
+            cp "$CACHE_DIR/$KEY.glb" "$OUT"
+            cp "$CACHE_DIR/$KEY.json" "$REPORT_DIR/$SAFE.after.json"
+            HITS=$((HITS + 1))
+          else
+            TMP_OUT="$(mktemp -d)/out.glb"
+            # Exit 1 = optimized but still over budget / visibly lossy: the JSON says so.
+            $CLI optimize "$f" --profile "$PROFILE" -o "$TMP_OUT" --json $VERIFY_FLAG > "$REPORT_DIR/$SAFE.after.json" 2>"$REPORT_DIR/$SAFE.after.err" || true
+            if [ ! -s "$REPORT_DIR/$SAFE.after.json" ]; then
+              echo "::warning file=$f::optimize failed: $(head -c 300 "$REPORT_DIR/$SAFE.after.err")"
+              rm -f "$REPORT_DIR/$SAFE.after.json"
+              continue
+            fi
+            cp "$TMP_OUT" "$OUT"
+            if [ "$USE_CACHE" = "true" ]; then
+              cp "$TMP_OUT" "$CACHE_DIR/$KEY.glb"; cp "$REPORT_DIR/$SAFE.after.json" "$CACHE_DIR/$KEY.json"
+            fi
+          fi
+          # Record where the output landed (the CLI JSON carries the temp path).
+          node -e "
+            const fs=require('fs'); const p='$REPORT_DIR/$SAFE.after.json';
+            const j=JSON.parse(fs.readFileSync(p,'utf8')); j.outPath='$OUT'; j.after.file.path='$OUT';
+            fs.writeFileSync(p, JSON.stringify(j));"
+          OPTIMIZED=$((OPTIMIZED + 1))
+        done < "$REPORT_DIR/files.txt"
+        echo "optimized=$OPTIMIZED" >> "$GITHUB_OUTPUT"
+        echo "cache-hits=$HITS" >> "$GITHUB_OUTPUT"
+        echo "Optimized $OPTIMIZED asset(s), $HITS from cache."
+
+    - id: gate
+      if: steps.analyze.outputs.count > 0
+      shell: bash
+      env:
+        REPORT_DIR: ${{ steps.analyze.outputs.dir }}
+        PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        # Verdict per asset: pass if the original passes, or (optimize mode)
+        # if its optimized output passes.
+        FAILED=$(node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" --count-failing)
+        node "$GITHUB_ACTION_PATH/action/report.mjs" "$REPORT_DIR" "$PROFILE" > "$REPORT_DIR/comment.md"
+        echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+
+    - id: pr
+      if: >-
+        inputs.optimize == 'true' && inputs.open-pr == 'true' && steps.optimize.outputs.optimized > 0 &&
+        github.event.pull_request.head.repo.full_name == github.repository
+      uses: peter-evans/create-pull-request@v7
+      with:
+        token: ${{ inputs.token }}
+        branch: ${{ inputs.pr-branch != '' && inputs.pr-branch || format('glbforge/optimize-{0}', github.event.pull_request.number) }}
+        base: ${{ github.event.pull_request.head.ref }}
+        commit-message: 'GLBForge: optimize ${{ steps.optimize.outputs.optimized }} asset(s) to the ${{ inputs.profile }} budget'
+        title: 'GLBForge: web-ready assets for #${{ github.event.pull_request.number }}'
+        body-path: ${{ steps.analyze.outputs.dir }}/comment.md
+        labels: glbforge
+        delete-branch: true
+
+    - if: >-
+        inputs.optimize == 'true' && steps.optimize.outputs.optimized > 0 &&
+        (inputs.open-pr != 'true' || github.event.pull_request.head.repo.full_name != github.repository)
+      uses: actions/upload-artifact@v4
+      with:
+        name: glbforge-optimized
+        path: |
+          **/*.web.glb
+          **/*.web.lod*.glb
+        if-no-files-found: ignore
 
     - if: steps.analyze.outputs.count > 0
       uses: actions/github-script@v7
       env:
         REPORT_DIR: ${{ steps.analyze.outputs.dir }}
+        PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+        OPTIMIZED: ${{ steps.optimize.outputs.optimized }}
+        FORK: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        OPTIMIZE: ${{ inputs.optimize }}
       with:
         github-token: ${{ inputs.token }}
         script: |
           const fs = require('fs');
           const marker = '<!-- glbforge-report -->';
-          const body = marker + '\n' + fs.readFileSync(process.env.REPORT_DIR + '/comment.md', 'utf8');
+          let body = marker + '\n' + fs.readFileSync(process.env.REPORT_DIR + '/comment.md', 'utf8');
+          if (process.env.PR_URL) {
+            body += `\n\n➡️ **Optimized assets are ready to merge:** ${process.env.PR_URL}`;
+          } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.FORK === 'true') {
+            body += '\n\n➡️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact (fork PRs cannot receive a bot branch).';
+          }
           const { owner, repo } = context.repo;
           const issue_number = context.payload.pull_request.number;
           const comments = await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 });
@@ -97,8 +254,8 @@ runs:
             await github.rest.issues.createComment({ owner, repo, issue_number, body });
           }
 
-    - if: inputs.fail-on-budget == 'true' && steps.analyze.outputs.failed > 0
+    - if: inputs.fail-on-budget == 'true' && steps.gate.outputs.failed > 0
       shell: bash
       run: |
-        echo "::error::${{ steps.analyze.outputs.failed }} asset(s) over the '${{ inputs.profile }}' budget."
+        echo "::error::${{ steps.gate.outputs.failed }} asset(s) over the '${{ inputs.profile }}' budget."
         exit 1
