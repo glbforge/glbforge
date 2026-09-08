@@ -140,13 +140,14 @@ runs:
         CLI: ${{ steps.cli.outputs.bin }}
         CLI_VERSION: ${{ steps.cli.outputs.version }}
         CACHE_DIR: ${{ runner.temp }}/glbforge-cache
+        STAGE_DIR: ${{ runner.temp }}/glbforge-out
         USE_CACHE: ${{ inputs.cache }}
         REPLACE: ${{ inputs.replace }}
         VERIFY: ${{ inputs.verify }}
         ALL: ${{ inputs.optimize-all }}
       run: |
         set -euo pipefail
-        mkdir -p "$CACHE_DIR"
+        mkdir -p "$CACHE_DIR" "$STAGE_DIR"
         OPTIMIZED=0; HITS=0
         VERIFY_FLAG=""; [ "$VERIFY" = "true" ] || VERIFY_FLAG="--no-verify"
         while IFS= read -r f; do
@@ -174,6 +175,9 @@ runs:
               cp "$TMP_OUT" "$CACHE_DIR/$KEY.glb"; cp "$REPORT_DIR/$SAFE.after.json" "$CACHE_DIR/$KEY.json"
             fi
           fi
+          # Stage a copy for the artifact fallback: the PR action restores the
+          # working tree after pushing its branch, so the file won't be here later.
+          mkdir -p "$STAGE_DIR/$(dirname "$OUT")" && cp "$OUT" "$STAGE_DIR/$OUT"
           # Record where the output landed (the CLI JSON carries the temp path).
           node -e "
             const fs=require('fs'); const p='$REPORT_DIR/$SAFE.after.json';
@@ -224,10 +228,8 @@ runs:
       uses: actions/upload-artifact@v4
       with:
         name: glbforge-optimized
-        path: |
-          **/*.web.glb
-          **/*.web.lod*.glb
-        if-no-files-found: ignore
+        path: ${{ runner.temp }}/glbforge-out
+        if-no-files-found: warn
 
     - if: steps.analyze.outputs.count > 0
       uses: actions/github-script@v7
@@ -249,7 +251,7 @@ runs:
           } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.FORK === 'true') {
             body += '\n\n➡️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact (fork PRs cannot receive a bot branch).';
           } else if (process.env.OPTIMIZE === 'true' && Number(process.env.OPTIMIZED) > 0 && process.env.PR_FAILED === 'true') {
-            body += '\n\n⚠️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact — opening a PR failed. Usually this means **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** is off, or the job lacks `contents: write` + `pull-requests: write`.';
+            body += '\n\n⚠️ Optimized assets were uploaded as the `glbforge-optimized` workflow artifact — opening a PR failed. Usually this means **Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"** is off (for organizations it must be enabled at the org level first, then the repo), or the job lacks `contents: write` + `pull-requests: write`.';
           }
           const { owner, repo } = context.repo;
           const issue_number = context.payload.pull_request.number;
