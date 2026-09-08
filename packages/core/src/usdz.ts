@@ -13,6 +13,7 @@ import { readFloat } from './accessors.js';
 import { computeSmoothNormals } from './normals.js';
 import { writeUsda, type UsdAttribute, type UsdLayer, type UsdPrim, type UsdProperty } from './usd-ir.js';
 import { writeUsdc } from './usdc.js';
+import { buildSkeleton, SKEL_FPS } from './usd-skel.js';
 import { storeZip, type ZipEntry } from './zip.js';
 
 /** Re-encode a texture for USDZ (PNG or JPEG only). Node's default uses sharp. */
@@ -35,6 +36,9 @@ export interface UsdzOptions {
 export interface UsdzResult {
   usdz: Uint8Array;
   format: 'usdc' | 'usda';
+  /** Skeletons exported and the sampled clip length in frames (30 fps), 0 when static. */
+  skeletons: number;
+  frames: number;
   /** Files packed, in order (the USD layer first). */
   files: Array<{ name: string; bytes: number }>;
   meshes: number;
@@ -159,10 +163,21 @@ export function buildUsdLayer(
     };
   });
 
+  // --- Skeletons: one per skin, under a SkelRoot ---
+  const skins = root.listSkins();
+  const skeletons = new Map<import('@gltf-transform/core').Skin, ReturnType<typeof buildSkeleton>>();
+  let frames = 0;
+  skins.forEach((skin, i) => {
+    const sk = buildSkeleton(skin, root.listAnimations(), `/${rootName}`, i === 0 ? 'Skel' : `Skel_${i}`);
+    skeletons.set(skin, sk);
+    frames = Math.max(frames, sk.frames);
+    warnings.push(...sk.warnings);
+  });
+
   // --- Meshes: one Xform per mesh-bearing node, world transform baked ---
   const nodePrims: UsdPrim[] = [];
   let meshCount = 0, triangles = 0, nodeIndex = 0;
-  const primBlock = (prim: Primitive, pi: number, parentPath: string, xformName: string): UsdPrim | null => {
+  const primBlock = (prim: Primitive, pi: number, parentPath: string, xformName: string, skin: import('@gltf-transform/core').Skin | null = null): UsdPrim | null => {
     if (prim.getMode() !== Primitive.Mode.TRIANGLES) { warnings.push(`${xformName}: primitive ${pi} is not a triangle list; skipped.`); return null; }
     const posAcc = prim.getAttribute('POSITION');
     if (!posAcc) return null;
@@ -191,13 +206,39 @@ export function buildUsdLayer(
     if (nrm) props.push(attr('normals', 'normal3f[]', { value: nrm.subarray(0, count * 3), interpolation: 'vertex' }));
     if (st) props.push(attr('primvars:st', 'texCoord2f[]', { value: st, interpolation: 'vertex' }));
     if (mat) props.push({ kind: 'relationship', name: 'material:binding', targets: [matPath(mat)] });
+    const apiSchemas: string[] = [];
+    const sk = skin ? skeletons.get(skin) : undefined;
+    const jointsAcc = prim.getAttribute('JOINTS_0'), weightsAcc = prim.getAttribute('WEIGHTS_0');
+    if (sk && jointsAcc && weightsAcc) {
+      apiSchemas.push('SkelBindingAPI');
+      const j = jointsAcc.getArray()!, w = readFloat(weightsAcc);
+      const jointIndices = new Int32Array(count * 4), jointWeights = new Float32Array(count * 4);
+      for (let i = 0; i < count * 4; i++) { jointIndices[i] = w[i] > 0 ? sk.jointRemap[j[i]] : 0; jointWeights[i] = w[i]; }
+      if (prim.getAttribute('JOINTS_1')) warnings.push(`${xformName}: more than 4 joint influences per vertex; USDZ export keeps the first 4.`);
+      props.push(attr('primvars:skel:geomBindTransform', 'matrix4d', { value: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }));
+      props.push(attr('primvars:skel:jointIndices', 'int[]', { value: jointIndices, elementSize: 4, interpolation: 'vertex' }));
+      props.push(attr('primvars:skel:jointWeights', 'float[]', { value: jointWeights, elementSize: 4, interpolation: 'vertex' }));
+      props.push({ kind: 'relationship', name: 'skel:skeleton', targets: [sk.skeletonPath] });
+    }
+    if (mat) apiSchemas.push('MaterialBindingAPI');
+    if (prim.listTargets().length) warnings.push(`${xformName}: morph targets are not exported yet (UsdSkel blend shapes pending).`);
     triangles += triCount;
     meshCount++;
-    return { name, path: `${parentPath}/${name}`, typeName: 'Mesh', apiSchemas: mat ? ['MaterialBindingAPI'] : undefined, properties: props, children: [] };
+    return { name, path: `${parentPath}/${name}`, typeName: 'Mesh', apiSchemas: apiSchemas.length ? apiSchemas : undefined, properties: props, children: [] };
   };
   const visit = (node: Node): void => {
     const mesh = node.getMesh();
-    if (mesh) {
+    const skin = node.getSkin();
+    if (mesh && skin && skeletons.has(skin)) {
+      // Skinned: glTF ignores the mesh node's own transform; points live in
+      // skeleton space, so the Mesh sits directly under the SkelRoot.
+      const xformName = ident(node.getName() || `Skinned_${nodeIndex}`) + `_${nodeIndex}`;
+      nodeIndex++;
+      mesh.listPrimitives().forEach((prim, pi) => {
+        const p = primBlock(prim, pi, `/${rootName}`, xformName, skin);
+        if (p) { p.name = `${xformName}_${p.name}`; p.path = `/${rootName}/${p.name}`; nodePrims.push(p); }
+      });
+    } else if (mesh) {
       const m = node.getWorldMatrix();
       const xformName = ident(node.getName() || `Node_${nodeIndex}`) + `_${nodeIndex}`;
       nodeIndex++;
@@ -217,21 +258,21 @@ export function buildUsdLayer(
     for (const child of node.listChildren()) visit(child);
   };
   for (const child of scene.listChildren()) visit(child);
-  if (root.listSkins().length || root.listAnimations().length) {
-    warnings.push('Skins and animation clips are not exported: USDZ output is the static bind pose.');
+  if (!skins.length && root.listAnimations().length) {
+    warnings.push('Node animations without a skin are not exported (UsdSkel carries joint animation only); the pose is static.');
   }
 
   const rootPrim: UsdPrim = {
-    name: rootName, path: `/${rootName}`, typeName: 'Xform', properties: [],
+    name: rootName, path: `/${rootName}`, typeName: skins.length ? 'SkelRoot' : 'Xform', properties: [],
     children: [
       ...(materialPrims.length ? [{ name: 'Materials', path: `/${rootName}/Materials`, typeName: 'Scope', properties: [], children: materialPrims }] : []),
+      ...[...skeletons.values()].map((s) => s.skeletonPrim),
       ...nodePrims,
     ],
   };
-  return {
-    layer: { defaultPrim: rootName, metersPerUnit: 1, upAxis: 'Y', doc: 'Exported by GLBForge (glbforge.dev)', prims: [rootPrim] },
-    meshes: meshCount, triangles,
-  };
+  const layer: UsdLayer = { defaultPrim: rootName, metersPerUnit: 1, upAxis: 'Y', doc: 'Exported by GLBForge (glbforge.dev)', prims: [rootPrim] };
+  if (frames > 0) Object.assign(layer, { startTimeCode: 0, endTimeCode: frames - 1, timeCodesPerSecond: SKEL_FPS, framesPerSecond: SKEL_FPS });
+  return { layer, meshes: meshCount, triangles };
 }
 
 export async function toUsdz(doc: Document, opts: UsdzOptions = {}): Promise<UsdzResult> {
@@ -268,11 +309,14 @@ export async function toUsdz(doc: Document, opts: UsdzOptions = {}): Promise<Usd
   }
 
   const { layer, meshes, triangles } = buildUsdLayer(doc, texFiles, { name: opts.name, warnings });
+  const frames = layer.endTimeCode !== undefined ? layer.endTimeCode + 1 : 0;
   const layerBytes = format === 'usda' ? new TextEncoder().encode(writeUsda(layer)) : writeUsdc(layer);
   const entries: ZipEntry[] = [{ name: `model.${format}`, data: layerBytes }, ...files];
   return {
     usdz: storeZip(entries),
     format,
+    skeletons: root.listSkins().length,
+    frames,
     files: entries.map((e) => ({ name: e.name, bytes: e.data.length })),
     meshes, triangles,
     materials: root.listMaterials().length,

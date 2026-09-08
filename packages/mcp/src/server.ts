@@ -555,8 +555,8 @@ export function createServer(): McpServer {
       annotations: WRITES_FILES,
       description:
         'Export a GLB as USDZ for iOS AR Quick Look: binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures ' +
-        '(WebP is transcoded; KTX2 is rejected), store-only 64-byte-aligned zip. Static: skins and clips ' +
-        'are baked to the bind pose. Use on the optimized .web.glb. Returns a thumbnail.',
+        '(WebP is transcoded; KTX2 is rejected), store-only 64-byte-aligned zip. Skinned assets get a UsdSkel ' +
+        'skeleton with the first clip sampled at 30 fps (morph targets not yet). Use on the optimized .web.glb. Returns a thumbnail.',
       inputSchema: {
         path: z.string().describe('Absolute path to the .glb'),
         out: z.string().describe('Absolute output path for the .usdz'),
@@ -573,6 +573,7 @@ export function createServer(): McpServer {
       return reply({
         out, bytes: result.usdz.byteLength, sha256: sha256(result.usdz), format: result.format, files: result.files,
         meshes: result.meshes, triangles: result.triangles, materials: result.materials, textures: result.textures,
+        skeletons: result.skeletons, frames: result.frames,
         warnings: result.warnings,
         hint: 'Serve it and reference from <model-viewer ios-src>; iOS Safari opens it in AR Quick Look.',
       }, image?.image);

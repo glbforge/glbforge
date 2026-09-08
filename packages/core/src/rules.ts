@@ -238,7 +238,7 @@ const RULES: Record<string, Rule> = {
       ruleId: 'scene/animated-asset',
       severity: 'info',
       message: `Deforming asset: ${parts.join(', ')}. Optimization preserves skins, joint boundaries, morph targets, and clips (bone-aware simplification).`,
-      suggestion: 'Budget triangles with animation in mind — deformation costs per frame. STL/USDZ exports bake the bind pose (static).',
+      suggestion: 'Budget triangles with animation in mind — deformation costs per frame. USDZ export carries the skeleton and the first clip (UsdSkel); STL bakes the bind pose.',
       data: { skins: r.scene.skins, animations: r.scene.animations },
     };
   },

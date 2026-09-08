@@ -14,14 +14,40 @@
  * File layout: bootstrap (88 bytes) · values · TOKENS · STRINGS · FIELDS ·
  * FIELDSETS · PATHS · SPECS · table of contents.
  */
-import { vectorWidth, type UsdLayer, type UsdPrim, type UsdValue } from './usd-ir.js';
+import { isQuat, vectorWidth, type UsdLayer, type UsdPrim, type UsdValue } from './usd-ir.js';
 
 // Crate value types (crateDataTypes.h order).
 const T = {
-  Bool: 1, Int: 3, Float: 8, Double: 9, String: 10, Token: 11, AssetPath: 12, Matrix4d: 15,
-  Vec2f: 20, Vec3f: 24, Vec4f: 28, TokenListOp: 32, PathListOp: 34, TokenVector: 41,
-  Specifier: 42, Variability: 44,
+  Bool: 1, Int: 3, Half: 7, Float: 8, Double: 9, String: 10, Token: 11, AssetPath: 12, Matrix4d: 15,
+  Quatf: 17, Vec2f: 20, Vec3f: 24, Vec3h: 25, Vec4f: 28, TokenListOp: 32, PathListOp: 34, TokenVector: 41,
+  Specifier: 42, Variability: 44, TimeSamples: 46, DoubleVector: 48,
 } as const;
+
+/** IEEE 754 binary16 (round-to-nearest-even) for half-typed attributes. */
+export function toHalf(v: number): number {
+  if (Number.isNaN(v)) return 0x7e00;
+  const sign = v < 0 || Object.is(v, -0) ? 0x8000 : 0;
+  v = Math.abs(v);
+  if (v === Infinity) return sign | 0x7c00;
+  if (v === 0) return sign;
+  const dv = new DataView(new ArrayBuffer(4));
+  dv.setFloat32(0, v);
+  const bits = dv.getUint32(0);
+  let exp = ((bits >>> 23) & 0xff) - 127 + 15;
+  let mant = bits & 0x7fffff;
+  if (exp >= 31) return sign | 0x7c00;
+  if (exp <= 0) {
+    if (exp < -10) return sign;
+    mant |= 0x800000;
+    const shift = 14 - exp;
+    let half = mant >> shift;
+    if ((mant >> (shift - 1)) & 1 && ((mant & ((1 << (shift - 1)) - 1)) || (half & 1))) half++;
+    return sign | half;
+  }
+  let half = (exp << 10) | (mant >> 13);
+  if (mant & 0x1000 && ((mant & 0xfff) || (half & 1))) half++;
+  return sign | half;
+}
 const SPEC_ATTRIBUTE = 1, SPEC_PRIM = 6, SPEC_PSEUDO_ROOT = 7, SPEC_RELATIONSHIP = 8;
 const IS_ARRAY = 1n << 63n, IS_INLINED = 1n << 62n;
 const HAS_CHILD = 1, HAS_SIBLING = 2, IS_PRIM_PROPERTY = 4;
@@ -37,7 +63,9 @@ class Buf {
   }
   align(n: number) { const pad = (n - (this.length % n)) % n; this.ensure(pad); this.length += pad; }
   u8(v: number) { this.ensure(1); this.bytes[this.length++] = v & 0xff; }
+  u16(v: number) { this.ensure(2); new DataView(this.bytes.buffer).setUint16(this.length, v & 0xffff, true); this.length += 2; }
   u32(v: number) { this.ensure(4); new DataView(this.bytes.buffer).setUint32(this.length, v >>> 0, true); this.length += 4; }
+  i64(v: number) { this.ensure(8); new DataView(this.bytes.buffer).setBigInt64(this.length, BigInt(v), true); this.length += 8; }
   i32(v: number) { this.ensure(4); new DataView(this.bytes.buffer).setInt32(this.length, v | 0, true); this.length += 4; }
   u64(v: number | bigint) { this.ensure(8); new DataView(this.bytes.buffer).setBigUint64(this.length, BigInt(v), true); this.length += 8; }
   f32(v: number) { this.ensure(4); new DataView(this.bytes.buffer).setFloat32(this.length, v, true); this.length += 4; }
@@ -135,15 +163,31 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
         for (let i = 0; i < xs.length; i++) out.i32(xs[i]);
         return rep(T.Int, at, IS_ARRAY);
       }
-      if (base === 'float' || width === 0) {
+      if (base === 'half') {
         out.u64(xs.length);
+        for (let i = 0; i < xs.length; i++) out.u16(toHalf(xs[i]));
+        return rep(T.Half, at, IS_ARRAY);
+      }
+      if (base === 'float' || base === 'double' || width === 0) {
+        out.u64(xs.length);
+        if (base === 'double') { for (let i = 0; i < xs.length; i++) out.f64(xs[i]); return rep(T.Double, at, IS_ARRAY); }
         for (let i = 0; i < xs.length; i++) out.f32(xs[i]);
         return rep(T.Float, at, IS_ARRAY);
       }
+      if (base === 'matrix4d') {
+        const count = Math.floor(xs.length / 16);
+        out.u64(count);
+        for (let i = 0; i < count * 16; i++) out.f64(xs[i]);
+        return rep(T.Matrix4d, at, IS_ARRAY);
+      }
       const count = Math.floor(xs.length / width);
       out.u64(count);
-      for (let i = 0; i < count * width; i++) out.f32(xs[i]);
-      return rep(width === 2 ? T.Vec2f : width === 3 ? T.Vec3f : T.Vec4f, at, IS_ARRAY);
+      if (base === 'half3') {
+        for (let i = 0; i < count * 3; i++) out.u16(toHalf(xs[i]));
+        return rep(T.Vec3h, at, IS_ARRAY);
+      }
+      for (let i = 0; i < count * width; i++) out.f32(xs[i]); // quats: IR is (x,y,z,w) = GfQuatf memory order
+      return rep(isQuat(base) ? T.Quatf : width === 2 ? T.Vec2f : width === 3 ? T.Vec3f : T.Vec4f, at, IS_ARRAY);
     }
     switch (base) {
       case 'bool': return inline(T.Bool, v ? 1 : 0);
@@ -164,17 +208,49 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
         out.align(4); const at = out.length;
         const xs = v as ArrayLike<number>;
         for (let i = 0; i < width; i++) out.f32(xs[i]);
-        return rep(width === 2 ? T.Vec2f : width === 3 ? T.Vec3f : T.Vec4f, at);
+        return rep(isQuat(base) ? T.Quatf : width === 2 ? T.Vec2f : width === 3 ? T.Vec3f : T.Vec4f, at);
       }
     }
+  };
+
+  /**
+   * TimeSamples: [int64 offset to the times rep][u64 n, double times...]
+   * [ValueRep DoubleVector -> that inline block][int64 8][u64 n][ValueRep per sample].
+   * Identical time arrays share one inline block, as Pixar's writer does.
+   */
+  const timesBlocks = new Map<string, number>();
+  const timeSamples = (typeName: string, times: number[], values: UsdValue[]): bigint => {
+    const valueReps = values.map((v) => value(typeName, v));
+    const key = times.join(',');
+    let timesAt = timesBlocks.get(key);
+    out.align(8);
+    const at = out.length;
+    if (timesAt === undefined) {
+      out.i64(8 + 8 + 8 * times.length);
+      timesAt = out.length;
+      out.u64(times.length);
+      for (const t of times) out.f64(t);
+      timesBlocks.set(key, timesAt);
+    } else {
+      out.i64(8);
+    }
+    out.u64(rep(T.DoubleVector, timesAt));
+    out.i64(8);
+    out.u64(valueReps.length);
+    for (const r of valueReps) out.u64(r);
+    return rep(T.TimeSamples, at);
   };
 
   // --- Specs ------------------------------------------------------------------
   const rootFields = [
     field('defaultPrim', inline(T.Token, tok(layer.defaultPrim))),
-    field('metersPerUnit', value('double', layer.metersPerUnit)),
-    field('upAxis', inline(T.Token, tok(layer.upAxis))),
   ];
+  if (layer.endTimeCode !== undefined) rootFields.push(field('endTimeCode', value('double', layer.endTimeCode)));
+  if (layer.framesPerSecond !== undefined) rootFields.push(field('framesPerSecond', value('double', layer.framesPerSecond)));
+  rootFields.push(field('metersPerUnit', value('double', layer.metersPerUnit)));
+  if (layer.startTimeCode !== undefined) rootFields.push(field('startTimeCode', value('double', layer.startTimeCode)));
+  if (layer.timeCodesPerSecond !== undefined) rootFields.push(field('timeCodesPerSecond', value('double', layer.timeCodesPerSecond)));
+  rootFields.push(field('upAxis', inline(T.Token, tok(layer.upAxis))));
   if (layer.doc) rootFields.push(field('documentation', value('string', layer.doc)));
   rootFields.push(field('primChildren', tokenVector(layer.prims.map((p) => p.name))));
   specs.push({ path: 0, fieldSet: fieldSet(rootFields), type: SPEC_PSEUDO_ROOT });
@@ -211,7 +287,9 @@ export function writeUsdc(layer: UsdLayer): Uint8Array {
         field('variability', inline(T.Variability, prop.uniform ? 1 : 0)),
       ];
       if (prop.connect !== undefined) afs.push(field('connectionPaths', explicitPathListOp([prop.connect])));
+      else if (prop.samples) afs.push(field('timeSamples', timeSamples(prop.typeName, prop.samples.times, prop.samples.values)));
       else if (prop.value !== undefined) afs.push(field('default', value(prop.typeName, prop.value)));
+      if (prop.elementSize !== undefined) afs.push(field('elementSize', inline(T.Int, prop.elementSize)));
       if (prop.interpolation) afs.push(field('interpolation', inline(T.Token, tok(prop.interpolation))));
       specs.push({ path: pnode.index, fieldSet: fieldSet(afs), type: SPEC_ATTRIBUTE });
     }

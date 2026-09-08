@@ -132,8 +132,13 @@ and `test/usd-oracle.py` opens the usdc and its usda twin with Pixar's USD
 and checks every prim, value, connection, and relationship for equality
 (set `GLBFORGE_PXR_PYTHON` to a python with `usd-core` to run it). On the
 Meshy fixture the layer is 5.4MB binary vs 13.4MB ASCII. `--usda` writes
-the text layer instead. Static export: skins and clips are baked to the bind
-pose; KTX2 inputs are rejected with guidance. Also `export_usdz` on the MCP
+the text layer instead. **Animated assets export as UsdSkel**: joints ordered
+parents-first with bind and rest transforms, `SkelBindingAPI` joint
+indices/weights on the meshes, and the first animation clip sampled at 30 fps
+into a `SkelAnimation` (translations, quaternion rotations, half scales). The
+oracle test asks Pixar's UsdSkel to recompute joint transforms from the
+result. Morph targets are not exported yet. KTX2 inputs are rejected with
+guidance. Also `export_usdz` on the MCP
 server and an **Export USDZ** button in the Studio (in-browser too — textures
 transcode through a canvas). Reference it from `<model-viewer ios-src="model.usdz">` for the AR
 button on iOS. Verified on an iPhone in AR Quick Look: flat-material and

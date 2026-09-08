@@ -566,7 +566,7 @@ program
 
 program
   .command('usdz')
-  .description('Export a GLB as USDZ for iOS AR Quick Look (binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Static: skins/clips are baked to the bind pose.')
+  .description('Export a GLB as USDZ for iOS AR Quick Look (binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Skinned assets export a UsdSkel skeleton with the first animation clip sampled at 30 fps.')
   .argument('<file>', 'path to .glb (an optimized .web.glb works — WebP is transcoded)')
   .option('-o, --out <file>', 'output path (default: <name>.usdz)')
   .option('--jpeg', 'encode opaque color textures as JPEG (smaller) instead of PNG')
@@ -582,7 +582,7 @@ program
     if (opts.json) {
       console.log(JSON.stringify({ outPath, bytes: result.usdz.byteLength, ...result, usdz: undefined }, null, 2));
     } else {
-      console.log(`  ${outPath} (${(result.usdz.byteLength / 1048576).toFixed(1)}MB)  ${result.meshes} mesh(es), ${result.triangles.toLocaleString()} tris, ${result.materials} material(s), ${result.textures} texture(s)`);
+      console.log(`  ${outPath} (${(result.usdz.byteLength / 1048576).toFixed(1)}MB)  ${result.meshes} mesh(es), ${result.triangles.toLocaleString()} tris, ${result.materials} material(s), ${result.textures} texture(s)${result.skeletons ? `, ${result.skeletons} skeleton(s)${result.frames ? ` + ${result.frames}-frame clip @30fps` : ''}` : ''}`);
       for (const w of result.warnings) console.log(`  ! ${w}`);
       console.log('  iOS: AirDrop or serve the .usdz; Safari opens it in AR Quick Look. <model-viewer ios-src="…">');
     }

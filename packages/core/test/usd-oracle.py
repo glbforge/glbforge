@@ -3,7 +3,7 @@ Usage: python usd-oracle.py <candidate.usdz|usdc> <reference.usdz|usda>
 Exit 0 when every prim, attribute value, connection, relationship, and layer metadata matches.
 Requires the `usd-core` wheel (pip install usd-core)."""
 import math, sys
-from pxr import Usd, Sdf, Gf
+from pxr import Usd, Sdf, Gf, UsdSkel
 
 cand_path, ref_path = sys.argv[1], sys.argv[2]
 cand = Usd.Stage.Open(cand_path)
@@ -13,6 +13,8 @@ errors = []
 def same(a, b, where):
     if isinstance(a, Sdf.AssetPath) and isinstance(b, Sdf.AssetPath):
         a, b = a.path, b.path  # resolved paths embed the package file name
+    if isinstance(a, (Gf.Quatf, Gf.Quatd, Gf.Quath)) and isinstance(b, (Gf.Quatf, Gf.Quatd, Gf.Quath)):
+        a, b = [a.GetReal(), *a.GetImaginary()], [b.GetReal(), *b.GetImaginary()]
     if isinstance(a, (float, int)) and isinstance(b, (float, int)) and not isinstance(a, bool):
         if not math.isclose(float(a), float(b), rel_tol=1e-6, abs_tol=1e-6): errors.append(f'{where}: {a} != {b}')
         return
@@ -45,14 +47,33 @@ for rp in ref_prims:
         same(ca.GetVariability(), ra.GetVariability(), f'{ra.GetPath()}.variability')
         same(list(ca.GetConnections()), list(ra.GetConnections()), f'{ra.GetPath()}.connections')
         same(ca.GetMetadata('interpolation'), ra.GetMetadata('interpolation'), f'{ra.GetPath()}.interpolation')
+        same(ca.GetMetadata('elementSize'), ra.GetMetadata('elementSize'), f'{ra.GetPath()}.elementSize')
         rv, cv = ra.Get(), ca.Get()
         if (rv is None) != (cv is None): errors.append(f'{ra.GetPath()}: value presence {cv is not None} != {rv is not None}')
         elif rv is not None: same(cv, rv, f'{ra.GetPath()}.value')
+        rt, ct = list(ra.GetTimeSamples()), list(ca.GetTimeSamples())
+        same(ct, rt, f'{ra.GetPath()}.timeSamples')
+        for t in rt[:: max(1, len(rt) // 6)]:
+            same(ca.Get(t), ra.Get(t), f'{ra.GetPath()}@{t}')
     for rr in rp.GetRelationships():
         cr = cp.GetRelationship(rr.GetName())
         if not cr: errors.append(f'missing rel {rr.GetPath()}'); continue
         same(list(cr.GetTargets()), list(rr.GetTargets()), f'{rr.GetPath()}.targets')
 
+# UsdSkel sanity on the candidate: valid skeleton + animation queries, and the last joint's local rotation at the end frame.
+for prim in cand.Traverse():
+    if prim.IsA(UsdSkel.Skeleton):
+        q = UsdSkel.Cache().GetSkelQuery(UsdSkel.Skeleton(prim))
+        if not q: errors.append(f'{prim.GetPath()}: invalid skeleton query'); continue
+        aq = q.GetAnimQuery()
+        joints = list(q.GetJointOrder())
+        frames = len(aq.GetJointTransformTimeSamples()) if aq else 0
+        rot = ''
+        if aq:
+            xf = q.ComputeJointLocalTransforms(cand.GetEndTimeCode())
+            m = xf[-1]; rq = m.ExtractRotationQuat()
+            rot = f' upper@{int(cand.GetEndTimeCode())}=({rq.GetReal():.4g}, ' + ', '.join(f'{c:.4g}' for c in rq.GetImaginary()) + ')'
+        print(f'skel: joints={len(joints)} frames={frames}{rot}')
 if errors:
     print('\n'.join(errors[:40])); print(f'{len(errors)} difference(s)'); sys.exit(1)
 print(f'OK: {len(ref_prims)} prims identical between {cand_path} and {ref_path}')

@@ -87,19 +87,26 @@ describe('USDZ export', () => {
       const txt = await toUsdz(doc, { format: 'usda' });
       await writeFile(join(dir, 'bin.usdz'), bin.usdz);
       await writeFile(join(dir, 'txt.usdz'), txt.usdz);
-      const out = execFileSync(python, [new URL('./usd-oracle.py', import.meta.url).pathname, join(dir, 'bin.usdz'), join(dir, 'txt.usdz')], { encoding: 'utf8' });
+      let out = '';
+      try {
+        out = execFileSync(python, [new URL('./usd-oracle.py', import.meta.url).pathname, join(dir, 'bin.usdz'), join(dir, 'txt.usdz')], { encoding: 'utf8' });
+      } catch (err) {
+        const e = err as { stdout?: string; stderr?: string };
+        throw new Error(`usd-oracle failed:\n${e.stdout ?? ''}\n${(e.stderr ?? '').split('\n').slice(-6).join('\n')}`);
+      }
       expect(out).toMatch(/^OK:/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   }, 120_000);
 
-  it('rejects KTX2 textures with guidance and reports skinned assets as static', async () => {
+  it('rejects KTX2 textures with guidance and exports skins as a SkelRoot', async () => {
     const { doc } = await extrudeImage(await ringPng(), { texture: false });
     doc.createSkin('rig');
     const r = await toUsdz(doc);
     expect(r.textures).toBe(0);
-    expect(r.warnings.join(' ')).toMatch(/static bind pose/);
+    expect(r.skeletons).toBe(1);
+    expect(r.frames).toBe(0);
     const tex = doc.createTexture('k').setImage(new Uint8Array([0xab, 0x4b, 0x54, 0x58])).setMimeType('image/ktx2');
     doc.getRoot().listMaterials()[0].setBaseColorTexture(tex);
     await expect(toUsdz(doc)).rejects.toThrow(/KTX2/);

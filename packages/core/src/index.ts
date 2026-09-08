@@ -15,6 +15,7 @@ export { isDeforming, dominantJoints, simplifyDeformingPrimitive, type Deforming
 export { toUsdz, buildUsdLayer, type UsdzOptions, type UsdzResult, type UsdzTextureEncoder } from './usdz.js';
 export { writeUsda, type UsdLayer, type UsdPrim, type UsdProperty, type UsdAttribute, type UsdRelationship, type UsdValue } from './usd-ir.js';
 export { writeUsdc } from './usdc.js';
+export { buildSkeleton, SKEL_FPS, compose, decompose, invert, mul } from './usd-skel.js';
 export { storeZip, type ZipEntry } from './zip.js';
 export { toStl, type StlOptions, type StlResult } from './stl.js';
 export { detectGenerator, type GeneratorGuess, type GeneratorProfile } from './detect.js';
