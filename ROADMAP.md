@@ -3,6 +3,35 @@
 Mission: **the web-readiness layer for AI-generated 3D** — generation is a
 commodity; the gap between "generated" and "shipped" is the product.
 
+## Status after v0.5.0 (2026-09-08) — what's left
+
+v0.5.0 shipped the six-item agent/quality pass: measured SSIM verification on
+every optimization, the agent-friendly MCP (compact cards, drill-down,
+previews, comparison sheets, `capabilities`), the Action's optimize-PR mode
+(live-verified on PR #2/#3), `glbforge init` / `audit`, bone-aware skinning,
+USDZ export, and versioned budget profiles with a published methodology.
+Everything below is what remains, most urgent first.
+
+**Verification debt (needs a device or a human)**
+- [ ] USDZ on an iPhone: open a `glbforge usdz` output in AR Quick Look. The archive is spec-checked (store-only, 64-byte aligned, usda first) but has never been opened on iOS. If it fails, suspects in order: ASCII `usda` vs binary `usdc`, `normals` interpolation, the `st` V-flip
+- [ ] Stripe live-mode flip + Meshy ToS resale check + `support@glbforge.dev` routing (pre-existing; gates real money)
+
+**Near-term engineering (follow-through on v0.5.0)**
+- [ ] USDZ: binary `usdc` writer — the ASCII layer is ~14MB at 150k tris; then UsdSkel for skinned/animated exports (today: static bind pose)
+- [ ] Action: expose `lods` and `target-triangles` inputs; `replace: true` and `optimize-all` paths have only been dry-run locally (sibling mode is what PR #2 exercised)
+- [ ] Perceptual verification for LOD chains: report SSIM per LOD as info (LODs are intentionally lossy, so no gate) so agents can pick switch distances from measured numbers
+- [ ] Studio: metrics overlay on the compare slider + a `compare` panel — the SSIM/heatmap data now exists in core, the UI doesn't show it yet
+- [ ] `init`: config paths for more clients (Codex, Windsurf, Zed); Cursor path is unit-tested only
+- [ ] MCP progress notifications for long tools; MCP resources for intermediate artifacts (reports, LODs)
+- [ ] Documented composition patterns with filesystem / image-gen / Blender MCP servers
+- [ ] Profiles v2: don't move caps without data — collect real device/network failures from users first (the methodology page commits to this)
+
+**Longer-term (unchanged)**
+- [ ] Fixture zoo + per-generator rules (self-feeding corpus); training-corpus target ~200 assets before a first TRELLIS/TripoSR fine-tune
+- [ ] Scene-level budgets; pluggable retopo / UV / baking backends
+- [ ] Distribution: per-package READMEs with before/after galleries, awesome-mcp lists, launch content
+- [ ] v1.0 product bets (see below) — choose after usage data
+
 ## ✅ Done (v0.1 — validated end to end)
 
 - [x] `@glbforge/core` analyze: stats, welded-space topology, 14 named lint rules, 3 budget profiles
@@ -59,9 +88,10 @@ commodity; the gap between "generated" and "shipped" is the product.
   its backend (Express API locally, in-browser engine when static). Analyze, forge
   (layers/pillow/presets), optimize (meshopt WASM + canvas WebP), STL — all client-side,
   zero servers, assets never leave the visitor's device. Meshy + KTX2 route to npx.
-- [ ] Hosted generation, phase 2: BYOK **and** purchased credits (GitHub OAuth + Stripe,
-  quota ledger, balance kill-switch via getBalance). Check Meshy ToS re: resale — an
-  affiliate/volume arrangement may be the better structure
+- [x] Hosted generation, phase 2: purchased credits LIVE (GitHub + Google OAuth, tiered
+  costs, packs, Stripe checkout + webhook proven in test mode, gen history). Still open:
+  Stripe live-mode flip; Meshy ToS re: resale — an affiliate/volume arrangement may be
+  the better structure
 
 ## Agent experience (from external product review, 2026-08-20)
 
@@ -109,9 +139,9 @@ commodity; the gap between "generated" and "shipped" is the product.
   simplification measures 0.81% chamfer, inside its reported 1% fidelityBound) and
   `glbforge dataset` (deterministic software renderer: 10 known-camera views + mesh +
   cameras.json per asset — fine-tuning pairs, ~1s/asset, zero GPU; now smooth-shaded from
-  vertex normals) + perceptual SSIM verification wired into every optimize. Open: MCP resources +
-  previews; collision meshes; part separation; skinning preservation; USDZ scaffolds;
-  Studio metric overlays.
+  vertex normals) + perceptual SSIM verification wired into every optimize; previews,
+  comparison sheets, skinning preservation, and USDZ export shipped in v0.5.0. Open: MCP
+  resources; collision meshes; part separation; usdc/UsdSkel; Studio metric overlays.
 - **Phase 3**: team dashboards + regression alerts; vertical starters; hosted free-tier
   lead-gen (local-first stays primary); rule corpus as compounding moat; video bridge only
   if usage justifies.
