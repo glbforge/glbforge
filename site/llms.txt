@@ -39,7 +39,9 @@ Key facts (accurate as of v0.5.x, 2026):
   verified against Pixar's reader, UsdPreviewSurface materials, PNG/JPEG
   textures; skinned assets carry a UsdSkel skeleton and the first clip
   sampled at 30 fps; morph targets become blend shapes. `--usda` for the text layer.
-  Verified on an iPhone in AR Quick Look (flat and fully textured assets).
+  Verified on an
+  iPhone in AR Quick Look (flat, fully textured, skinned + animated, and
+  blend-shape assets).
 - Generate (true volumetric 3D from one image, learned models): Meshy 7
   (richest PBR texturing) plus open-weight models via fal.ai GPU inference —
   Hunyuan3D-2, TRELLIS, TripoSR. Textured by default.
