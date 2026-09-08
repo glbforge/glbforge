@@ -185,8 +185,11 @@ artifact instead. Opening the PR needs the repository (and, for
 organizations, the org) setting **Allow GitHub Actions to create and approve
 pull requests**; when it is off, the run still posts the report card and
 uploads the optimized files as the `glbforge-optimized` artifact. In optimize mode the gate passes when the optimized output
-passes, so the fix is always one merge away. Inputs: `profile`,
-`fail-on-budget`, `optimize`, `optimize-all`, `replace`, `verify`, `cache`,
+passes, so the fix is always one merge away. `target-triangles` overrides the
+profile's triangle target and `lods: 40000,10000` adds geometry-only LOD files
+(`<name>.web.lodN.glb`) to the PR; both are part of the cache key. Inputs:
+`profile`, `fail-on-budget`, `optimize`, `optimize-all`, `replace`, `verify`,
+`target-triangles`, `lods`, `cache`,
 `open-pr`, `pr-branch`, `version`, `token`.
 
 ## Meshy API key

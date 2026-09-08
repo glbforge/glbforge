@@ -19,7 +19,8 @@ Everything below is what remains, most urgent first.
 **Near-term engineering (follow-through on v0.5.0)**
 - [x] USDZ: binary `usdc` writer (2026-09-08) — crate 0.8.0 in pure TS (literal-only LZ4 + Pixar integer compression for structural sections, raw arrays); verified byte-layout against Pixar's writer and value-for-value against Pixar's reader (test/usd-oracle.py, `GLBFORGE_PXR_PYTHON`). Layer 5.4MB vs 13.4MB ASCII on the Meshy fixture
 - [ ] USDZ: UsdSkel for skinned/animated exports (today: static bind pose); real LZ4 matching in the crate writer if structural sections ever matter (they are KBs)
-- [ ] Action: expose `lods` and `target-triangles` inputs; `replace: true` and `optimize-all` paths have only been dry-run locally (sibling mode is what PR #2 exercised)
+- [x] Action: `lods` and `target-triangles` inputs (2026-09-08) — both in the cache key, LOD files cached/staged/committed alongside, report rows carry each LOD's real triangle count and flag targets the simplifier could not reach. `replace: true` and `optimize-all` still only dry-run locally
+- [ ] LOD targets can be unreachable on seam-heavy meshes (layered forge output: 20k and 5k targets both stall at ~48k because meshopt will not collapse across UV/normal seams). Options: a seam-tolerant simplification for geometry-only LODs, or `--lods` reporting the reachable floor up front
 - [ ] Perceptual verification for LOD chains: report SSIM per LOD as info (LODs are intentionally lossy, so no gate) so agents can pick switch distances from measured numbers
 - [ ] Studio: metrics overlay on the compare slider + a `compare` panel — the SSIM/heatmap data now exists in core, the UI doesn't show it yet
 - [ ] `init`: config paths for more clients (Codex, Windsurf, Zed); Cursor path is unit-tested only

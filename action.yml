@@ -29,6 +29,12 @@ inputs:
   verify:
     description: 'Perceptual verification (SSIM of fixed-camera renders before vs after) during optimization'
     default: 'true'
+  target-triangles:
+    description: 'With optimize=true: override the profile triangle target (e.g. 80000)'
+    default: ''
+  lods:
+    description: 'With optimize=true: extra geometry-only LOD files, comma-separated triangle targets (e.g. 40000,10000), written as <name>.web.lodN.glb'
+    default: ''
   cache:
     description: 'Cache optimized outputs keyed on input content + profile + CLI version (deterministic pipeline: a hit is exact)'
     default: 'true'
@@ -144,44 +150,58 @@ runs:
         USE_CACHE: ${{ inputs.cache }}
         REPLACE: ${{ inputs.replace }}
         VERIFY: ${{ inputs.verify }}
+        TARGET: ${{ inputs.target-triangles }}
+        LODS: ${{ inputs.lods }}
         ALL: ${{ inputs.optimize-all }}
       run: |
         set -euo pipefail
         mkdir -p "$CACHE_DIR" "$STAGE_DIR"
         OPTIMIZED=0; HITS=0
-        VERIFY_FLAG=""; [ "$VERIFY" = "true" ] || VERIFY_FLAG="--no-verify"
+        FLAGS=""
+        [ "$VERIFY" = "true" ] || FLAGS="$FLAGS --no-verify"
+        [ -z "$TARGET" ] || FLAGS="$FLAGS --target $TARGET"
+        LODS="${LODS// /}"
+        [ -z "$LODS" ] || FLAGS="$FLAGS --lods $LODS"
+        NLODS=0; [ -z "$LODS" ] || NLODS=$(echo "$LODS" | tr ',' '\n' | grep -c .)
         while IFS= read -r f; do
           [ -n "$f" ] || continue
           SAFE=$(echo "$f" | tr '/' '_')
           PASSED=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$REPORT_DIR/$SAFE.json','utf8')).passed)")
           if [ "$PASSED" = "true" ] && [ "$ALL" != "true" ]; then continue; fi
           if [ "$REPLACE" = "true" ]; then OUT="$f"; else OUT="${f%.*}.web.glb"; fi
-          KEY="$(sha256sum "$f" | cut -c1-64)-$(printf '%s|%s|%s' "$PROFILE" "$CLI_VERSION" "$VERIFY" | sha256sum | cut -c1-16)"
+          # Cache key: input content + everything that changes the output.
+          KEY="$(sha256sum "$f" | cut -c1-64)-$(printf '%s|%s|%s|%s|%s' "$PROFILE" "$CLI_VERSION" "$VERIFY" "$TARGET" "$LODS" | sha256sum | cut -c1-16)"
+          OUT_BASE="${OUT%.glb}"
           if [ "$USE_CACHE" = "true" ] && [ -f "$CACHE_DIR/$KEY.glb" ] && [ -f "$CACHE_DIR/$KEY.json" ]; then
             cp "$CACHE_DIR/$KEY.glb" "$OUT"
+            for ((i=1; i<=NLODS; i++)); do cp "$CACHE_DIR/$KEY.lod$i.glb" "$OUT_BASE.lod$i.glb"; done
             cp "$CACHE_DIR/$KEY.json" "$REPORT_DIR/$SAFE.after.json"
             HITS=$((HITS + 1))
           else
-            TMP_OUT="$(mktemp -d)/out.glb"
+            TMP_DIR="$(mktemp -d)"; TMP_OUT="$TMP_DIR/out.glb"
             # Exit 1 = optimized but still over budget / visibly lossy: the JSON says so.
-            $CLI optimize "$f" --profile "$PROFILE" -o "$TMP_OUT" --json $VERIFY_FLAG > "$REPORT_DIR/$SAFE.after.json" 2>"$REPORT_DIR/$SAFE.after.err" || true
+            $CLI optimize "$f" --profile "$PROFILE" -o "$TMP_OUT" --json $FLAGS > "$REPORT_DIR/$SAFE.after.json" 2>"$REPORT_DIR/$SAFE.after.err" || true
             if [ ! -s "$REPORT_DIR/$SAFE.after.json" ]; then
               echo "::warning file=$f::optimize failed: $(head -c 300 "$REPORT_DIR/$SAFE.after.err")"
               rm -f "$REPORT_DIR/$SAFE.after.json"
               continue
             fi
             cp "$TMP_OUT" "$OUT"
+            for ((i=1; i<=NLODS; i++)); do cp "$TMP_DIR/out.lod$i.glb" "$OUT_BASE.lod$i.glb"; done
             if [ "$USE_CACHE" = "true" ]; then
               cp "$TMP_OUT" "$CACHE_DIR/$KEY.glb"; cp "$REPORT_DIR/$SAFE.after.json" "$CACHE_DIR/$KEY.json"
+              for ((i=1; i<=NLODS; i++)); do cp "$TMP_DIR/out.lod$i.glb" "$CACHE_DIR/$KEY.lod$i.glb"; done
             fi
           fi
-          # Stage a copy for the artifact fallback: the PR action restores the
-          # working tree after pushing its branch, so the file won't be here later.
+          # Stage copies for the artifact fallback: the PR action restores the
+          # working tree after pushing its branch, so the files won't be here later.
           mkdir -p "$STAGE_DIR/$(dirname "$OUT")" && cp "$OUT" "$STAGE_DIR/$OUT"
-          # Record where the output landed (the CLI JSON carries the temp path).
+          for ((i=1; i<=NLODS; i++)); do cp "$OUT_BASE.lod$i.glb" "$STAGE_DIR/$OUT_BASE.lod$i.glb"; done
+          # Record where the outputs landed (the CLI JSON carries the temp path).
           node -e "
             const fs=require('fs'); const p='$REPORT_DIR/$SAFE.after.json';
             const j=JSON.parse(fs.readFileSync(p,'utf8')); j.outPath='$OUT'; j.after.file.path='$OUT';
+            j.lods=(j.lods||[]).map((l,i)=>({...l, path:'$OUT_BASE.lod'+(i+1)+'.glb'}));
             fs.writeFileSync(p, JSON.stringify(j));"
           OPTIMIZED=$((OPTIMIZED + 1))
         done < "$REPORT_DIR/files.txt"

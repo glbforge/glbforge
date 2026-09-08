@@ -75,6 +75,10 @@ for (const { before: r, after } of results) {
     lines.push(
       `| ↳ \`${after.outPath}\` | **${a.score}**/100 | ${v} | ${num(a.geometry.triangles)} | ~${a.geometry.drawCallEstimate} | ${mb(a.file.bytes)}${saved} | ${mb(a.textureVramTotal)} | ${fidelityCell(after)} |`,
     );
+    for (const lod of after.lods ?? []) {
+      const short = lod.triangles > lod.target * 1.1 ? ` (target ${num(lod.target)} not reachable)` : '';
+      lines.push(`| ↳ \`${lod.path}\` | — | LOD, geometry only${short} | ${num(lod.triangles)} | — | ${mb(lod.bytes)} | — | |`);
+    }
   }
 }
 

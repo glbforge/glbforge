@@ -68,22 +68,10 @@ async function optimizeFile(
   // The measured visual verdict is part of the report card: a failing SSIM
   // fails the budget like any perf/* rule.
   if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
-  if (extra.json) {
-    console.log(JSON.stringify({
-      outPath: output,
-      sha256: createHash('sha256').update(outBytes).digest('hex'),
-      steps: summary.steps,
-      fidelityBound: summary.fidelityBound,
-      perceptual: summary.perceptual,
-      before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
-      after,
-      savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
-    }, null, 2));
-  } else {
-    printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
-  }
+  if (!extra.json) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
 
   // Optional LOD chain: simplify further from the already-optimized doc.
+  const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number }> = [];
   if (extra.lods) {
     const targets = extra.lods.split(',').map((t) => parseInt(t.trim(), 10));
     for (let i = 0; i < targets.length; i++) {
@@ -99,8 +87,26 @@ async function optimizeFile(
       const lodPath = output.replace(/\.glb$/i, `.lod${i + 1}.glb`);
       const lodBytes = await io.writeBinary(lodDoc);
       await writeFile(lodPath, lodBytes);
-      if (!extra.json) console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, target ${targets[i].toLocaleString()} tris)`);
+      const lodTris = analyze(await io.readBinary(lodBytes), { profile, topology: false }).geometry.triangles;
+      lodFiles.push({ path: lodPath, bytes: lodBytes.byteLength, triangles: lodTris, target: targets[i] });
+      if (!extra.json) {
+        const short = lodTris > targets[i] * 1.1 ? '  (target not reachable within the error ladder — seam-heavy mesh)' : '';
+        console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, ${lodTris.toLocaleString()} tris, target ${targets[i].toLocaleString()})${short}`);
+      }
     }
+  }
+  if (extra.json) {
+    console.log(JSON.stringify({
+      outPath: output,
+      sha256: createHash('sha256').update(outBytes).digest('hex'),
+      steps: summary.steps,
+      fidelityBound: summary.fidelityBound,
+      perceptual: summary.perceptual,
+      before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
+      after,
+      savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
+      lods: lodFiles,
+    }, null, 2));
   }
   return after.passed;
 }
