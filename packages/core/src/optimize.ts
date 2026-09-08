@@ -5,13 +5,17 @@ import {
   join,
   palette,
   prune,
-  simplify,
+  simplifyPrimitive,
   textureCompress,
   meshopt,
   weld,
 } from '@gltf-transform/functions';
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import type { Profile } from './types.js';
+import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from './harness/perceptual.js';
+import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
+import { computeSmoothNormals } from './normals.js';
+import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
  * Environment-specific texture recompressor. Given the encoded source image
@@ -37,6 +41,16 @@ export interface OptimizeOptions {
   textureEncoder?: TextureEncoder;
   /** Skip meshopt compression (emit plain quantized GLB). */
   compress?: boolean;
+  /** Perceptual verification: render fixed cameras before and after and
+   *  score SSIM against profile.minSsim. Default: on in Node, off in
+   *  browsers (pass a textureDecoder and verify: true to enable there). */
+  verify?: boolean;
+  /** Base-color decoder for the verification renders (browsers: canvas).
+   *  Node defaults to sharp. Without one, textures are left out of the diff. */
+  textureDecoder?: TextureDecoder;
+  /** Keep the rendered before/after views on `perceptual.rendered` (for
+   *  comparison sheets). Off by default — it is a few MB of pixels. */
+  keepViews?: boolean;
   log?: (msg: string) => void;
 }
 
@@ -48,7 +62,12 @@ export interface OptimizeSummary {
    *  of the mesh extent (from the meshopt error tolerance actually used).
    *  0 when no simplification ran — the geometry is untouched. */
   fidelityBound: number;
+  /** Measured visual fidelity (SSIM before vs after on a fixed 4-camera
+   *  rig), or null when verification was skipped. */
+  perceptual: PerceptualVerdict | null;
 }
+
+const isNode = typeof process !== 'undefined' && !!(process as { versions?: { node?: string } }).versions?.node;
 
 function countTriangles(doc: Document): number {
   let tris = 0;
@@ -79,6 +98,19 @@ export async function optimize(
 ): Promise<OptimizeSummary> {
   const log = opts.log ?? (() => {});
   const steps: string[] = [];
+
+  // Reference renders BEFORE any mutation; the frame is fixed here so the
+  // cameras cannot drift when simplification shifts the bounds.
+  const verify = opts.verify ?? isNode;
+  let snapshot: Awaited<ReturnType<typeof perceptualSnapshot>> | null = null;
+  if (verify) {
+    // KTX2 output can't be decoded by sharp, so texture the diff only when
+    // both sides can be decoded; otherwise compare geometry + shading.
+    const decoder = opts.textureFormat === 'ktx2'
+      ? undefined
+      : opts.textureDecoder ?? (isNode ? sharpTextureDecoder() : undefined);
+    snapshot = await perceptualSnapshot(doc, { textureDecoder: decoder });
+  }
   const target = opts.targetTriangles ?? opts.profile.maxTriangles;
 
   await MeshoptSimplifier.ready;
@@ -112,20 +144,34 @@ export async function optimize(
   // budget (within 10%) or run out of tolerance. The last rung used is the
   // upper bound on how far the surface moved (fidelityBound).
   let fidelityBound = 0;
+  let deformingPrims = 0;
+  await MeshoptSimplifier.ready;
   for (const error of [0.001, 0.01, 0.05, 0.1]) {
     const current = countTriangles(doc);
     if (current <= target * 1.1) break;
-    await doc.transform(
-      simplify({
-        simplifier: MeshoptSimplifier,
-        ratio: target / current,
-        error,
-      }),
-    );
+    const ratio = target / current;
+    deformingPrims = 0;
+    for (const mesh of doc.getRoot().listMeshes()) {
+      for (const prim of mesh.listPrimitives()) {
+        const mode = prim.getMode();
+        if (mode !== 4 && mode !== 5 && mode !== 6) continue;
+        if (!prim.getAttribute('POSITION')) continue;
+        if (isDeforming(prim)) {
+          // Skinned / morphing: attribute-aware simplification that keeps
+          // joint boundaries and remaps every target with the same plan.
+          await simplifyDeformingPrimitive(prim, { ratio, error });
+          deformingPrims++;
+        } else {
+          simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio, error });
+        }
+        if ((prim.getIndices()?.getCount() ?? prim.getAttribute('POSITION')!.getCount()) === 0) prim.dispose();
+      }
+      if (mesh.listPrimitives().length === 0) mesh.dispose();
+    }
     fidelityBound = error;
     const after = countTriangles(doc);
-    steps.push(`simplify(error=${error}) -> ${after.toLocaleString()}`);
-    log(`simplify @ error=${error}: ${current.toLocaleString()} -> ${after.toLocaleString()}`);
+    steps.push(`simplify(error=${error}) -> ${after.toLocaleString()}${deformingPrims ? ` (${deformingPrims} skinned/morphing prim${deformingPrims > 1 ? 's' : ''} bone-aware)` : ''}`);
+    log(`simplify @ error=${error}: ${current.toLocaleString()} -> ${after.toLocaleString()}${deformingPrims ? ` (${deformingPrims} deforming prims bone-aware)` : ''}`);
   }
 
   // Fill missing normals with SMOOTH normals. gltf-transform's normals()
@@ -137,48 +183,8 @@ export async function optimize(
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) {
       if (prim.getAttribute('NORMAL')) continue;
-      const position = prim.getAttribute('POSITION');
-      const indices = prim.getIndices();
-      if (!position || prim.getMode() !== 4) continue;
-      const pos = position.getArray()!;
-      const vertexCount = position.getCount();
-      const idx = indices?.getArray() ?? null;
-      const triCount = (idx ? idx.length : vertexCount) / 3;
-
-      // Canonical index per exact position, so seams don't split shading.
-      const canonical = new Uint32Array(vertexCount);
-      const seen = new Map<string, number>();
-      for (let i = 0; i < vertexCount; i++) {
-        const key = pos[i * 3] + '|' + pos[i * 3 + 1] + '|' + pos[i * 3 + 2];
-        const hit = seen.get(key);
-        canonical[i] = hit ?? i;
-        if (hit === undefined) seen.set(key, i);
-      }
-
-      const acc = new Float32Array(vertexCount * 3);
-      for (let t = 0; t < triCount; t++) {
-        const a = idx ? idx[t * 3] : t * 3;
-        const b = idx ? idx[t * 3 + 1] : t * 3 + 1;
-        const c = idx ? idx[t * 3 + 2] : t * 3 + 2;
-        const ax = pos[a * 3], ay = pos[a * 3 + 1], az = pos[a * 3 + 2];
-        const ux = pos[b * 3] - ax, uy = pos[b * 3 + 1] - ay, uz = pos[b * 3 + 2] - az;
-        const vx = pos[c * 3] - ax, vy = pos[c * 3 + 1] - ay, vz = pos[c * 3 + 2] - az;
-        // Cross product magnitude = 2x area: free area weighting.
-        const nx = uy * vz - uz * vy;
-        const ny = uz * vx - ux * vz;
-        const nz = ux * vy - uy * vx;
-        for (const v of [a, b, c]) {
-          const ci = canonical[v];
-          acc[ci * 3] += nx; acc[ci * 3 + 1] += ny; acc[ci * 3 + 2] += nz;
-        }
-      }
-      const out = new Float32Array(vertexCount * 3);
-      for (let i = 0; i < vertexCount; i++) {
-        const ci = canonical[i];
-        const nx = acc[ci * 3], ny = acc[ci * 3 + 1], nz = acc[ci * 3 + 2];
-        const len = Math.hypot(nx, ny, nz) || 1;
-        out[i * 3] = nx / len; out[i * 3 + 1] = ny / len; out[i * 3 + 2] = nz / len;
-      }
+      const out = computeSmoothNormals(prim);
+      if (!out) continue;
       const normalAcc = doc
         .createAccessor()
         .setType('VEC3')
@@ -246,7 +252,16 @@ export async function optimize(
     steps.push('meshopt');
   }
 
-  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc), fidelityBound };
+  let perceptual: PerceptualVerdict | null = null;
+  if (snapshot) {
+    const result = await perceptualCompare(snapshot, doc, opts.keepViews);
+    const threshold = opts.profile.minSsim;
+    perceptual = { ...result, threshold, passed: result.ssimMin >= threshold };
+    steps.push(`verify ssim=${result.ssimMin}${perceptual.passed ? '' : ' FAIL'}`);
+    log(`visual fidelity: SSIM ${(result.ssimMean * 100).toFixed(1)}% mean, ${(result.ssimMin * 100).toFixed(1)}% min @ ${result.worstView} (floor ${(threshold * 100).toFixed(0)}%)`);
+  }
+
+  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc), fidelityBound, perceptual };
 }
 
 /**

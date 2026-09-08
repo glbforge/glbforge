@@ -1,10 +1,14 @@
 /**
- * Deterministic software renderer for training-pair generation: renders a
- * document from a rig of known cameras into PNGs — no GPU, no browser.
- * Z-buffered rasterizer with barycentric UV texture sampling and a fixed
- * directional light; identical input yields identical pixels.
+ * Deterministic software renderer: renders a document from a rig of known
+ * cameras — no GPU, no browser. Z-buffered rasterizer with barycentric UV
+ * texture sampling and a fixed directional light; identical input yields
+ * identical pixels. Used for training-pair generation (`glbforge dataset`),
+ * perceptual verification of optimization (SSIM before/after), and agent
+ * previews (MCP thumbnails).
  */
 import { Document, Node, Primitive, Texture } from '@gltf-transform/core';
+import { readFloat } from '../accessors.js';
+import { computeSmoothNormals } from '../normals.js';
 
 export interface RenderCamera {
   name: string;
@@ -17,6 +21,46 @@ export interface RenderedView {
   name: string;
   png: Uint8Array;
   camera: { position: [number, number, number]; target: [number, number, number]; fovDeg: number };
+}
+
+/** A view as raw pixels — what the comparators consume (no encoder involved). */
+export interface RawView {
+  name: string;
+  /** RGBA, size*size*4. */
+  rgba: Uint8Array;
+  /** 1 where geometry was drawn, 0 for background. */
+  mask: Uint8Array;
+  size: number;
+  camera: { position: [number, number, number]; target: [number, number, number]; fovDeg: number };
+}
+
+/** Bounding frame shared across renders so cameras don't move between them. */
+export interface RenderFrame {
+  center: [number, number, number];
+  radius: number;
+}
+
+export interface DecodedTexture { rgba: Uint8Array; width: number; height: number }
+
+/**
+ * Environment-specific image decoder (encoded bytes -> RGBA). Node's default
+ * uses sharp; browsers supply a canvas-based decoder. Return null for
+ * formats the environment cannot decode (e.g. KTX2).
+ */
+export type TextureDecoder = (bytes: Uint8Array, mimeType: string) => Promise<DecodedTexture | null>;
+
+export interface RenderOptions {
+  /** Output edge length in pixels. Default 512. */
+  size?: number;
+  cameras?: RenderCamera[];
+  /** Override the auto-computed framing (use `computeFrame` on a reference doc). */
+  frame?: RenderFrame;
+  /** Base-color texture decoder. Omit to render base-color factors only. */
+  textureDecoder?: TextureDecoder;
+  /** Supersampling factor: rasterize at size*n and box-filter down. Removes
+   *  the per-pixel aliasing noise of dense meshes so comparisons measure
+   *  shape and shading, not sampling luck. Default 1. */
+  supersample?: number;
 }
 
 /** 10-view rig: 8 orbit azimuths at two elevations + top + front-low. */
@@ -40,43 +84,70 @@ export function defaultRig(): RenderCamera[] {
   return cameras;
 }
 
-interface Fragment {
-  tris: Float32Array;     // world xyz * 9 per tri
-  uvs: Float32Array;      // uv * 6 per tri
-  texture: { rgba: Uint8Array; width: number; height: number } | null;
-  color: [number, number, number]; // linear base color factor
+/**
+ * 4-view verification rig: three-quarter views every 90° at a moderate
+ * elevation, so every side of the asset is scored once. Fixed forever —
+ * changing it changes every SSIM number ever reported.
+ */
+export function verifyRig(): RenderCamera[] {
+  const elevation = 0.3;
+  return [45, 135, 225, 315].map((deg) => {
+    const azimuth = (deg * Math.PI) / 180;
+    return {
+      name: `verify_${deg}`,
+      position: [
+        Math.cos(azimuth) * Math.cos(elevation),
+        Math.sin(elevation),
+        Math.sin(azimuth) * Math.cos(elevation),
+      ] as [number, number, number],
+      fovDeg: 40,
+    };
+  });
 }
 
-export async function renderViews(
-  doc: Document,
-  opts: { size?: number; cameras?: RenderCamera[] } = {},
-): Promise<RenderedView[]> {
-  const sharp = (await import('sharp')).default;
-  const size = opts.size ?? 512;
-  const cameras = opts.cameras ?? defaultRig();
+/** Single three-quarter hero view (thumbnails). */
+export function thumbnailRig(): RenderCamera[] {
+  return [{ name: 'thumbnail', position: [0.62, 0.32, 0.72], fovDeg: 35 }];
+}
 
-  // Decode each texture once.
-  const decoded = new Map<Texture, { rgba: Uint8Array; width: number; height: number } | null>();
-  const decode = async (texture: Texture | null) => {
-    if (!texture) return null;
-    if (decoded.has(texture)) return decoded.get(texture)!;
+/** Node's default decoder (sharp, lazily imported so browsers never touch it). */
+export function sharpTextureDecoder(maxSize = 512): TextureDecoder {
+  return async (bytes) => {
     try {
-      const raw = await sharp(Buffer.from(texture.getImage()!))
-        .resize(512, 512, { fit: 'inside', withoutEnlargement: true })
+      const sharp = (await import('sharp')).default;
+      const raw = await sharp(Buffer.from(bytes))
+        .resize(maxSize, maxSize, { fit: 'inside', withoutEnlargement: true })
         .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-      const entry = { rgba: new Uint8Array(raw.data), width: raw.info.width, height: raw.info.height };
-      decoded.set(texture, entry);
-      return entry;
+      return { rgba: new Uint8Array(raw.data), width: raw.info.width, height: raw.info.height };
     } catch {
-      decoded.set(texture, null);
       return null;
     }
   };
+}
 
-  // Gather per-material fragments in world space.
+interface Fragment {
+  tris: Float32Array;     // world xyz * 9 per tri
+  normals: Float32Array;  // world-space vertex normals * 9 per tri
+  uvs: Float32Array;      // uv * 6 per tri
+  texture: DecodedTexture | null;
+  color: [number, number, number]; // linear base color factor
+}
+
+async function gatherFragments(doc: Document, decoder: TextureDecoder | undefined): Promise<Fragment[]> {
+  // Decode each texture once.
+  const decoded = new Map<Texture, DecodedTexture | null>();
+  const decode = async (texture: Texture | null) => {
+    if (!texture || !decoder) return null;
+    if (decoded.has(texture)) return decoded.get(texture)!;
+    const image = texture.getImage();
+    const entry = image ? await decoder(image, texture.getMimeType()) : null;
+    decoded.set(texture, entry);
+    return entry;
+  };
+
   const fragments: Fragment[] = [];
   const scene = doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0];
-  if (!scene) return [];
+  if (!scene) return fragments;
   const visitQueue: Node[] = [...scene.listChildren()];
   while (visitQueue.length) {
     const node = visitQueue.pop()!;
@@ -88,11 +159,19 @@ export async function renderViews(
       if (prim.getMode() !== Primitive.Mode.TRIANGLES) continue;
       const pos = prim.getAttribute('POSITION');
       if (!pos) continue;
-      const p = pos.getArray()!;
-      const uv = prim.getAttribute('TEXCOORD_0')?.getArray() ?? null;
+      const p = readFloat(pos);
+      const uvAcc = prim.getAttribute('TEXCOORD_0');
+      const uv = uvAcc ? readFloat(uvAcc) : null;
       const idx = prim.getIndices()?.getArray() ?? null;
       const count = idx ? idx.length : pos.getCount();
+      // Vertex normals as a viewer would see them: the NORMAL attribute, or
+      // smooth normals computed on load when the asset ships without any.
+      const nrmAcc = prim.getAttribute('NORMAL');
+      const nrm = nrmAcc ? readFloat(nrmAcc) : computeSmoothNormals(prim);
+      // Normal matrix = inverse-transpose of the upper 3x3; uniform scale is
+      // the common case, so normalizing after the plain 3x3 is enough here.
       const tris = new Float32Array(count * 3);
+      const normals = new Float32Array(count * 3);
       const uvs = new Float32Array(count * 2);
       for (let i = 0; i < count; i++) {
         const v = idx ? idx[i] : i;
@@ -100,20 +179,30 @@ export async function renderViews(
         tris[i * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
         tris[i * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
         tris[i * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+        if (nrm) {
+          const nx = nrm[v * 3], ny = nrm[v * 3 + 1], nz = nrm[v * 3 + 2];
+          let wx = m[0] * nx + m[4] * ny + m[8] * nz;
+          let wy = m[1] * nx + m[5] * ny + m[9] * nz;
+          let wz = m[2] * nx + m[6] * ny + m[10] * nz;
+          const wl = Math.hypot(wx, wy, wz) || 1;
+          normals[i * 3] = wx / wl; normals[i * 3 + 1] = wy / wl; normals[i * 3 + 2] = wz / wl;
+        }
         if (uv) { uvs[i * 2] = uv[v * 2]; uvs[i * 2 + 1] = uv[v * 2 + 1]; }
       }
       const material = prim.getMaterial();
       const factor = material?.getBaseColorFactor() ?? [0.8, 0.8, 0.8, 1];
       fragments.push({
-        tris, uvs,
+        tris, normals, uvs,
         texture: await decode(material?.getBaseColorTexture() ?? null),
         color: [factor[0], factor[1], factor[2]],
       });
     }
   }
+  return fragments;
+}
 
-  // Framing: bounding sphere of everything.
-  let minV = [Infinity, Infinity, Infinity], maxV = [-Infinity, -Infinity, -Infinity];
+function frameOf(fragments: Fragment[]): RenderFrame {
+  const minV = [Infinity, Infinity, Infinity], maxV = [-Infinity, -Infinity, -Infinity];
   for (const f of fragments) {
     for (let i = 0; i < f.tris.length; i += 3) {
       for (let a = 0; a < 3; a++) {
@@ -122,12 +211,26 @@ export async function renderViews(
       }
     }
   }
-  const center: [number, number, number] = [
-    (minV[0] + maxV[0]) / 2, (minV[1] + maxV[1]) / 2, (minV[2] + maxV[2]) / 2,
-  ];
-  const radius = Math.max(maxV[0] - minV[0], maxV[1] - minV[1], maxV[2] - minV[2]) / 2 || 1;
+  if (!Number.isFinite(minV[0])) return { center: [0, 0, 0], radius: 1 };
+  return {
+    center: [(minV[0] + maxV[0]) / 2, (minV[1] + maxV[1]) / 2, (minV[2] + maxV[2]) / 2],
+    radius: Math.max(maxV[0] - minV[0], maxV[1] - minV[1], maxV[2] - minV[2]) / 2 || 1,
+  };
+}
 
-  const views: RenderedView[] = [];
+/** World-space framing of a document's default scene (no textures decoded). */
+export async function computeFrame(doc: Document): Promise<RenderFrame> {
+  return frameOf(await gatherFragments(doc, undefined));
+}
+
+/** Render to raw RGBA views. Needs no image codec unless a decoder is passed. */
+export async function renderRaw(doc: Document, opts: RenderOptions = {}): Promise<RawView[]> {
+  const size = opts.size ?? 512;
+  const cameras = opts.cameras ?? defaultRig();
+  const fragments = await gatherFragments(doc, opts.textureDecoder);
+  const { center, radius } = opts.frame ?? frameOf(fragments);
+
+  const views: RawView[] = [];
   for (const cam of cameras) {
     const distance = radius / Math.tan((cam.fovDeg * Math.PI) / 360) * 1.35;
     const eye: [number, number, number] = [
@@ -135,32 +238,74 @@ export async function renderViews(
       center[1] + cam.position[1] * distance,
       center[2] + cam.position[2] * distance,
     ];
-    const png = await rasterize(fragments, eye, center, cam.fovDeg, size, sharp as unknown as (input: Buffer, opts: object) => { png(): { toBuffer(): Promise<Buffer> } });
-    views.push({ name: cam.name, png, camera: { position: eye, target: center, fovDeg: cam.fovDeg } });
+    const ss = Math.max(1, Math.floor(opts.supersample ?? 1));
+    const hi = rasterize(fragments, eye, center, cam.fovDeg, size * ss);
+    const { rgba, mask } = ss === 1 ? hi : downsample(hi.rgba, hi.mask, size, ss);
+    views.push({ name: cam.name, rgba, mask, size, camera: { position: eye, target: center, fovDeg: cam.fovDeg } });
   }
   return views;
 }
 
-async function rasterize(
+/** Render to PNGs (Node: textures decoded and pixels encoded with sharp). */
+export async function renderViews(
+  doc: Document,
+  opts: { size?: number; cameras?: RenderCamera[]; frame?: RenderFrame } = {},
+): Promise<RenderedView[]> {
+  const sharp = (await import('sharp')).default;
+  const raw = await renderRaw(doc, { ...opts, textureDecoder: sharpTextureDecoder() });
+  const views: RenderedView[] = [];
+  for (const v of raw) {
+    const png = new Uint8Array(
+      await sharp(Buffer.from(v.rgba), { raw: { width: v.size, height: v.size, channels: 4 } })
+        .png().toBuffer(),
+    );
+    views.push({ name: v.name, png, camera: v.camera });
+  }
+  return views;
+}
+
+/** Box-filter an RGBA image by an integer factor; mask = any covered sample. */
+function downsample(
+  rgba: Uint8Array, mask: Uint8Array, size: number, ss: number,
+): { rgba: Uint8Array; mask: Uint8Array } {
+  const big = size * ss;
+  const out = new Uint8Array(size * size * 4);
+  const outMask = new Uint8Array(size * size);
+  const n = ss * ss;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let r = 0, g = 0, b = 0, m = 0;
+      for (let dy = 0; dy < ss; dy++) {
+        for (let dx = 0; dx < ss; dx++) {
+          const p = (y * ss + dy) * big + (x * ss + dx);
+          r += rgba[p * 4]; g += rgba[p * 4 + 1]; b += rgba[p * 4 + 2]; m |= mask[p];
+        }
+      }
+      const o = y * size + x;
+      out[o * 4] = Math.round(r / n); out[o * 4 + 1] = Math.round(g / n); out[o * 4 + 2] = Math.round(b / n); out[o * 4 + 3] = 255;
+      outMask[o] = m;
+    }
+  }
+  return { rgba: out, mask: outMask };
+}
+
+function rasterize(
   fragments: Fragment[],
   eye: [number, number, number],
   target: [number, number, number],
   fovDeg: number,
   size: number,
-  sharp: (input: Buffer, opts: object) => { png(): { toBuffer(): Promise<Buffer> } },
-): Promise<Uint8Array> {
-  // Camera basis.
+): { rgba: Uint8Array; mask: Uint8Array } {
+  // Camera basis: forward, right = forward × up(0,1,0), up = right × forward.
   let fx = target[0] - eye[0], fy = target[1] - eye[1], fz = target[2] - eye[2];
   const fl = Math.hypot(fx, fy, fz); fx /= fl; fy /= fl; fz /= fl;
-  let rx = fz * 0 - fy * 1 !== 0 || true ? fy * 0 - fz * 1 : 0; // right = f × up(0,1,0)
-  let ry = fz * 0 - fx * 0;
-  let rz = fx * 1 - fy * 0;
-  rx = fy * 0 - fz * 1; ry = fz * 0 - fx * 0; rz = fx * 1 - fy * 0;
+  let rx = -fz, ry = 0, rz = fx;
   const rl = Math.hypot(rx, ry, rz) || 1; rx /= rl; ry /= rl; rz /= rl;
   const ux = ry * fz - rz * fy, uy = rz * fx - rx * fz, uz = rx * fy - ry * fx;
 
   const focal = 1 / Math.tan((fovDeg * Math.PI) / 360);
   const color = new Uint8Array(size * size * 4);
+  const mask = new Uint8Array(size * size);
   const depth = new Float32Array(size * size).fill(Infinity);
   // Neutral studio background.
   for (let i = 0; i < size * size; i++) {
@@ -189,14 +334,15 @@ async function rasterize(
       const C = project(t[i + 6], t[i + 7], t[i + 8]);
       if (A[2] <= 0 || B[2] <= 0 || C[2] <= 0) continue;
 
-      // Face normal for shading (world space).
+      // Face normal as the fallback when the mesh has no usable normals.
       const e1 = [t[i + 3] - t[i], t[i + 4] - t[i + 1], t[i + 5] - t[i + 2]];
       const e2 = [t[i + 6] - t[i], t[i + 7] - t[i + 1], t[i + 8] - t[i + 2]];
-      let nx = e1[1] * e2[2] - e1[2] * e2[1];
-      let ny = e1[2] * e2[0] - e1[0] * e2[2];
-      let nz = e1[0] * e2[1] - e1[1] * e2[0];
-      const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
-      const lambert = 0.35 + 0.65 * Math.abs(nx * light[0] + ny * light[1] + nz * light[2]);
+      let fnx = e1[1] * e2[2] - e1[2] * e2[1];
+      let fny = e1[2] * e2[0] - e1[0] * e2[2];
+      let fnz = e1[0] * e2[1] - e1[1] * e2[0];
+      const fnl = Math.hypot(fnx, fny, fnz) || 1; fnx /= fnl; fny /= fnl; fnz /= fnl;
+      const n = frag.normals;
+      const hasNormals = n[i] !== 0 || n[i + 1] !== 0 || n[i + 2] !== 0;
 
       const minX = Math.max(0, Math.floor(Math.min(A[0], B[0], C[0])));
       const maxX = Math.min(size - 1, Math.ceil(Math.max(A[0], B[0], C[0])));
@@ -216,6 +362,17 @@ async function rasterize(
           const p = py * size + px;
           if (z >= depth[p]) continue;
           depth[p] = z;
+          mask[p] = 1;
+
+          // Smooth (Gouraud-style) shading from interpolated vertex normals.
+          let nx = fnx, ny = fny, nz = fnz;
+          if (hasNormals) {
+            nx = w0 * n[i] + w1 * n[i + 3] + w2 * n[i + 6];
+            ny = w0 * n[i + 1] + w1 * n[i + 4] + w2 * n[i + 7];
+            nz = w0 * n[i + 2] + w1 * n[i + 5] + w2 * n[i + 8];
+            const nl = Math.hypot(nx, ny, nz) || 1; nx /= nl; ny /= nl; nz /= nl;
+          }
+          const lambert = 0.35 + 0.65 * Math.abs(nx * light[0] + ny * light[1] + nz * light[2]);
 
           let r = frag.color[0], g = frag.color[1], b = frag.color[2];
           if (frag.texture && uv.length) {
@@ -235,8 +392,5 @@ async function rasterize(
     }
   }
 
-  return new Uint8Array(
-    await sharp(Buffer.from(color), { raw: { width: size, height: size, channels: 4 } })
-      .png().toBuffer(),
-  );
+  return { rgba: color, mask };
 }

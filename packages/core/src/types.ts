@@ -10,9 +10,22 @@ export interface Finding {
   data?: Record<string, unknown>;
 }
 
-/** A named performance budget an asset is checked against. */
+/** Why each cap is what it is (one paragraph per cap). */
+export type ProfileRationale = Record<
+  'maxTriangles' | 'maxDrawCalls' | 'maxTextureSize' | 'maxTextureBytes' |
+  'maxTextureVramBytes' | 'maxFileBytes' | 'maxMaterials' | 'minSsim',
+  string
+>;
+
+/**
+ * A named, versioned performance budget an asset is checked against.
+ * Budgets are contracts: a cap never changes in place — a change is a new
+ * version (`name@N`), so CI pinned to a version keeps meaning the same thing.
+ */
 export interface Profile {
   name: string;
+  /** Bumped whenever any cap changes; pin with "name@N". */
+  version: number;
   description: string;
   maxTriangles: number;
   maxDrawCalls: number;
@@ -24,6 +37,11 @@ export interface Profile {
   maxTextureVramBytes: number;
   maxFileBytes: number;
   maxMaterials: number;
+  /** Minimum SSIM (0..1) between fixed-camera renders before and after
+   *  optimization. Below this, the optimization is visibly lossy and fails. */
+  minSsim: number;
+  /** Methodology summary per cap; the full text lives at glbforge.dev/budgets. */
+  rationale: ProfileRationale;
 }
 
 export interface TopologyStats {

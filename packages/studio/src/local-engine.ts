@@ -8,12 +8,15 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer';
 import {
   analyze,
+  applyPerceptualVerdict,
   extrudeFromRgba,
   getProfile,
   optimize,
   PROFILES,
   toStl,
   type AnalysisResult,
+  type PerceptualVerdict,
+  type TextureDecoder,
   type TextureEncoder,
 } from '@glbforge/core';
 import { registerLocalUrls, type AssetDetail, type AssetSummary } from './api';
@@ -63,6 +66,7 @@ const CONSTRAINED =
 
 async function ingest(
   name: string, bytes: Uint8Array, profile: string, parentId?: string,
+  perceptual: PerceptualVerdict | null = null,
 ): Promise<LocalAsset> {
   if (CONSTRAINED && bytes.byteLength > 120 * 1024 * 1024) {
     throw new Error('This file is too large to process on a mobile device — use a desktop or `npx glbforge ui`.');
@@ -75,6 +79,7 @@ async function ingest(
   const report = analyze(doc, {
     profile: getProfile(profile), filePath: name, fileBytes: bytes.byteLength, topology,
   });
+  if (perceptual) applyPerceptualVerdict(report, perceptual);
   const asset: LocalAsset = {
     id: String(nextId++), name, bytes, report, parentId,
     blobUrl: URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'model/gltf-binary' })),
@@ -134,6 +139,32 @@ async function decodeImage(bytes: ArrayBuffer, name: string): Promise<{
     URL.revokeObjectURL(url);
   }
 }
+
+/** Canvas-based texture decoder for the verification renders (≤512px). */
+const canvasDecoder: TextureDecoder = async (bytes, mimeType) => {
+  if (mimeType === 'image/ktx2') return null;
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mimeType }));
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('texture decode failed'));
+      image.src = url;
+    });
+    const scale = Math.min(1, 512 / Math.max(image.naturalWidth, image.naturalHeight, 1));
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(image, 0, 0, width, height);
+    return { rgba: new Uint8Array(ctx.getImageData(0, 0, width, height).data.buffer), width, height };
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+};
 
 /** Canvas-based texture recompressor (WebP where supported, else JPEG/PNG). */
 const canvasEncoder: TextureEncoder = async ({ bytes, mimeType, slots }, { maxSize }) => {
@@ -205,9 +236,16 @@ export const localEngine = {
     if (!asset) throw new Error('no such asset');
     const io = await createIO();
     const doc = await io.readBinary(asset.bytes);
-    await optimize(doc, { profile: getProfile(opts.profile), textureEncoder: canvasEncoder });
+    // Perceptual verification renders the 2M-tri input four times in JS;
+    // skip it for big files on constrained devices (the report notes nothing
+    // then — no verdict is better than a stalled tab).
+    const verify = CONSTRAINED ? asset.bytes.byteLength < 8 * 1024 * 1024 : true;
+    const result = await optimize(doc, {
+      profile: getProfile(opts.profile), textureEncoder: canvasEncoder,
+      verify, textureDecoder: canvasDecoder,
+    });
     const out = await io.writeBinary(doc);
-    return toDetail(await ingest(asset.name.replace(/\.glb$/i, '') + '.web.glb', out, opts.profile, asset.id));
+    return toDetail(await ingest(asset.name.replace(/\.glb$/i, '') + '.web.glb', out, opts.profile, asset.id, result.perceptual));
   },
 
   reanalyze: async (id: string, profile: string) => {

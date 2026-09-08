@@ -6,6 +6,7 @@ import express from 'express';
 import { Logger } from '@gltf-transform/core';
 import {
   analyze,
+  applyPerceptualVerdict,
   createNodeIO,
   extrudeImage,
   getProfile,
@@ -13,6 +14,7 @@ import {
   PROFILES,
   toStl,
   type AnalysisResult,
+  type PerceptualVerdict,
 } from '@glbforge/core';
 import { FAL_MODELS, FalClient, MeshyClient, type TaskKind } from '@glbforge/meshy';
 
@@ -35,6 +37,7 @@ async function ingest(
   profileName: string,
   parentId?: string,
   steps?: string[],
+  perceptual: PerceptualVerdict | null = null,
 ): Promise<Asset> {
   const io = await createNodeIO();
   const doc = await io.readBinary(bytes);
@@ -43,6 +46,7 @@ async function ingest(
     filePath: name,
     fileBytes: bytes.byteLength,
   });
+  if (perceptual) applyPerceptualVerdict(report, perceptual);
   const asset: Asset = { id: String(nextId++), name, bytes, report, parentId, steps };
   assets.set(asset.id, asset);
   return asset;
@@ -130,7 +134,7 @@ export async function startUiServer(opts: {
       const outBytes = await io.writeBinary(doc);
       const variant = await ingest(
         asset.name.replace(/\.glb$/i, '') + '.web.glb',
-        outBytes, profile, asset.id, result.steps,
+        outBytes, profile, asset.id, result.steps, result.perceptual,
       );
       res.json({ ...summary(variant), report: variant.report });
     } catch (err) {

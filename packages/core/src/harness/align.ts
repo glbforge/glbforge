@@ -10,6 +10,7 @@
  * - fscore@τ:   harmonic mean of precision/recall at τ = 1% and 2% of extent
  */
 import { Document, Node, Primitive } from '@gltf-transform/core';
+import { readFloat } from '../accessors.js';
 
 export interface AlignmentScore {
   /** Coarse occupancy IoU, 0..1. */
@@ -47,7 +48,7 @@ export function triangleSoup(doc: Document): Float32Array {
         if (prim.getMode() !== Primitive.Mode.TRIANGLES) continue;
         const pos = prim.getAttribute('POSITION');
         if (!pos) continue;
-        const p = pos.getArray()!;
+        const p = readFloat(pos);
         const idx = prim.getIndices()?.getArray() ?? null;
         const count = idx ? idx.length : pos.getCount();
         for (let i = 0; i < count; i++) {

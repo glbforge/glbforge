@@ -1,3 +1,4 @@
+import type { PerceptualVerdict } from '@glbforge/core';
 import pc from 'picocolors';
 import type { AnalysisResult } from '@glbforge/core';
 
@@ -22,7 +23,7 @@ export function printReport(r: AnalysisResult): void {
   const scoreColor = r.score >= 80 ? pc.green : r.score >= 50 ? pc.yellow : pc.red;
   console.log(
     `  ${pc.bold('Score')} ${scoreColor(pc.bold(String(r.score)))}${pc.dim('/100')}` +
-    `   ${pc.bold('Profile')} ${r.profile.name}` +
+    `   ${pc.bold('Profile')} ${r.profile.name}@${r.profile.version}` +
     `   ${r.passed ? pc.green('✓ within budget') : pc.red('✗ over budget')}`,
   );
   console.log(line);
@@ -79,6 +80,8 @@ export function printDiff(
   before: AnalysisResult,
   after: AnalysisResult,
   steps: string[],
+  perceptual: PerceptualVerdict | null = null,
+  fidelityBound = 0,
 ): void {
   const line = pc.dim('─'.repeat(64));
   console.log();
@@ -91,9 +94,23 @@ export function printDiff(
   row('file size', mb(before.file.bytes), mb(after.file.bytes));
   row('score', `${before.score}/100`, `${after.score}/100`);
   console.log(line);
+  const pct = (n: number) => (n * 100).toFixed(1) + '%';
+  if (perceptual) {
+    const verdict = perceptual.passed
+      ? pc.green(`✓ SSIM ${pct(perceptual.ssimMean)}`)
+      : pc.red(`✗ SSIM ${pct(perceptual.ssimMean)}`);
+    console.log(
+      `  visual fidelity ${verdict}` +
+      pc.dim(`  weakest view ${pct(perceptual.ssimMin)} @ ${perceptual.worstView} · floor ${pct(perceptual.threshold)}` +
+        (perceptual.textured ? '' : ' · untextured') +
+        (fidelityBound ? ` · geometric deviation ≤ ${pct(fidelityBound)}` : '')),
+    );
+  } else if (fidelityBound) {
+    console.log(pc.dim(`  geometric deviation ≤ ${pct(fidelityBound)} of extent (perceptual check skipped)`));
+  }
   const savings = 1 - after.file.bytes / Math.max(1, before.file.bytes);
   console.log(
-    `  ${after.passed ? pc.green('✓ within ' + after.profile.name + ' budget') : pc.red('✗ still over budget')}` +
+    `  ${after.passed ? pc.green(`✓ within ${after.profile.name}@${after.profile.version} budget`) : pc.red('✗ still over budget')}` +
     pc.dim(`   (${(savings * 100).toFixed(1)}% smaller)`),
   );
   if (!after.passed) {

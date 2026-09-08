@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { Command } from 'commander';
 import { Logger, NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
@@ -16,10 +17,11 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, extrudeImage, getProfile, optimize, PROFILES, renderViews, stripMaterials, toStl } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, extrudeImage, getProfile, optimize, perceptualDiff, PROFILES, renderViews, sharpTextureDecoder, stripMaterials, toStl, toUsdz } from '@glbforge/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
+import { registerInitCommand } from './init.js';
 import { loadDotEnv } from './env.js';
 
 loadDotEnv();
@@ -35,7 +37,7 @@ async function optimizeFile(
   profileName: string,
   extra: {
     target?: number; textures?: boolean; compress?: boolean; lods?: string;
-    json?: boolean; textureFormat?: 'webp' | 'ktx2';
+    json?: boolean; textureFormat?: 'webp' | 'ktx2'; verify?: boolean;
   } = {},
 ): Promise<boolean> {
   const profile = getProfile(profileName);
@@ -52,6 +54,7 @@ async function optimizeFile(
     textures: extra.textures,
     compress: extra.compress,
     textureFormat: extra.textureFormat,
+    verify: extra.verify,
     log: extra.json ? undefined : (msg) => console.log('  ' + msg),
   });
 
@@ -62,16 +65,22 @@ async function optimizeFile(
   const after = analyze(await io.readBinary(outBytes), {
     profile, topology: false, filePath: output, fileBytes: outBytes.byteLength,
   });
+  // The measured visual verdict is part of the report card: a failing SSIM
+  // fails the budget like any perf/* rule.
+  if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
   if (extra.json) {
     console.log(JSON.stringify({
       outPath: output,
+      sha256: createHash('sha256').update(outBytes).digest('hex'),
       steps: summary.steps,
+      fidelityBound: summary.fidelityBound,
+      perceptual: summary.perceptual,
       before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
       after,
       savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
     }, null, 2));
   } else {
-    printDiff(before, after, summary.steps);
+    printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
   }
 
   // Optional LOD chain: simplify further from the already-optimized doc.
@@ -85,6 +94,7 @@ async function optimizeFile(
       await optimize(lodDoc, {
         profile, targetTriangles: targets[i],
         textures: false, compress: extra.compress,
+        verify: false, // LODs are intentionally lossy; the primary carries the verdict
       });
       const lodPath = output.replace(/\.glb$/i, `.lod${i + 1}.glb`);
       const lodBytes = await io.writeBinary(lodDoc);
@@ -104,7 +114,7 @@ program
   .command('analyze')
   .description('Analyze a GLB/glTF against a web performance budget.')
   .argument('<file>', 'path to .glb or .gltf')
-  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
   .option('--json', 'emit JSON instead of the report card')
   .option('--no-topology', 'skip the topology pass (faster on huge meshes)')
   .action(async (file: string, opts: { profile: string; json?: boolean; topology: boolean }) => {
@@ -134,23 +144,24 @@ program
   .command('optimize')
   .description('Optimize a GLB to fit a web performance budget, then re-analyze.')
   .argument('<file>', 'path to .glb')
-  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
   .option('-o, --out <file>', 'output path (default: <name>.web.glb)')
   .option('--target <triangles>', 'override triangle target', (v) => parseInt(v, 10))
   .option('--lods <targets>', 'extra LOD files, comma-separated triangle counts (e.g. 50000,15000)')
   .option('--no-textures', 'skip texture resize/re-encode')
   .option('--no-compress', 'skip meshopt compression')
   .option('--ktx2', 'encode textures as KTX2/BasisU (GPU-resident, ~8x less video memory; needs basisu or toktx installed)')
+  .option('--no-verify', 'skip perceptual verification (SSIM of fixed-camera renders before vs after)')
   .option('--json', 'emit JSON instead of the diff table')
   .action(async (file: string, opts: {
     profile: string; out?: string; target?: number; lods?: string;
-    textures: boolean; compress: boolean; json?: boolean; ktx2?: boolean;
+    textures: boolean; compress: boolean; json?: boolean; ktx2?: boolean; verify: boolean;
   }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.web.glb';
     const passed = await optimizeFile(file, outPath, opts.profile, {
       target: opts.target, textures: opts.textures,
       compress: opts.compress, lods: opts.lods, json: opts.json,
-      textureFormat: opts.ktx2 ? 'ktx2' : 'webp',
+      textureFormat: opts.ktx2 ? 'ktx2' : 'webp', verify: opts.verify,
     });
     process.exitCode = passed ? 0 : 1;
   });
@@ -219,20 +230,21 @@ program
   .command('ship')
   .description('Anything → web-ready, one command: GLBs are optimized to budget; flat artwork is forged; photos are generated (FAL_KEY/MESHY_API_KEY) — then analyzed, optimized, and budget-gated.')
   .argument('<input>', 'a .glb, or an image (png/jpg/webp/svg)')
-  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
   .option('-o, --out <file>', 'output path (default: <input>.web.glb)')
   .option('--prefer <route>', 'force image routing: forge | gen')
   .option('--model <name>', 'generator for photos: hunyuan | trellis | triposr | meshy', 'hunyuan')
   .option('--ktx2', 'KTX2 textures (GPU-resident)')
   .option('--lods <targets>', 'LOD chain triangle targets, e.g. 40000,10000')
+  .option('--no-verify', 'skip perceptual verification of the optimization')
   .action(async (input: string, opts: {
     profile: string; out?: string; prefer?: 'forge' | 'gen';
-    model: string; ktx2?: boolean; lods?: string;
+    model: string; ktx2?: boolean; lods?: string; verify: boolean;
   }) => {
     const finish = async (glbPath: string) => {
       const outPath = opts.out ?? glbPath.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
       const passed = await optimizeFile(glbPath, outPath, opts.profile, {
-        textureFormat: opts.ktx2 ? 'ktx2' : 'webp', lods: opts.lods,
+        textureFormat: opts.ktx2 ? 'ktx2' : 'webp', lods: opts.lods, verify: opts.verify,
       });
       process.exitCode = passed ? 0 : 1;
     };
@@ -374,7 +386,7 @@ program
   .command('watch')
   .description('Watch a directory: new or changed GLBs are analyzed and optimized automatically.')
   .argument('<dir>', 'directory to watch')
-  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
   .option('--ktx2', 'encode textures as KTX2 in the outputs')
   .action(async (dir: string, opts: { profile: string; ktx2?: boolean }) => {
     const { watch } = await import('node:fs');
@@ -408,6 +420,61 @@ program
     });
     // Keep the process alive.
     await new Promise(() => {});
+  });
+
+program
+  .command('audit')
+  .description('Analyze every GLB in a directory against a budget (skips GLBForge outputs *.web.glb). Exits non-zero when any asset fails — the `glb:check` script.')
+  .argument('<dir>', 'directory containing GLBs')
+  .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
+  .option('-r, --recursive', 'descend into subdirectories (max depth 4)')
+  .option('--limit <n>', 'max files to analyze', (v) => parseInt(v, 10), 50)
+  .option('--json', 'emit JSON')
+  .action(async (dir: string, opts: { profile: string; recursive?: boolean; limit: number; json?: boolean }) => {
+    const audit = await auditDirectory(dir, { profile: getProfile(opts.profile), recursive: opts.recursive, limit: opts.limit });
+    if (opts.json) {
+      console.log(JSON.stringify(audit, null, 2));
+    } else {
+      for (const r of audit.results) {
+        if (r.error) { console.log(`  ✗ ${r.path}  error: ${r.error}`); continue; }
+        const mark = r.passed ? '✓' : '✗';
+        console.log(`  ${mark} ${r.path}  ${String(r.score).padStart(3)}/100  ${r.triangles!.toLocaleString()} tris  ${(r.bytes! / 1048576).toFixed(1)}MB${r.passed ? '' : '  ' + r.topFinding}`);
+      }
+      console.log(`  ${audit.scanned} asset(s) audited against ${audit.profile}: ${audit.failing.length} failing${audit.truncated ? ` (${audit.truncated} more not scanned — raise --limit)` : ''}`);
+    }
+    process.exitCode = audit.failing.length === 0 && !audit.results.some((r) => r.error) ? 0 : 1;
+  });
+
+program
+  .command('verify')
+  .description('Measure visual fidelity between two GLBs: SSIM over fixed-camera renders, gated on the profile floor. E.g. verify model.web.glb model.glb')
+  .argument('<candidate>', 'candidate .glb (e.g. the optimized file)')
+  .argument('<reference>', 'reference .glb (e.g. the original)')
+  .option('-p, --profile <name>', `budget profile supplying the SSIM floor: ${Object.keys(PROFILES).join(' | ')}`, 'mobile-hero')
+  .option('--min-ssim <n>', 'override the SSIM floor (0..1)', parseFloat)
+  .option('--size <px>', 'render size per view', (v) => parseInt(v, 10), 256)
+  .option('--no-textures', 'compare geometry and shading only')
+  .option('--json', 'emit JSON')
+  .action(async (candidate: string, reference: string, opts: {
+    profile: string; minSsim?: number; size: number; textures: boolean; json?: boolean;
+  }) => {
+    const io = await createIO();
+    const candDoc = await io.readBinary(new Uint8Array(await readFile(candidate)));
+    const refDoc = await io.readBinary(new Uint8Array(await readFile(reference)));
+    const threshold = opts.minSsim ?? getProfile(opts.profile).minSsim;
+    const result = await perceptualDiff(refDoc, candDoc, {
+      size: opts.size, textureDecoder: opts.textures ? sharpTextureDecoder() : undefined,
+    });
+    const passed = result.ssimMin >= threshold;
+    if (opts.json) {
+      console.log(JSON.stringify({ ...result, threshold, passed }, null, 2));
+    } else {
+      const pct = (n: number) => (n * 100).toFixed(1) + '%';
+      for (const v of result.views) console.log(`  ${v.name.padEnd(12)} SSIM ${pct(v.ssim)}   (coverage ${pct(v.coverage)})`);
+      console.log(`  mean ${pct(result.ssimMean)}   min ${pct(result.ssimMin)} @ ${result.worstView}   floor ${pct(threshold)}${result.textured ? '' : '   (untextured)'}`);
+      console.log(passed ? '  ✓ no visible loss by measurement' : '  ✗ visibly lossy');
+    }
+    process.exitCode = passed ? 0 : 1;
   });
 
 program
@@ -500,6 +567,29 @@ program
   });
 
 program
+  .command('usdz')
+  .description('Export a GLB as USDZ for iOS AR Quick Look (UsdPreviewSurface materials, PNG/JPEG textures, 64-byte-aligned store-only zip). Static: skins/clips are baked to the bind pose.')
+  .argument('<file>', 'path to .glb (an optimized .web.glb works — WebP is transcoded)')
+  .option('-o, --out <file>', 'output path (default: <name>.usdz)')
+  .option('--jpeg', 'encode opaque color textures as JPEG (smaller) instead of PNG')
+  .option('--json', 'emit JSON')
+  .action(async (file: string, opts: { out?: string; jpeg?: boolean; json?: boolean }) => {
+    const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.usdz';
+    const io = await createIO();
+    const doc = await io.readBinary(new Uint8Array(await readFile(file)));
+    doc.setLogger(new Logger(Logger.Verbosity.ERROR));
+    const result = await toUsdz(doc, { colorFormat: opts.jpeg ? 'jpeg' : 'png' });
+    await writeFile(outPath, result.usdz);
+    if (opts.json) {
+      console.log(JSON.stringify({ outPath, bytes: result.usdz.byteLength, ...result, usdz: undefined }, null, 2));
+    } else {
+      console.log(`  ${outPath} (${(result.usdz.byteLength / 1048576).toFixed(1)}MB)  ${result.meshes} mesh(es), ${result.triangles.toLocaleString()} tris, ${result.materials} material(s), ${result.textures} texture(s)`);
+      for (const w of result.warnings) console.log(`  ! ${w}`);
+      console.log('  iOS: AirDrop or serve the .usdz; Safari opens it in AR Quick Look. <model-viewer ios-src="…">');
+    }
+  });
+
+program
   .command('scaffold')
   .description('Emit a minimal Vite + React Three Fiber viewer for a GLB.')
   .argument('<file>', 'path to (optimized) .glb')
@@ -510,6 +600,7 @@ program
     console.log(`  cd ${opts.out} && pnpm install && pnpm dev`);
   });
 
+registerInitCommand(program);
 registerMeshyCommands(program, (input, output, profileName) =>
   optimizeFile(input, output, profileName));
 

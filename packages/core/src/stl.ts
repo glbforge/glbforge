@@ -1,4 +1,5 @@
 import { Document, Node, Primitive } from '@gltf-transform/core';
+import { readFloat } from './accessors.js';
 
 export interface StlOptions {
   /** Scale so the largest dimension prints at this many millimeters. Default 80. */
@@ -43,7 +44,7 @@ export function toStl(doc: Document, opts: StlOptions = {}): StlResult {
         if (prim.getMode() !== Primitive.Mode.TRIANGLES) continue;
         const position = prim.getAttribute('POSITION');
         if (!position) continue;
-        const pos = position.getArray()!;
+        const pos = readFloat(position);
         const indices = prim.getIndices()?.getArray() ?? null;
         const count = indices ? indices.length : position.getCount();
         for (let i = 0; i < count; i++) {
