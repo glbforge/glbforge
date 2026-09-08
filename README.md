@@ -41,7 +41,12 @@ node packages/cli/dist/index.js ui model.glb   # GLBForge Studio on localhost:51
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,
 `--json`, `--no-topology`. Exits non-zero when the asset is over budget — wire
 it into CI like a linter. `optimize` flags: `--target <tris>`, `--lods a,b`,
-`--no-textures`, `--no-compress`, `--no-verify`.
+`--no-textures`, `--no-compress`, `--no-verify`. LOD files (`--lods 40000,10000`)
+are geometry-only: materials stripped, positions welded, meshopt-simplified,
+and when non-manifold topology stalls the simplifier (stacked forge layers,
+doubled shells) they fall back to grid vertex clustering so the target is
+always reached — the CLI and the Action report say `grid-clustered` when that
+happened.
 
 Measured on the included Meshy 7 fixture (4K textures, 1.99M tris):
 **89.4MB → 5.5MB (93.8% smaller), score 25 → 100, ~7s.** Pipeline:

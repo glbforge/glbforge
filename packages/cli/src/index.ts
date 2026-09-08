@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, extrudeImage, getProfile, optimize, perceptualDiff, PROFILES, renderViews, sharpTextureDecoder, stripMaterials, toStl, toUsdz } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, extrudeImage, getProfile, optimize, perceptualDiff, PROFILES, renderViews, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
 import { printDiff, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -71,27 +71,19 @@ async function optimizeFile(
   if (!extra.json) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
 
   // Optional LOD chain: simplify further from the already-optimized doc.
-  const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number }> = [];
+  const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number; method: string }> = [];
   if (extra.lods) {
     const targets = extra.lods.split(',').map((t) => parseInt(t.trim(), 10));
     for (let i = 0; i < targets.length; i++) {
       const lodDoc = await io.readBinary(outBytes);
       lodDoc.setLogger(new Logger(Logger.Verbosity.ERROR));
-      // LOD files are geometry-only; the viewer reuses the primary's materials.
-      stripMaterials(lodDoc);
-      await optimize(lodDoc, {
-        profile, targetTriangles: targets[i],
-        textures: false, compress: extra.compress,
-        verify: false, // LODs are intentionally lossy; the primary carries the verdict
-      });
+      const lod = await buildLod(lodDoc, targets[i], { profile, compress: extra.compress });
       const lodPath = output.replace(/\.glb$/i, `.lod${i + 1}.glb`);
       const lodBytes = await io.writeBinary(lodDoc);
       await writeFile(lodPath, lodBytes);
-      const lodTris = analyze(await io.readBinary(lodBytes), { profile, topology: false }).geometry.triangles;
-      lodFiles.push({ path: lodPath, bytes: lodBytes.byteLength, triangles: lodTris, target: targets[i] });
+      lodFiles.push({ path: lodPath, bytes: lodBytes.byteLength, triangles: lod.triangles, target: targets[i], method: lod.method });
       if (!extra.json) {
-        const short = lodTris > targets[i] * 1.1 ? '  (target not reachable within the error ladder — seam-heavy mesh)' : '';
-        console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, ${lodTris.toLocaleString()} tris, target ${targets[i].toLocaleString()})${short}`);
+        console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, ${lod.triangles.toLocaleString()} tris, target ${targets[i].toLocaleString()}${lod.method === 'cluster' ? ', grid-clustered' : ''})`);
       }
     }
   }

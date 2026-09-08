@@ -5,6 +5,7 @@ import {
   join,
   palette,
   prune,
+  compactPrimitive,
   simplifyPrimitive,
   textureCompress,
   meshopt,
@@ -14,7 +15,8 @@ import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import type { Profile } from './types.js';
 import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from './harness/perceptual.js';
 import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
-import { computeSmoothNormals } from './normals.js';
+import { computeSmoothNormals, canonicalByPosition } from './normals.js';
+import { readFloat } from './accessors.js';
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
@@ -274,4 +276,42 @@ export function stripMaterials(doc: Document): void {
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) prim.setMaterial(null);
   }
+}
+
+/**
+ * Prepare a document for a geometry-only LOD: strip materials, then weld by
+ * POSITION ONLY so seam vertices (same point, different UV/normal) merge.
+ * meshopt locks any position with 3+ attribute variants — every rim of a
+ * layered forge mesh — which is why LOD targets stall far above the
+ * request. At LOD distances the UV discontinuity this creates is
+ * invisible; normals are dropped so optimize() regenerates them smooth on
+ * the simplified surface. Deterministic (first vertex per position wins).
+ */
+export function prepareLod(doc: Document): { mergedVertices: number } {
+  stripMaterials(doc);
+  let merged = 0;
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) {
+      if (prim.getMode() !== 4) continue;
+      const position = prim.getAttribute('POSITION');
+      if (!position) continue;
+      for (const sem of ['NORMAL', 'TANGENT']) {
+        const acc = prim.getAttribute(sem);
+        if (acc) { prim.setAttribute(sem, null); if (acc.listParents().length === 1) acc.dispose(); }
+      }
+      const pos = readFloat(position);
+      const count = position.getCount();
+      const canonical = canonicalByPosition(pos, count);
+      const remap = new Uint32Array(count);
+      let next = 0;
+      for (let i = 0; i < count; i++) {
+        if (canonical[i] === i) remap[i] = next++;
+      }
+      for (let i = 0; i < count; i++) remap[i] = remap[canonical[i]];
+      if (next === count) continue;
+      merged += count - next;
+      compactPrimitive(prim, remap, next);
+    }
+  }
+  return { mergedVertices: merged };
 }

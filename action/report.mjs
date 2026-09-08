@@ -76,8 +76,9 @@ for (const { before: r, after } of results) {
       `| ↳ \`${after.outPath}\` | **${a.score}**/100 | ${v} | ${num(a.geometry.triangles)} | ~${a.geometry.drawCallEstimate} | ${mb(a.file.bytes)}${saved} | ${mb(a.textureVramTotal)} | ${fidelityCell(after)} |`,
     );
     for (const lod of after.lods ?? []) {
+      const how = lod.method === 'cluster' ? ', grid-clustered' : '';
       const short = lod.triangles > lod.target * 1.1 ? ` (target ${num(lod.target)} not reachable)` : '';
-      lines.push(`| ↳ \`${lod.path}\` | — | LOD, geometry only${short} | ${num(lod.triangles)} | — | ${mb(lod.bytes)} | — | |`);
+      lines.push(`| ↳ \`${lod.path}\` | — | LOD, geometry only${how}${short} | ${num(lod.triangles)} | — | ${mb(lod.bytes)} | — | |`);
     }
   }
 }

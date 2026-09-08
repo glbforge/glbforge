@@ -38,10 +38,10 @@ import {
   getProfile,
   optimize,
   perceptualDiff,
+  buildLod,
   profileLabel,
   PROFILES,
   sharpTextureDecoder,
-  stripMaterials,
   toStl,
   toUsdz,
   type AnalysisResult,
@@ -108,17 +108,15 @@ function fidelityOf(summary: OptimizeSummary, after: AnalysisResult) {
 async function writeLods(
   io: IO, outBytes: Uint8Array, outPath: string, prof: ReturnType<typeof getProfile>,
   lods: number[] | undefined, compress: boolean,
-): Promise<Array<{ path: string; bytes: number; sha256: string; target: number }>> {
+): Promise<Array<{ path: string; bytes: number; sha256: string; target: number; triangles: number; method: string }>> {
   const files = [];
   for (let i = 0; i < (lods?.length ?? 0); i++) {
     const lodDoc = quiet(await io.readBinary(outBytes));
-    // LOD files are geometry-only; the viewer reuses the primary's materials.
-    stripMaterials(lodDoc);
-    await optimize(lodDoc, { profile: prof, targetTriangles: lods![i], textures: false, compress, verify: false });
+    const lod = await buildLod(lodDoc, lods![i], { profile: prof, compress });
     const lodPath = outPath.replace(/\.glb$/i, `.lod${i + 1}.glb`);
     const lodBytes = await io.writeBinary(lodDoc);
     await writeFile(lodPath, lodBytes);
-    files.push({ path: lodPath, bytes: lodBytes.byteLength, sha256: sha256(lodBytes), target: lods![i] });
+    files.push({ path: lodPath, bytes: lodBytes.byteLength, sha256: sha256(lodBytes), target: lods![i], triangles: lod.triangles, method: lod.method });
   }
   return files;
 }

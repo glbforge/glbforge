@@ -6,7 +6,8 @@ export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncod
 export { createNodeIO } from './io.js';
 export { extrudeImage, extrudeFromRgba, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
 export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
-export { stripMaterials } from './optimize.js';
+export { stripMaterials, prepareLod } from './optimize.js';
+export { buildLod, clusterDecimate, smoothPositions, type LodResult } from './lod.js';
 export { readFloat } from './accessors.js';
 export { auditDirectory, listGlbs, OUTPUT_PATTERN, type AuditOptions, type AuditResult, type AuditRow } from './audit.js';
 export { computeSmoothNormals } from './normals.js';
