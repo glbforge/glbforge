@@ -172,7 +172,10 @@ the results — before/after table, visual SSIM, and the pipeline steps. Same
 input, profile, and CLI version always produce identical bytes, so outputs
 are cached by content hash (`cache: true`) and re-runs are no-ops. Fork PRs
 cannot receive a bot branch; their outputs are uploaded as a workflow
-artifact instead. In optimize mode the gate passes when the optimized output
+artifact instead. Opening the PR needs the repository (and, for
+organizations, the org) setting **Allow GitHub Actions to create and approve
+pull requests**; when it is off, the run still posts the report card and
+uploads the optimized files as the `glbforge-optimized` artifact. In optimize mode the gate passes when the optimized output
 passes, so the fix is always one merge away. Inputs: `profile`,
 `fail-on-budget`, `optimize`, `optimize-all`, `replace`, `verify`, `cache`,
 `open-pr`, `pr-branch`, `version`, `token`.
