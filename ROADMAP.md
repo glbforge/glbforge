@@ -13,7 +13,7 @@ USDZ export, and versioned budget profiles with a published methodology.
 Everything below is what remains, most urgent first.
 
 **Verification debt (needs a device or a human)**
-- [ ] USDZ on an iPhone: open a `glbforge usdz` output in AR Quick Look. The archive is spec-checked (store-only, 64-byte aligned, usda first) but has never been opened on iOS. If it fails, suspects in order: ASCII `usda` vs binary `usdc`, `normals` interpolation, the `st` V-flip
+- [x] USDZ on an iPhone (2026-09-08): AR Quick Look opens both the flat-material plush (crate 0.8.0) and the textured cat (JPEG base color + PNG normal/ORM through channel outputs, `st` primvar) — the binary crate writer and the full UsdPreviewSurface path are verified on a real device
 - [ ] Stripe live-mode flip + Meshy ToS resale check + `support@glbforge.dev` routing (pre-existing; gates real money)
 
 **Near-term engineering (follow-through on v0.5.0)**
@@ -112,7 +112,7 @@ Everything below is what remains, most urgent first.
 
 - [ ] Fixture zoo + per-generator rules for Hunyuan/TRELLIS/TripoSR/Tripo/Rodin (we now generate these in-house — self-feeding corpus)
 - [x] **Animation/skinning** (2026-09-07): deforming prims (JOINTS_0 or morph targets) take `simplifyDeformingPrimitive` — meshopt `simplifyWithAttributes` with WEIGHTS_n + normalized per-target delta magnitude as attributes, vertex locks on dominant-joint edges, LockBorder, shared compaction remap for all attributes + targets. Skins/IBMs/clips untouched. `scene/animated-asset` info rule. Tested on a rigged cylinder (blend band survives, weights normalized, deterministic, GLB round trip)
-- [x] **USDZ export** (2026-09-07): `glbforge usdz` / MCP `export_usdz` — usda + UsdPreviewSurface (baseColor/MR channel outputs/normal/occlusion/emissive/alpha), WebP→PNG/JPEG via sharp, own store-only zip writer (64-byte aligned, fixed timestamps, deterministic). Static bind pose. Needs an on-device Quick Look check
+- [x] **USDZ export** (2026-09-07): `glbforge usdz` / MCP `export_usdz` — UsdPreviewSurface (baseColor/MR channel outputs/normal/occlusion/emissive/alpha), WebP→PNG/JPEG via sharp, own store-only zip writer (64-byte aligned, fixed timestamps, deterministic). Static bind pose. Binary crate layer + iPhone verification landed 2026-09-08 (see Status section)
 - [x] **Versioned budget profiles + methodology** (2026-09-07): `Profile.version` + per-cap `rationale`; `PROFILE_VERSIONS` keeps every published version frozen (tested); `getProfile('mobile-hero@1')` pins, bare name = latest; labels `name@N` in CLI/Action/MCP; `list_profiles rationale=true`; docs/BUDGETS.md + glbforge.dev/budgets (model behind the numbers, score computation, SSIM calibration, changelog)
 - [ ] Scene-level budgets: analyze a set of GLBs against a shared budget
 - [ ] UV unwrap / retopo / normal baking as optional pluggable backends (keep pure-Node default)

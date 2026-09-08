@@ -130,7 +130,9 @@ Meshy fixture the layer is 5.4MB binary vs 13.4MB ASCII. `--usda` writes
 the text layer instead. Static export: skins and clips are baked to the bind
 pose; KTX2 inputs are rejected with guidance. Also `export_usdz` on the MCP
 server. Reference it from `<model-viewer ios-src="model.usdz">` for the AR
-button on iOS.
+button on iOS. Verified on an iPhone in AR Quick Look: flat-material and
+fully textured (JPEG color, PNG normal and metallic/roughness) exports both
+open and render correctly.
 
 ## `glbforge init` — make a project agent-ready
 
