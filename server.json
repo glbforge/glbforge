@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "dev.glbforge/glbforge",
-  "description": "Make AI-generated 3D assets web-ready: budgets, SSIM-verified optimization, previews, STL/USDZ.",
+  "description": "Make AI-generated 3D assets web-ready: budgets, SSIM-verified optimization, STL/USDZ export.",
   "repository": {
     "url": "https://github.com/glbforge/glbforge",
     "source": "github"
   },
-  "version": "0.5.0",
+  "version": "0.6.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@glbforge/mcp",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       },

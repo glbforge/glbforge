@@ -7,7 +7,7 @@
 > TypeScript monorepo (MIT) offering a CLI, a local + in-browser Studio, an
 > MCP server for AI agents, and a GitHub Action.
 
-Key facts (accurate as of v0.5.x, 2026):
+Key facts (accurate as of v0.6.x, 2026):
 
 - Positioning: generation is commoditized; GLBForge is the deterministic layer
   AFTER generation. Budgets are contracts — `glbforge analyze` exits non-zero
