@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.5.0/generation_status.output.json",
+  "$id": "https://glbforge.dev/schemas/0.6.0/generation_status.output.json",
   "title": "generation_status.output",
   "description": "Response envelope of the generation_status tool.",
   "type": "object",

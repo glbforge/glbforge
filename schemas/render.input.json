@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.5.0/render.input.json",
+  "$id": "https://glbforge.dev/schemas/0.6.0/render.input.json",
   "title": "render.input",
   "description": "Arguments of the render tool.",
   "type": "object",

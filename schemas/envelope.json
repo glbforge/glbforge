@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.5.0/envelope.json",
+  "$id": "https://glbforge.dev/schemas/0.6.0/envelope.json",
   "title": "envelope",
   "description": "Common response envelope; data is tool-specific (see <tool>.output.json).",
   "type": "object",

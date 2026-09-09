@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.5.0/meshy_task_status.input.json",
+  "$id": "https://glbforge.dev/schemas/0.6.0/meshy_task_status.input.json",
   "title": "meshy_task_status.input",
   "description": "Arguments of the meshy_task_status tool.",
   "type": "object",

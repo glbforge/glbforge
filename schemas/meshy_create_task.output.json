@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.5.0/meshy_create_task.output.json",
+  "$id": "https://glbforge.dev/schemas/0.6.0/meshy_create_task.output.json",
   "title": "meshy_create_task.output",
   "description": "Response envelope of the meshy_create_task tool.",
   "type": "object",
