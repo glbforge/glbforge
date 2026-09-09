@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/index.json",
+  "title": "index",
+  "description": "Every tool of the GLBForge MCP server with its input/output schema files.",
+  "version": "0.5.0",
+  "tools": {
+    "validate": {
+      "description": "Does the asset open, and is it well-formed for its target? Returns format, USDZ packaging compliance (stored entries, 64-byte alignment, allowed file types), layer metadata (default_prim, up_axis, meters_per_unit, layer_stack), schema errors, and AR Quick Look compatibility with arkit_issues — every issue with a stable code and prim_path. mode=quick (default) runs no renders and finishes well under a second; mode=full adds analyze_performance and a front render. Call it first on any file, and after every mutation.",
+      "input": "validate.input.json",
+      "output": "validate.output.json",
+      "readOnly": true
+    },
+    "inspect_geometry": {
+      "description": "Per-mesh geometry facts keyed by prim_path: vertex/face/triangle counts, is_manifold, degenerate faces, normals authored|missing and inverted-normal count, UV sets with out-of-range flags, world bounding box in metres; scene-level bounds, pivot position (pivot_at_base for AR placement) and scale warnings (largest dimension < small_scale or > large_scale). Use it to decide whether an asset needs normals, rescaling or re-pivoting before export.",
+      "input": "inspect_geometry.input.json",
+      "output": "inspect_geometry.output.json",
+      "readOnly": true
+    },
+    "inspect_animation": {
+      "description": "Does anything actually move? Clips with time range / fps / duration, animated prims and which properties animate, skeletons (joint_count, bound_meshes, max_influences_per_vertex, unbound_vertex_count), blend shapes with is_driven, root motion. Codes: SKELETON_UNBOUND, MESH_NOT_DEFORMING, BLENDSHAPE_UNDRIVEN, ANIMATION_ZERO_LENGTH, ANIMATION_NO_MOTION. Call it before render_animation_strip or export_usdz on any rigged asset.",
+      "input": "inspect_animation.input.json",
+      "output": "inspect_animation.output.json",
+      "readOnly": true
+    },
+    "inspect_materials": {
+      "description": "Materials with shader_type and bound_meshes, unbound_meshes, every texture (resolved, resolution, format, size_bytes, channel, color_space, used_by material+input, memory estimate), missing_textures, texture_memory_estimate_mb, non_power_of_two and oversized (threshold configurable). Codes: TEXTURE_UNRESOLVED, MATERIAL_UNBOUND, MESH_NO_MATERIAL, TEXTURE_OVERSIZED, TEXTURE_NPOT, TEXTURE_FORMAT_UNSUPPORTED.",
+      "input": "inspect_materials.input.json",
+      "output": "inspect_materials.output.json",
+      "readOnly": true
+    },
+    "analyze_performance": {
+      "description": "Totals and estimates (triangles, vertices, draw calls, file size, GPU memory, prim count, scene depth, animation seconds), instancing_candidates, and a budget_check against a profile (ios_ar | visionos | web, a budget profile like mobile-hero, or custom_limits) — each overage names the metric, value, limit and worst_offender_prim_path. Use it to pick targetTriangles for optimize_glb.",
+      "input": "analyze_performance.input.json",
+      "output": "analyze_performance.output.json",
+      "readOnly": true
+    },
+    "render": {
+      "description": "Deterministic software render (no GPU) of any GLB / USDZ / USD: view=front (one straight-on view), thumbnail (one 3/4 view), turntable (N angles tiled into one contact sheet, default 8), or custom (explicit camera position/target/fov). Pass time (seconds) or frame (index at fps) to pose an animated asset. Returns the PNG plus the camera(s) used so you know what you are looking at. Optionally saves the PNG.",
+      "input": "render.input.json",
+      "output": "render.output.json",
+      "readOnly": false
+    },
+    "render_animation_strip": {
+      "description": "Contact sheet of an animated asset at the requested frames (stills, labelled with frame and time) so you can verify that it moves the way it should. frames are indices at fps (or pass times in seconds). include_clip=true also writes an animated GIF next to the sheet for human reviewers. Run inspect_animation first to learn the clip range.",
+      "input": "render_animation_strip.input.json",
+      "output": "render_animation_strip.output.json",
+      "readOnly": false
+    },
+    "inspect_all": {
+      "description": "Everything at once for an unfamiliar asset: validate + inspect_geometry + inspect_animation + inspect_materials + analyze_performance merged into one response, errors deduplicated. Call this first, then the individual tools for details or after a fix.",
+      "input": "inspect_all.input.json",
+      "output": "inspect_all.output.json",
+      "readOnly": true
+    },
+    "capabilities": {
+      "description": "What this GLBForge install can do right now: versions, which generation providers have keys (FAL_KEY → generate_image_to_3d; MESHY_API_KEY → meshy_*), whether a KTX2 encoder is installed (textureFormat=ktx2), profiles, and the working directory .env is read from. Call it before planning a generation or KTX2 route so you never hit a missing-key error mid-plan.",
+      "input": "capabilities.input.json",
+      "output": "capabilities.output.json",
+      "readOnly": true
+    },
+    "compare_glb": {
+      "description": "Measure how faithfully a candidate GLB matches a reference: visual SSIM over four fixed cameras (gated on the profile floor) plus geometric alignment (point-to-surface chamfer, F-scores, proportion IoU). Returns a reference | candidate | change-heatmap sheet for the weakest view. Use it to judge any optimization, a regenerated asset against the original, or two generators against each other.",
+      "input": "compare_glb.input.json",
+      "output": "compare_glb.output.json",
+      "readOnly": true
+    },
+    "list_profiles": {
+      "description": "List the web performance budget profiles: triangle/draw-call/texture/file-size/GPU-memory caps, the minimum visual-fidelity SSIM an optimization must keep, the profile version to pin in CI, and (with rationale=true) why each cap is what it is. (AR targets — ios_ar, visionos — live in analyze_performance.)",
+      "input": "list_profiles.input.json",
+      "output": "list_profiles.output.json",
+      "readOnly": true
+    },
+    "analyze_glb": {
+      "description": "Analyze a GLB/glTF against a web performance budget. Returns a compact report card (score, pass/fail, key numbers, every error + top findings, nextActions) plus a rendered thumbnail; errors[] carries every finding with a code and prim_path. Call inspect_report for full findings/textures/topology, inspect_all for the format-agnostic view. Run before and after any optimization.",
+      "input": "analyze_glb.input.json",
+      "output": "analyze_glb.output.json",
+      "readOnly": true
+    },
+    "inspect_report": {
+      "description": "Drill into an analysis: full findings (with fix suggestions and rule data), per-texture stats, materials, welded-space topology, geometry per primitive, scene/generator facts, or the whole report. Re-analyzes deterministically, so it works on any file at any time.",
+      "input": "inspect_report.input.json",
+      "output": "inspect_report.output.json",
+      "readOnly": true
+    },
+    "render_preview": {
+      "description": "Render a GLB with the deterministic software rasterizer (no GPU): one thumbnail or a 2x2 turntable of four angles. Use it to look at an asset before deciding, or to verify a result. Optionally saves the PNG. (For front / N-angle / custom cameras, animation frames, and USD inputs use `render`.)",
+      "input": "render_preview.input.json",
+      "output": "render_preview.output.json",
+      "readOnly": false
+    },
+    "ship_asset": {
+      "description": "One call from anything to web-ready. A .glb is optimized to the budget and gated. An image is routed: flat artwork forges instantly (free); photographic input returns a routing instruction to call generate_image_to_3d (then optimize_glb the result). Returns the compact report, a geometric fidelity bound, the measured visual-fidelity SSIM (fixed-camera renders before vs after), a sha256 of the output, diff + post_validation, and a thumbnail — or a reference | result | change sheet when SSIM fails. dry_run=true returns the diff without writing.",
+      "input": "ship_asset.input.json",
+      "output": "ship_asset.output.json",
+      "readOnly": false
+    },
+    "audit_directory": {
+      "description": "Analyze every GLB in a directory against a budget profile in one call. Returns a per-file score table plus the failing list — then call optimize_glb on each failure (or ask before bulk-optimizing).",
+      "input": "audit_directory.input.json",
+      "output": "audit_directory.output.json",
+      "readOnly": true
+    },
+    "optimize_glb": {
+      "description": "Optimize a GLB for web delivery: weld, simplify to the profile triangle budget (bone-aware for skinned/morphing meshes), fill smooth normals, resize/re-encode textures to WebP, meshopt-compress. Writes the optimized file and returns a before/after diff (prims added/removed, properties changed), the measured visual-fidelity SSIM, the compact report, post_validation of the output, a sha256, and a thumbnail — or a reference | result | change sheet when SSIM fails. Every change the pipeline makes on its own (joined prims, generated normals, re-encoded textures) is listed in errors[] with a code. dry_run=true computes everything and writes nothing. Typically 90%+ smaller.",
+      "input": "optimize_glb.input.json",
+      "output": "optimize_glb.output.json",
+      "readOnly": false
+    },
+    "extrude_image": {
+      "description": "Deterministic 2D graphic -> extruded 3D GLB (no AI, no credits, instant). Traces the image silhouette and projects the source image back on as texture. USE THIS instead of generation for flat artwork: logos, wordmarks, icons, stickers. Use generation for photographic or dimensional subjects. Supports a signage-style bevel on the rims. Returns the mesh stats, diff (the prims created), post_validation, and a thumbnail of the forged piece. dry_run=true writes nothing.",
+      "input": "extrude_image.input.json",
+      "output": "extrude_image.output.json",
+      "readOnly": false
+    },
+    "export_stl": {
+      "description": "Export a GLB as binary STL for 3D printing — scaled to millimeters, rotated z-up (both reported as AXIS_CONVERTED / SCALE_CONVERTED). Reports watertightness (glbforge-extruded assets are watertight by construction; simplified AI meshes usually are too). Returns a thumbnail of the exported geometry. dry_run=true writes nothing.",
+      "input": "export_stl.input.json",
+      "output": "export_stl.output.json",
+      "readOnly": false
+    },
+    "export_usdz": {
+      "description": "Export a GLB as USDZ for iOS AR Quick Look: binary usdc layer, UsdPreviewSurface materials, PNG/JPEG textures (WebP is transcoded; KTX2 is rejected), store-only 64-byte-aligned zip. Skinned assets get a UsdSkel skeleton with the first clip sampled at 30 fps; morph targets become UsdSkel blend shapes. Use on the optimized .web.glb. Returns the packed files, diff, post_validation (validate of the written usdz: packaging + AR Quick Look compatibility), every export-time change as a coded entry in errors[], and a thumbnail. dry_run=true writes nothing.",
+      "input": "export_usdz.input.json",
+      "output": "export_usdz.output.json",
+      "readOnly": false
+    },
+    "generate_image_to_3d": {
+      "description": "True volumetric 3D from a single image via open models on fal.ai GPU inference (needs FAL_KEY — check capabilities first): hunyuan (Hunyuan3D-2, highest quality), trellis (balanced), triposr (fastest). Cheaper than Meshy for most subjects; use Meshy for the richest PBR texturing. Returns a request id — poll generation_status, then download.",
+      "input": "generate_image_to_3d.input.json",
+      "output": "generate_image_to_3d.output.json",
+      "readOnly": false
+    },
+    "generation_status": {
+      "description": "Check an open-model generation (from generate_image_to_3d); when COMPLETED, pass download=true with an out path to save the GLB — the result then includes post_validation and a thumbnail of what was generated. dry_run=true skips writing.",
+      "input": "generation_status.input.json",
+      "output": "generation_status.output.json",
+      "readOnly": false
+    },
+    "meshy_create_task": {
+      "description": "Start a Meshy generation task (needs MESHY_API_KEY — check capabilities first). kind \"image-to-3d\" takes a local image path or URL; kind \"text-to-3d\" takes a prompt (geometry preview stage — pass refine_from to texture a finished preview). Returns a task id immediately; poll meshy_task_status (generation takes minutes).",
+      "input": "meshy_create_task.input.json",
+      "output": "meshy_create_task.output.json",
+      "readOnly": false
+    },
+    "meshy_task_status": {
+      "description": "Check a Meshy task: status, progress %, and (when finished) model URLs.",
+      "input": "meshy_task_status.input.json",
+      "output": "meshy_task_status.output.json",
+      "readOnly": false
+    },
+    "meshy_download": {
+      "description": "Download a finished Meshy task's GLB to a local path; returns post_validation and a thumbnail of the model. dry_run=true skips writing.",
+      "input": "meshy_download.input.json",
+      "output": "meshy_download.output.json",
+      "readOnly": false
+    }
+  }
+}

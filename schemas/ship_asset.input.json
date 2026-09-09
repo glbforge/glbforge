@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/ship_asset.input.json",
+  "title": "ship_asset.input",
+  "description": "Arguments of the ship_asset tool.",
+  "type": "object",
+  "properties": {
+    "input": {
+      "type": "string",
+      "description": "Absolute path: .glb or image (png/jpg/webp/svg)"
+    },
+    "out": {
+      "type": "string",
+      "description": "Output path (default: <input>.web.glb)"
+    },
+    "profile": {
+      "type": "string",
+      "description": "Budget profile: mobile-hero | desktop-hero | product-configurator; pin a version with name@N (e.g. mobile-hero@1)",
+      "default": "mobile-hero"
+    },
+    "textureFormat": {
+      "type": "string",
+      "enum": [
+        "webp",
+        "ktx2"
+      ],
+      "default": "webp"
+    },
+    "verify": {
+      "type": "boolean",
+      "default": true,
+      "description": "Perceptual (SSIM) verification; a failing SSIM fails the report"
+    },
+    "targetTriangles": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "description": "Override the profile triangle target"
+    },
+    "lods": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "description": "Extra geometry-only LOD files, e.g. [40000, 10000]"
+    },
+    "preview": {
+      "type": "string",
+      "enum": [
+        "thumbnail",
+        "turntable",
+        "compare",
+        "none"
+      ],
+      "default": "thumbnail",
+      "description": "Rendered PNG of the shipped asset returned with the result: thumbnail (one 3/4 view) | turntable (4 angles tiled 2x2) | none"
+    },
+    "render": {
+      "type": "boolean",
+      "description": "Checkpoint render: true = attach a thumbnail even if preview=none, false = no image (overrides preview)"
+    },
+    "dry_run": {
+      "type": "boolean",
+      "default": false,
+      "description": "Compute everything in memory and return the diff it would apply; write nothing"
+    }
+  },
+  "required": [
+    "input"
+  ],
+  "additionalProperties": false
+}

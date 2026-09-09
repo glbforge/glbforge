@@ -1,0 +1,14 @@
+export * from './diagnostics.js';
+export * from './ir.js';
+export { fromGltf, recomputeWorlds, nodeWorld, type FromGltfOptions } from './from-gltf.js';
+export { inspectGeometry, type GeometryReport, type MeshGeometryReport, type GeometryInspectOptions, type BoundingBox } from './geometry.js';
+export { inspectAnimation, channelMoves, type AnimationReport, type SkeletonReport, type BlendShapeReport, type ClipReport } from './animation.js';
+export { inspectMaterials, textureVramBytes, type MaterialsReport, type MaterialReport, type TextureReport, type MaterialsInspectOptions } from './materials.js';
+export { PERFORMANCE_PROFILES, PERFORMANCE_LIMIT_KEYS, resolvePerformanceProfile, fromBudgetProfile, type PerformanceProfile, type PerformanceLimitKey } from './perf-profiles.js';
+export { analyzePerformance, type PerformanceReport, type Overage } from './performance.js';
+export { fromUsd, type FromUsdOptions } from './from-usd.js';
+export { loadScene, formatOf, type LoadedScene, type SceneFormat } from './load.js';
+export { validateScene, type ValidationReport } from './validate.js';
+export { poseScene, sampleChannel, type PosedMesh, type PoseOptions } from './pose.js';
+export { diffScenes, snapshotScene, type SceneDiff, type PropertyChange, type SceneSnapshot } from './diff.js';
+export { fragmentsFromScene, renderScene, frontRig, turntableRig, customCamera, type RenderSceneOptions, type SceneFragmentsOptions } from './render-ir.js';

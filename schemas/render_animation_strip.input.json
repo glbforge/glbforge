@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/render_animation_strip.input.json",
+  "title": "render_animation_strip.input",
+  "description": "Arguments of the render_animation_strip tool.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute path to a .glb, .gltf, .usdz, .usda, .usdc or .usd file"
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "description": "Frame indices at fps, e.g. [0, 10, 20, 30]. Default: 8 evenly spaced frames over the clip"
+    },
+    "times": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "description": "Times in seconds (alternative to frames)"
+    },
+    "fps": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 30,
+      "description": "Frame rate for frame → time (USD files use their own timeCodesPerSecond)"
+    },
+    "animation": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Clip index"
+    },
+    "view": {
+      "type": "string",
+      "enum": [
+        "front",
+        "thumbnail",
+        "custom"
+      ],
+      "default": "front"
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "fov": {
+          "type": "number",
+          "minimum": 5,
+          "maximum": 120
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 512,
+      "default": 192,
+      "description": "Pixels per tile"
+    },
+    "columns": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "default": 4
+    },
+    "textures": {
+      "type": "boolean",
+      "default": true
+    },
+    "include_clip": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also write an animated GIF (<out or path>.strip.gif)"
+    },
+    "out": {
+      "type": "string",
+      "description": "Absolute path to save the contact sheet PNG"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

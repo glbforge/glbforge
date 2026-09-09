@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/meshy_create_task.input.json",
+  "title": "meshy_create_task.input",
+  "description": "Arguments of the meshy_create_task tool.",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "image-to-3d",
+        "text-to-3d",
+        "remesh",
+        "retexture"
+      ]
+    },
+    "image": {
+      "type": "string",
+      "description": "image-to-3d: local path or http(s) URL"
+    },
+    "prompt": {
+      "type": "string",
+      "description": "text-to-3d: what to generate; retexture: the style prompt"
+    },
+    "refine_from": {
+      "type": "string",
+      "description": "text-to-3d: preview task id to refine (texture stage)"
+    },
+    "input_task_id": {
+      "type": "string",
+      "description": "remesh/retexture: the SUCCEEDED task to operate on"
+    },
+    "topology": {
+      "type": "string",
+      "enum": [
+        "quad",
+        "triangle"
+      ],
+      "description": "remesh: output topology"
+    },
+    "should_texture": {
+      "type": "boolean",
+      "default": true,
+      "description": "image-to-3d: run the texture stage"
+    },
+    "enable_pbr": {
+      "type": "boolean",
+      "default": false
+    },
+    "target_polycount": {
+      "type": "integer",
+      "exclusiveMinimum": 0
+    }
+  },
+  "required": [
+    "kind"
+  ],
+  "additionalProperties": false
+}

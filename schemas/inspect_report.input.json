@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/inspect_report.input.json",
+  "title": "inspect_report.input",
+  "description": "Arguments of the inspect_report tool.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute path to the .glb file"
+    },
+    "profile": {
+      "type": "string",
+      "description": "Budget profile: mobile-hero | desktop-hero | product-configurator; pin a version with name@N (e.g. mobile-hero@1)",
+      "default": "mobile-hero"
+    },
+    "section": {
+      "type": "string",
+      "enum": [
+        "findings",
+        "textures",
+        "materials",
+        "topology",
+        "geometry",
+        "scene",
+        "all"
+      ],
+      "default": "findings"
+    },
+    "ruleId": {
+      "type": "string",
+      "description": "findings only: exact rule id or prefix, e.g. \"tex\" or \"perf/file-size\""
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warn",
+        "info"
+      ],
+      "description": "findings only"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

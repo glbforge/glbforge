@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/compare_glb.input.json",
+  "title": "compare_glb.input",
+  "description": "Arguments of the compare_glb tool.",
+  "type": "object",
+  "properties": {
+    "reference": {
+      "type": "string",
+      "description": "Absolute path to the reference .glb (e.g. the original)"
+    },
+    "candidate": {
+      "type": "string",
+      "description": "Absolute path to the candidate .glb (e.g. the optimized file)"
+    },
+    "profile": {
+      "type": "string",
+      "description": "Budget profile: mobile-hero | desktop-hero | product-configurator; pin a version with name@N (e.g. mobile-hero@1)",
+      "default": "mobile-hero"
+    },
+    "minSsim": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Override the SSIM floor"
+    },
+    "textures": {
+      "type": "boolean",
+      "default": true,
+      "description": "Include base-color textures in the renders"
+    },
+    "geometry": {
+      "type": "boolean",
+      "default": false,
+      "description": "Also run the geometric alignment score (chamfer, F-scores, IoU). Costs seconds on 100k-tri meshes and up to a minute on multi-million-tri inputs; the visual score alone takes ~5s"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 512,
+      "default": 256
+    }
+  },
+  "required": [
+    "reference",
+    "candidate"
+  ],
+  "additionalProperties": false
+}

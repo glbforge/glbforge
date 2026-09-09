@@ -12,9 +12,12 @@ import { computeSmoothNormals } from '../normals.js';
 
 export interface RenderCamera {
   name: string;
-  /** Unit-sphere position, scaled by the framing distance at render time. */
+  /** Unit-sphere position, scaled by the framing distance at render time — or the absolute eye when `absolute` is set. */
   position: [number, number, number];
   fovDeg: number;
+  /** Absolute camera: `position` is the eye in world space and `target` the look-at point (no auto framing). */
+  absolute?: boolean;
+  target?: [number, number, number];
 }
 
 export interface RenderedView {
@@ -125,7 +128,7 @@ export function sharpTextureDecoder(maxSize = 512): TextureDecoder {
   };
 }
 
-interface Fragment {
+export interface Fragment {
   tris: Float32Array;     // world xyz * 9 per tri
   normals: Float32Array;  // world-space vertex normals * 9 per tri
   uvs: Float32Array;      // uv * 6 per tri
@@ -225,23 +228,38 @@ export async function computeFrame(doc: Document): Promise<RenderFrame> {
 
 /** Render to raw RGBA views. Needs no image codec unless a decoder is passed. */
 export async function renderRaw(doc: Document, opts: RenderOptions = {}): Promise<RawView[]> {
+  const fragments = await gatherFragments(doc, opts.textureDecoder);
+  return renderRawFragments(fragments, opts);
+}
+
+/** Framing of a fragment list (what `computeFrame` does for a document). */
+export function frameOfFragments(fragments: Fragment[]): RenderFrame {
+  return frameOf(fragments);
+}
+
+/**
+ * Render already-gathered fragments (world-space triangles). This is the
+ * body of `renderRaw`; the posed / USD paths build their own fragments and
+ * come through here so every input shares one rasterizer.
+ */
+export function renderRawFragments(fragments: Fragment[], opts: RenderOptions = {}): RawView[] {
   const size = opts.size ?? 512;
   const cameras = opts.cameras ?? defaultRig();
-  const fragments = await gatherFragments(doc, opts.textureDecoder);
   const { center, radius } = opts.frame ?? frameOf(fragments);
 
   const views: RawView[] = [];
   for (const cam of cameras) {
     const distance = radius / Math.tan((cam.fovDeg * Math.PI) / 360) * 1.35;
-    const eye: [number, number, number] = [
+    const eye: [number, number, number] = cam.absolute ? cam.position : [
       center[0] + cam.position[0] * distance,
       center[1] + cam.position[1] * distance,
       center[2] + cam.position[2] * distance,
     ];
+    const target = cam.absolute && cam.target ? cam.target : center;
     const ss = Math.max(1, Math.floor(opts.supersample ?? 1));
-    const hi = rasterize(fragments, eye, center, cam.fovDeg, size * ss);
+    const hi = rasterize(fragments, eye, target, cam.fovDeg, size * ss);
     const { rgba, mask } = ss === 1 ? hi : downsample(hi.rgba, hi.mask, size, ss);
-    views.push({ name: cam.name, rgba, mask, size, camera: { position: eye, target: center, fovDeg: cam.fovDeg } });
+    views.push({ name: cam.name, rgba, mask, size, camera: { position: eye, target, fovDeg: cam.fovDeg } });
   }
   return views;
 }

@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/render.input.json",
+  "title": "render.input",
+  "description": "Arguments of the render tool.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute path to a .glb, .gltf, .usdz, .usda, .usdc or .usd file"
+    },
+    "view": {
+      "type": "string",
+      "enum": [
+        "front",
+        "turntable",
+        "custom",
+        "thumbnail"
+      ],
+      "default": "front"
+    },
+    "angles": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 24,
+      "default": 8,
+      "description": "turntable: number of azimuths"
+    },
+    "camera": {
+      "type": "object",
+      "properties": {
+        "position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "target": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "fov": {
+          "type": "number",
+          "minimum": 5,
+          "maximum": 120
+        }
+      },
+      "required": [
+        "position"
+      ],
+      "additionalProperties": false,
+      "description": "custom: eye position (world metres), look-at target (default scene centre), vertical fov in degrees (default 40)"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 64,
+      "maximum": 1024,
+      "default": 256,
+      "description": "Pixels per view/tile"
+    },
+    "time": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Animation time in seconds (posed render)"
+    },
+    "frame": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Animation frame index at fps (alternative to time)"
+    },
+    "fps": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 30,
+      "description": "Frame rate used to convert frame → time (USD files use their own timeCodesPerSecond)"
+    },
+    "animation": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Clip index when the asset has several"
+    },
+    "textures": {
+      "type": "boolean",
+      "default": true,
+      "description": "Sample base-color textures"
+    },
+    "out": {
+      "type": "string",
+      "description": "Absolute path to also save the PNG"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

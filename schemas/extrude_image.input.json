@@ -1,0 +1,131 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/extrude_image.input.json",
+  "title": "extrude_image.input",
+  "description": "Arguments of the extrude_image tool.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute path to a PNG/JPEG/WebP with transparent or white background"
+    },
+    "out": {
+      "type": "string",
+      "description": "Absolute output path for the .glb"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "alpha",
+        "luma"
+      ],
+      "description": "Solid-pixel test: alpha (transparent bg) | luma (white bg). Auto-detected."
+    },
+    "threshold": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "width": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "default": 1,
+      "description": "World width in meters"
+    },
+    "depth": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "Extrusion depth in meters (default width*0.08)"
+    },
+    "bevel": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "description": "Bevel radius in meters (signage look; try depth*0.25)"
+    },
+    "bevelSegments": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 8,
+      "default": 3
+    },
+    "layers": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 6,
+      "description": "Layered color extrusion: quantize into N color layers at stepped depths (the \"layered acrylic\" look)"
+    },
+    "pillow": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Puffy-sticker dome height in meters (e.g. 0.04); supersedes bevel"
+    },
+    "emboss": {
+      "type": "number",
+      "description": "Luminance micro-relief in meters — bright artwork rises (try depth*0.15)"
+    },
+    "preset": {
+      "type": "string",
+      "enum": [
+        "enamel",
+        "chrome",
+        "neon",
+        "acrylic",
+        "rubber"
+      ],
+      "description": "Material preset for the forged piece"
+    },
+    "simplify": {
+      "type": "number",
+      "minimum": 0,
+      "default": 1.2,
+      "description": "Contour tolerance in trace pixels"
+    },
+    "texture": {
+      "type": "boolean",
+      "default": true,
+      "description": "Project source image as baseColor"
+    },
+    "color": {
+      "type": "string",
+      "description": "Hex color when texture=false, e.g. \"#ff2266\""
+    },
+    "metallic": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0
+    },
+    "roughness": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "default": 0.6
+    },
+    "preview": {
+      "type": "string",
+      "enum": [
+        "thumbnail",
+        "turntable",
+        "compare",
+        "none"
+      ],
+      "default": "thumbnail",
+      "description": "Rendered PNG of the forged piece returned with the result: thumbnail (one 3/4 view) | turntable (4 angles tiled 2x2) | none"
+    },
+    "render": {
+      "type": "boolean",
+      "description": "Checkpoint render: true = attach a thumbnail even if preview=none, false = no image (overrides preview)"
+    },
+    "dry_run": {
+      "type": "boolean",
+      "default": false,
+      "description": "Compute everything in memory and return the diff it would apply; write nothing"
+    }
+  },
+  "required": [
+    "path",
+    "out"
+  ],
+  "additionalProperties": false
+}

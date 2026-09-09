@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/meshy_create_task.output.json",
+  "title": "meshy_create_task.output",
+  "description": "Response envelope of the meshy_create_task tool.",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "false only when the tool could not run; an asset with errors in it is still ok:true"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line, human-readable"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "FILE_NOT_FOUND",
+              "FILE_UNREADABLE",
+              "FORMAT_UNSUPPORTED",
+              "GLTF_VERSION_UNSUPPORTED",
+              "EXTENSION_UNSUPPORTED",
+              "BUFFER_UNRESOLVED",
+              "USDZ_ENTRY_COMPRESSED",
+              "USDZ_ENTRY_MISALIGNED",
+              "USDZ_FILE_TYPE_DISALLOWED",
+              "USDZ_NO_LAYER",
+              "USDZ_LAYER_NOT_FIRST",
+              "USDZ_NESTED_PACKAGE",
+              "USDZ_ARCHIVE_INVALID",
+              "MISSING_DEFAULT_PRIM",
+              "DEFAULT_PRIM_NOT_FOUND",
+              "UP_AXIS_Z",
+              "MISSING_UP_AXIS",
+              "METERS_PER_UNIT_NONSTANDARD",
+              "MISSING_METERS_PER_UNIT",
+              "UNRESOLVED_COMPOSITION_ARC",
+              "USD_SCHEMA_ERROR",
+              "MESH_INDEX_OUT_OF_RANGE",
+              "PRIM_TYPE_UNSUPPORTED_ARKIT",
+              "SHADER_NOT_PREVIEWSURFACE",
+              "SUBDIVISION_UNSUPPORTED",
+              "MESH_EMPTY",
+              "MESH_NON_MANIFOLD",
+              "MESH_DEGENERATE_FACES",
+              "NORMALS_MISSING",
+              "NORMALS_INVERTED",
+              "UV_MISSING",
+              "UV_OUT_OF_RANGE",
+              "MESH_UNINDEXED",
+              "MESH_UNWELDED",
+              "SCALE_TOO_SMALL",
+              "SCALE_TOO_LARGE",
+              "PIVOT_NOT_AT_BASE",
+              "ZUP_SUSPECTED",
+              "SKELETON_UNBOUND",
+              "MESH_NOT_DEFORMING",
+              "SKIN_UNBOUND_VERTICES",
+              "SKIN_TOO_MANY_INFLUENCES",
+              "BLENDSHAPE_UNDRIVEN",
+              "ANIMATION_ZERO_LENGTH",
+              "ANIMATION_NO_MOTION",
+              "SKELETON_NO_ANIMATION",
+              "ROOT_MOTION",
+              "NODE_ANIMATION_DROPPED",
+              "CLIPS_DROPPED",
+              "INFLUENCES_TRUNCATED",
+              "TEXTURE_UNRESOLVED",
+              "MATERIAL_UNBOUND",
+              "MESH_NO_MATERIAL",
+              "TEXTURE_OVERSIZED",
+              "TEXTURE_NPOT",
+              "TEXTURE_FORMAT_UNSUPPORTED",
+              "TEXTURE_UNUSED",
+              "MATERIAL_FEATURE_UNSUPPORTED",
+              "MATERIAL_ALPHA_BLEND",
+              "MATERIAL_BLEND_WITHOUT_ALPHA",
+              "MATERIALS_DUPLICATE",
+              "DEFAULT_MATERIAL_BOUND",
+              "TEXTURE_TRANSCODED",
+              "TRIANGLE_BUDGET_EXCEEDED",
+              "VERTEX_BUDGET_EXCEEDED",
+              "DRAW_CALL_BUDGET_EXCEEDED",
+              "FILE_SIZE_BUDGET_EXCEEDED",
+              "GPU_MEMORY_BUDGET_EXCEEDED",
+              "TEXTURE_SIZE_BUDGET_EXCEEDED",
+              "TEXTURE_BYTES_BUDGET_EXCEEDED",
+              "MATERIAL_BUDGET_EXCEEDED",
+              "PRIM_COUNT_BUDGET_EXCEEDED",
+              "SCENE_DEPTH_BUDGET_EXCEEDED",
+              "INSTANCING_CANDIDATE",
+              "FIDELITY_BELOW_FLOOR",
+              "FIDELITY_MEASURED",
+              "LOD_TARGET_MISSED",
+              "NORMALS_GENERATED",
+              "PRIMITIVES_JOINED",
+              "MATERIALS_PALETTED",
+              "HIERARCHY_FLATTENED",
+              "MESH_WELDED",
+              "MESH_SIMPLIFIED",
+              "TEXTURES_REENCODED",
+              "DEGENERATE_PRUNED",
+              "UV_FLIPPED",
+              "AXIS_CONVERTED",
+              "SCALE_CONVERTED",
+              "MORPH_TARGETS_DROPPED",
+              "ANIMATED_ASSET",
+              "GENERATOR_FINGERPRINT",
+              "NO_GEOMETRY_TO_RENDER",
+              "FRAME_OUT_OF_RANGE",
+              "CLIP_FORMAT_UNSUPPORTED",
+              "DRY_RUN",
+              "ROUTED_TO_GENERATION",
+              "TOOL_ERROR"
+            ],
+            "description": "Stable, enumerable code — branch on this, not on message text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+          },
+          "prim_path": {
+            "type": "string",
+            "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+          },
+          "property": {
+            "type": "string",
+            "description": "Property / attribute the issue concerns"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete next step, naming the tool call when one fixes it"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "prim_path",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "One diagnostic"
+      },
+      "description": "Every diagnostic (error, warning, info), errors first"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "taskId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "taskId",
+            "kind"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false,
+          "description": "Empty when ok is false"
+        }
+      ]
+    }
+  },
+  "required": [
+    "ok",
+    "summary",
+    "duration_ms",
+    "errors",
+    "data"
+  ],
+  "additionalProperties": false
+}

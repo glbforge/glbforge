@@ -1,0 +1,1581 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/inspect_all.output.json",
+  "title": "inspect_all.output",
+  "description": "Response envelope of the inspect_all tool.",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "false only when the tool could not run; an asset with errors in it is still ok:true"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line, human-readable"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "FILE_NOT_FOUND",
+              "FILE_UNREADABLE",
+              "FORMAT_UNSUPPORTED",
+              "GLTF_VERSION_UNSUPPORTED",
+              "EXTENSION_UNSUPPORTED",
+              "BUFFER_UNRESOLVED",
+              "USDZ_ENTRY_COMPRESSED",
+              "USDZ_ENTRY_MISALIGNED",
+              "USDZ_FILE_TYPE_DISALLOWED",
+              "USDZ_NO_LAYER",
+              "USDZ_LAYER_NOT_FIRST",
+              "USDZ_NESTED_PACKAGE",
+              "USDZ_ARCHIVE_INVALID",
+              "MISSING_DEFAULT_PRIM",
+              "DEFAULT_PRIM_NOT_FOUND",
+              "UP_AXIS_Z",
+              "MISSING_UP_AXIS",
+              "METERS_PER_UNIT_NONSTANDARD",
+              "MISSING_METERS_PER_UNIT",
+              "UNRESOLVED_COMPOSITION_ARC",
+              "USD_SCHEMA_ERROR",
+              "MESH_INDEX_OUT_OF_RANGE",
+              "PRIM_TYPE_UNSUPPORTED_ARKIT",
+              "SHADER_NOT_PREVIEWSURFACE",
+              "SUBDIVISION_UNSUPPORTED",
+              "MESH_EMPTY",
+              "MESH_NON_MANIFOLD",
+              "MESH_DEGENERATE_FACES",
+              "NORMALS_MISSING",
+              "NORMALS_INVERTED",
+              "UV_MISSING",
+              "UV_OUT_OF_RANGE",
+              "MESH_UNINDEXED",
+              "MESH_UNWELDED",
+              "SCALE_TOO_SMALL",
+              "SCALE_TOO_LARGE",
+              "PIVOT_NOT_AT_BASE",
+              "ZUP_SUSPECTED",
+              "SKELETON_UNBOUND",
+              "MESH_NOT_DEFORMING",
+              "SKIN_UNBOUND_VERTICES",
+              "SKIN_TOO_MANY_INFLUENCES",
+              "BLENDSHAPE_UNDRIVEN",
+              "ANIMATION_ZERO_LENGTH",
+              "ANIMATION_NO_MOTION",
+              "SKELETON_NO_ANIMATION",
+              "ROOT_MOTION",
+              "NODE_ANIMATION_DROPPED",
+              "CLIPS_DROPPED",
+              "INFLUENCES_TRUNCATED",
+              "TEXTURE_UNRESOLVED",
+              "MATERIAL_UNBOUND",
+              "MESH_NO_MATERIAL",
+              "TEXTURE_OVERSIZED",
+              "TEXTURE_NPOT",
+              "TEXTURE_FORMAT_UNSUPPORTED",
+              "TEXTURE_UNUSED",
+              "MATERIAL_FEATURE_UNSUPPORTED",
+              "MATERIAL_ALPHA_BLEND",
+              "MATERIAL_BLEND_WITHOUT_ALPHA",
+              "MATERIALS_DUPLICATE",
+              "DEFAULT_MATERIAL_BOUND",
+              "TEXTURE_TRANSCODED",
+              "TRIANGLE_BUDGET_EXCEEDED",
+              "VERTEX_BUDGET_EXCEEDED",
+              "DRAW_CALL_BUDGET_EXCEEDED",
+              "FILE_SIZE_BUDGET_EXCEEDED",
+              "GPU_MEMORY_BUDGET_EXCEEDED",
+              "TEXTURE_SIZE_BUDGET_EXCEEDED",
+              "TEXTURE_BYTES_BUDGET_EXCEEDED",
+              "MATERIAL_BUDGET_EXCEEDED",
+              "PRIM_COUNT_BUDGET_EXCEEDED",
+              "SCENE_DEPTH_BUDGET_EXCEEDED",
+              "INSTANCING_CANDIDATE",
+              "FIDELITY_BELOW_FLOOR",
+              "FIDELITY_MEASURED",
+              "LOD_TARGET_MISSED",
+              "NORMALS_GENERATED",
+              "PRIMITIVES_JOINED",
+              "MATERIALS_PALETTED",
+              "HIERARCHY_FLATTENED",
+              "MESH_WELDED",
+              "MESH_SIMPLIFIED",
+              "TEXTURES_REENCODED",
+              "DEGENERATE_PRUNED",
+              "UV_FLIPPED",
+              "AXIS_CONVERTED",
+              "SCALE_CONVERTED",
+              "MORPH_TARGETS_DROPPED",
+              "ANIMATED_ASSET",
+              "GENERATOR_FINGERPRINT",
+              "NO_GEOMETRY_TO_RENDER",
+              "FRAME_OUT_OF_RANGE",
+              "CLIP_FORMAT_UNSUPPORTED",
+              "DRY_RUN",
+              "ROUTED_TO_GENERATION",
+              "TOOL_ERROR"
+            ],
+            "description": "Stable, enumerable code — branch on this, not on message text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+          },
+          "prim_path": {
+            "type": "string",
+            "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+          },
+          "property": {
+            "type": "string",
+            "description": "Property / attribute the issue concerns"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete next step, naming the tool call when one fixes it"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "prim_path",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "One diagnostic"
+      },
+      "description": "Every diagnostic (error, warning, info), errors first"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "validation": {
+              "type": "object",
+              "properties": {
+                "opens": {
+                  "type": "boolean"
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "glb",
+                    "gltf",
+                    "usdz",
+                    "usda",
+                    "usdc"
+                  ]
+                },
+                "crate_version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "usdz_spec_compliant": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "null for non-usdz inputs"
+                },
+                "usdz_violations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "schema_errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "FILE_NOT_FOUND",
+                          "FILE_UNREADABLE",
+                          "FORMAT_UNSUPPORTED",
+                          "GLTF_VERSION_UNSUPPORTED",
+                          "EXTENSION_UNSUPPORTED",
+                          "BUFFER_UNRESOLVED",
+                          "USDZ_ENTRY_COMPRESSED",
+                          "USDZ_ENTRY_MISALIGNED",
+                          "USDZ_FILE_TYPE_DISALLOWED",
+                          "USDZ_NO_LAYER",
+                          "USDZ_LAYER_NOT_FIRST",
+                          "USDZ_NESTED_PACKAGE",
+                          "USDZ_ARCHIVE_INVALID",
+                          "MISSING_DEFAULT_PRIM",
+                          "DEFAULT_PRIM_NOT_FOUND",
+                          "UP_AXIS_Z",
+                          "MISSING_UP_AXIS",
+                          "METERS_PER_UNIT_NONSTANDARD",
+                          "MISSING_METERS_PER_UNIT",
+                          "UNRESOLVED_COMPOSITION_ARC",
+                          "USD_SCHEMA_ERROR",
+                          "MESH_INDEX_OUT_OF_RANGE",
+                          "PRIM_TYPE_UNSUPPORTED_ARKIT",
+                          "SHADER_NOT_PREVIEWSURFACE",
+                          "SUBDIVISION_UNSUPPORTED",
+                          "MESH_EMPTY",
+                          "MESH_NON_MANIFOLD",
+                          "MESH_DEGENERATE_FACES",
+                          "NORMALS_MISSING",
+                          "NORMALS_INVERTED",
+                          "UV_MISSING",
+                          "UV_OUT_OF_RANGE",
+                          "MESH_UNINDEXED",
+                          "MESH_UNWELDED",
+                          "SCALE_TOO_SMALL",
+                          "SCALE_TOO_LARGE",
+                          "PIVOT_NOT_AT_BASE",
+                          "ZUP_SUSPECTED",
+                          "SKELETON_UNBOUND",
+                          "MESH_NOT_DEFORMING",
+                          "SKIN_UNBOUND_VERTICES",
+                          "SKIN_TOO_MANY_INFLUENCES",
+                          "BLENDSHAPE_UNDRIVEN",
+                          "ANIMATION_ZERO_LENGTH",
+                          "ANIMATION_NO_MOTION",
+                          "SKELETON_NO_ANIMATION",
+                          "ROOT_MOTION",
+                          "NODE_ANIMATION_DROPPED",
+                          "CLIPS_DROPPED",
+                          "INFLUENCES_TRUNCATED",
+                          "TEXTURE_UNRESOLVED",
+                          "MATERIAL_UNBOUND",
+                          "MESH_NO_MATERIAL",
+                          "TEXTURE_OVERSIZED",
+                          "TEXTURE_NPOT",
+                          "TEXTURE_FORMAT_UNSUPPORTED",
+                          "TEXTURE_UNUSED",
+                          "MATERIAL_FEATURE_UNSUPPORTED",
+                          "MATERIAL_ALPHA_BLEND",
+                          "MATERIAL_BLEND_WITHOUT_ALPHA",
+                          "MATERIALS_DUPLICATE",
+                          "DEFAULT_MATERIAL_BOUND",
+                          "TEXTURE_TRANSCODED",
+                          "TRIANGLE_BUDGET_EXCEEDED",
+                          "VERTEX_BUDGET_EXCEEDED",
+                          "DRAW_CALL_BUDGET_EXCEEDED",
+                          "FILE_SIZE_BUDGET_EXCEEDED",
+                          "GPU_MEMORY_BUDGET_EXCEEDED",
+                          "TEXTURE_SIZE_BUDGET_EXCEEDED",
+                          "TEXTURE_BYTES_BUDGET_EXCEEDED",
+                          "MATERIAL_BUDGET_EXCEEDED",
+                          "PRIM_COUNT_BUDGET_EXCEEDED",
+                          "SCENE_DEPTH_BUDGET_EXCEEDED",
+                          "INSTANCING_CANDIDATE",
+                          "FIDELITY_BELOW_FLOOR",
+                          "FIDELITY_MEASURED",
+                          "LOD_TARGET_MISSED",
+                          "NORMALS_GENERATED",
+                          "PRIMITIVES_JOINED",
+                          "MATERIALS_PALETTED",
+                          "HIERARCHY_FLATTENED",
+                          "MESH_WELDED",
+                          "MESH_SIMPLIFIED",
+                          "TEXTURES_REENCODED",
+                          "DEGENERATE_PRUNED",
+                          "UV_FLIPPED",
+                          "AXIS_CONVERTED",
+                          "SCALE_CONVERTED",
+                          "MORPH_TARGETS_DROPPED",
+                          "ANIMATED_ASSET",
+                          "GENERATOR_FINGERPRINT",
+                          "NO_GEOMETRY_TO_RENDER",
+                          "FRAME_OUT_OF_RANGE",
+                          "CLIP_FORMAT_UNSUPPORTED",
+                          "DRY_RUN",
+                          "ROUTED_TO_GENERATION",
+                          "TOOL_ERROR"
+                        ],
+                        "description": "Stable, enumerable code — branch on this, not on message text"
+                      },
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+                      },
+                      "prim_path": {
+                        "type": "string",
+                        "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+                      },
+                      "property": {
+                        "type": "string",
+                        "description": "Property / attribute the issue concerns"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "suggested_fix": {
+                        "type": "string",
+                        "description": "Concrete next step, naming the tool call when one fixes it"
+                      },
+                      "data": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "severity",
+                      "prim_path",
+                      "message"
+                    ],
+                    "additionalProperties": false,
+                    "description": "One diagnostic"
+                  }
+                },
+                "default_prim": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "up_axis": {
+                  "type": "string",
+                  "enum": [
+                    "Y",
+                    "Z"
+                  ]
+                },
+                "meters_per_unit": {
+                  "type": "number"
+                },
+                "layer_stack": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Root layer plus every declared composition arc (not resolved)"
+                },
+                "arkit_compatible": {
+                  "type": "boolean"
+                },
+                "arkit_issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "FILE_NOT_FOUND",
+                          "FILE_UNREADABLE",
+                          "FORMAT_UNSUPPORTED",
+                          "GLTF_VERSION_UNSUPPORTED",
+                          "EXTENSION_UNSUPPORTED",
+                          "BUFFER_UNRESOLVED",
+                          "USDZ_ENTRY_COMPRESSED",
+                          "USDZ_ENTRY_MISALIGNED",
+                          "USDZ_FILE_TYPE_DISALLOWED",
+                          "USDZ_NO_LAYER",
+                          "USDZ_LAYER_NOT_FIRST",
+                          "USDZ_NESTED_PACKAGE",
+                          "USDZ_ARCHIVE_INVALID",
+                          "MISSING_DEFAULT_PRIM",
+                          "DEFAULT_PRIM_NOT_FOUND",
+                          "UP_AXIS_Z",
+                          "MISSING_UP_AXIS",
+                          "METERS_PER_UNIT_NONSTANDARD",
+                          "MISSING_METERS_PER_UNIT",
+                          "UNRESOLVED_COMPOSITION_ARC",
+                          "USD_SCHEMA_ERROR",
+                          "MESH_INDEX_OUT_OF_RANGE",
+                          "PRIM_TYPE_UNSUPPORTED_ARKIT",
+                          "SHADER_NOT_PREVIEWSURFACE",
+                          "SUBDIVISION_UNSUPPORTED",
+                          "MESH_EMPTY",
+                          "MESH_NON_MANIFOLD",
+                          "MESH_DEGENERATE_FACES",
+                          "NORMALS_MISSING",
+                          "NORMALS_INVERTED",
+                          "UV_MISSING",
+                          "UV_OUT_OF_RANGE",
+                          "MESH_UNINDEXED",
+                          "MESH_UNWELDED",
+                          "SCALE_TOO_SMALL",
+                          "SCALE_TOO_LARGE",
+                          "PIVOT_NOT_AT_BASE",
+                          "ZUP_SUSPECTED",
+                          "SKELETON_UNBOUND",
+                          "MESH_NOT_DEFORMING",
+                          "SKIN_UNBOUND_VERTICES",
+                          "SKIN_TOO_MANY_INFLUENCES",
+                          "BLENDSHAPE_UNDRIVEN",
+                          "ANIMATION_ZERO_LENGTH",
+                          "ANIMATION_NO_MOTION",
+                          "SKELETON_NO_ANIMATION",
+                          "ROOT_MOTION",
+                          "NODE_ANIMATION_DROPPED",
+                          "CLIPS_DROPPED",
+                          "INFLUENCES_TRUNCATED",
+                          "TEXTURE_UNRESOLVED",
+                          "MATERIAL_UNBOUND",
+                          "MESH_NO_MATERIAL",
+                          "TEXTURE_OVERSIZED",
+                          "TEXTURE_NPOT",
+                          "TEXTURE_FORMAT_UNSUPPORTED",
+                          "TEXTURE_UNUSED",
+                          "MATERIAL_FEATURE_UNSUPPORTED",
+                          "MATERIAL_ALPHA_BLEND",
+                          "MATERIAL_BLEND_WITHOUT_ALPHA",
+                          "MATERIALS_DUPLICATE",
+                          "DEFAULT_MATERIAL_BOUND",
+                          "TEXTURE_TRANSCODED",
+                          "TRIANGLE_BUDGET_EXCEEDED",
+                          "VERTEX_BUDGET_EXCEEDED",
+                          "DRAW_CALL_BUDGET_EXCEEDED",
+                          "FILE_SIZE_BUDGET_EXCEEDED",
+                          "GPU_MEMORY_BUDGET_EXCEEDED",
+                          "TEXTURE_SIZE_BUDGET_EXCEEDED",
+                          "TEXTURE_BYTES_BUDGET_EXCEEDED",
+                          "MATERIAL_BUDGET_EXCEEDED",
+                          "PRIM_COUNT_BUDGET_EXCEEDED",
+                          "SCENE_DEPTH_BUDGET_EXCEEDED",
+                          "INSTANCING_CANDIDATE",
+                          "FIDELITY_BELOW_FLOOR",
+                          "FIDELITY_MEASURED",
+                          "LOD_TARGET_MISSED",
+                          "NORMALS_GENERATED",
+                          "PRIMITIVES_JOINED",
+                          "MATERIALS_PALETTED",
+                          "HIERARCHY_FLATTENED",
+                          "MESH_WELDED",
+                          "MESH_SIMPLIFIED",
+                          "TEXTURES_REENCODED",
+                          "DEGENERATE_PRUNED",
+                          "UV_FLIPPED",
+                          "AXIS_CONVERTED",
+                          "SCALE_CONVERTED",
+                          "MORPH_TARGETS_DROPPED",
+                          "ANIMATED_ASSET",
+                          "GENERATOR_FINGERPRINT",
+                          "NO_GEOMETRY_TO_RENDER",
+                          "FRAME_OUT_OF_RANGE",
+                          "CLIP_FORMAT_UNSUPPORTED",
+                          "DRY_RUN",
+                          "ROUTED_TO_GENERATION",
+                          "TOOL_ERROR"
+                        ],
+                        "description": "Stable, enumerable code — branch on this, not on message text"
+                      },
+                      "severity": {
+                        "type": "string",
+                        "enum": [
+                          "error",
+                          "warning",
+                          "info"
+                        ],
+                        "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+                      },
+                      "prim_path": {
+                        "type": "string",
+                        "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+                      },
+                      "property": {
+                        "type": "string",
+                        "description": "Property / attribute the issue concerns"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "suggested_fix": {
+                        "type": "string",
+                        "description": "Concrete next step, naming the tool call when one fixes it"
+                      },
+                      "data": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "severity",
+                      "prim_path",
+                      "message"
+                    ],
+                    "additionalProperties": false,
+                    "description": "One diagnostic"
+                  }
+                },
+                "prim_count": {
+                  "type": "integer"
+                },
+                "extensions_required": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "performance": {
+                  "description": "mode=full: the analyze_performance data"
+                },
+                "render": {
+                  "type": "object",
+                  "properties": {
+                    "camera": {
+                      "type": "object",
+                      "properties": {
+                        "position": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "target": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "fov": {
+                          "type": "number",
+                          "description": "Vertical field of view, degrees"
+                        }
+                      },
+                      "required": [
+                        "position",
+                        "target",
+                        "fov"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "size": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "camera",
+                    "size"
+                  ],
+                  "additionalProperties": false,
+                  "description": "mode=full: the default render (image attached)"
+                }
+              },
+              "required": [
+                "opens",
+                "format",
+                "crate_version",
+                "usdz_spec_compliant",
+                "usdz_violations",
+                "schema_errors",
+                "default_prim",
+                "up_axis",
+                "meters_per_unit",
+                "layer_stack",
+                "arkit_compatible",
+                "arkit_issues",
+                "prim_count",
+                "extensions_required"
+              ],
+              "additionalProperties": false
+            },
+            "geometry": {
+              "type": "object",
+              "properties": {
+                "meshes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "node_index": {
+                        "type": "integer"
+                      },
+                      "mesh_index": {
+                        "type": "integer"
+                      },
+                      "primitive_index": {
+                        "type": "integer"
+                      },
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "triangles",
+                          "points",
+                          "lines",
+                          "other"
+                        ]
+                      },
+                      "vertex_count": {
+                        "type": "integer"
+                      },
+                      "face_count": {
+                        "type": "integer"
+                      },
+                      "triangle_count": {
+                        "type": "integer"
+                      },
+                      "is_manifold": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "is_closed": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "non_manifold_edge_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "boundary_edge_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "degenerate_face_count": {
+                        "anyOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "normals": {
+                        "type": "string",
+                        "enum": [
+                          "authored",
+                          "generated",
+                          "missing"
+                        ]
+                      },
+                      "inverted_normal_face_count": {
+                        "type": "integer"
+                      },
+                      "uv_sets": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "out_of_range": {
+                              "type": "boolean"
+                            },
+                            "min": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            },
+                            "max": {
+                              "type": "array",
+                              "items": {
+                                "type": "number"
+                              }
+                            }
+                          },
+                          "required": [
+                            "name",
+                            "out_of_range",
+                            "min",
+                            "max"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "bounding_box": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "min": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                              },
+                              "max": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                              },
+                              "size": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                },
+                                "minItems": 3,
+                                "maxItems": 3
+                              }
+                            },
+                            "required": [
+                              "min",
+                              "max",
+                              "size"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "World space, metres"
+                      },
+                      "material_path": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "skin_path": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "morph_target_count": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "node_index",
+                      "mesh_index",
+                      "primitive_index",
+                      "mode",
+                      "vertex_count",
+                      "face_count",
+                      "triangle_count",
+                      "is_manifold",
+                      "is_closed",
+                      "non_manifold_edge_count",
+                      "boundary_edge_count",
+                      "degenerate_face_count",
+                      "normals",
+                      "inverted_normal_face_count",
+                      "uv_sets",
+                      "bounding_box",
+                      "material_path",
+                      "skin_path",
+                      "morph_target_count"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "mesh_count": {
+                  "type": "integer"
+                },
+                "total_triangles": {
+                  "type": "integer"
+                },
+                "total_vertices": {
+                  "type": "integer"
+                },
+                "world_bounding_box": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "max": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "size": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        }
+                      },
+                      "required": [
+                        "min",
+                        "max",
+                        "size"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "largest_dimension_m": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "pivot_position": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "pivot_in_bounds": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Where the origin sits inside the bounds per axis: 0 = min, 0.5 = centre, 1 = max"
+                },
+                "pivot_at_base": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "up_axis": {
+                  "type": "string",
+                  "enum": [
+                    "Y",
+                    "Z"
+                  ]
+                },
+                "meters_per_unit": {
+                  "type": "number"
+                },
+                "scale_warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "meshes",
+                "mesh_count",
+                "total_triangles",
+                "total_vertices",
+                "world_bounding_box",
+                "largest_dimension_m",
+                "pivot_position",
+                "pivot_in_bounds",
+                "pivot_at_base",
+                "up_axis",
+                "meters_per_unit",
+                "scale_warnings"
+              ],
+              "additionalProperties": false
+            },
+            "animation": {
+              "type": "object",
+              "properties": {
+                "has_animation": {
+                  "type": "boolean"
+                },
+                "time_code_range": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "minItems": 2,
+                      "maxItems": 2,
+                      "items": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "time_unit": {
+                  "type": "string",
+                  "enum": [
+                    "seconds",
+                    "timecodes"
+                  ]
+                },
+                "frames_per_second": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "duration_seconds": {
+                  "type": "number"
+                },
+                "clips": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "start": {
+                        "type": "number"
+                      },
+                      "end": {
+                        "type": "number"
+                      },
+                      "duration_seconds": {
+                        "type": "number"
+                      },
+                      "channel_count": {
+                        "type": "integer"
+                      },
+                      "has_motion": {
+                        "type": "boolean"
+                      },
+                      "animated_prims": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "start",
+                      "end",
+                      "duration_seconds",
+                      "channel_count",
+                      "has_motion",
+                      "animated_prims"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "animated_prims": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "properties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "clips": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "properties",
+                      "clips"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "skeletons": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "joint_count": {
+                        "type": "integer"
+                      },
+                      "root_joint_path": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "bound_meshes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "max_influences_per_vertex": {
+                        "type": "integer"
+                      },
+                      "unbound_vertex_count": {
+                        "type": "integer"
+                      },
+                      "animated": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "joint_count",
+                      "root_joint_path",
+                      "bound_meshes",
+                      "max_influences_per_vertex",
+                      "unbound_vertex_count",
+                      "animated"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "blend_shapes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "target_mesh": {
+                        "type": "string"
+                      },
+                      "is_driven": {
+                        "type": "boolean"
+                      },
+                      "default_weight": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "prim_path",
+                      "target_mesh",
+                      "is_driven",
+                      "default_weight"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "root_motion_detected": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "has_animation",
+                "time_code_range",
+                "time_unit",
+                "frames_per_second",
+                "duration_seconds",
+                "clips",
+                "animated_prims",
+                "skeletons",
+                "blend_shapes",
+                "root_motion_detected"
+              ],
+              "additionalProperties": false
+            },
+            "materials": {
+              "type": "object",
+              "properties": {
+                "materials": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "shader_type": {
+                        "type": "string"
+                      },
+                      "bound_meshes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "inputs": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "input": {
+                              "type": "string"
+                            },
+                            "texture": {
+                              "type": "string"
+                            },
+                            "channel": {
+                              "type": "string"
+                            },
+                            "color_space": {
+                              "type": "string"
+                            },
+                            "tex_coord": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "input",
+                            "texture",
+                            "channel",
+                            "color_space",
+                            "tex_coord"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "alpha_mode": {
+                        "type": "string"
+                      },
+                      "double_sided": {
+                        "type": "boolean"
+                      },
+                      "unsupported_features": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "shader_type",
+                      "bound_meshes",
+                      "inputs",
+                      "alpha_mode",
+                      "double_sided",
+                      "unsupported_features"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "unbound_meshes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "textures": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "resolved": {
+                        "type": "boolean"
+                      },
+                      "resolution": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "minItems": 2,
+                            "maxItems": 2,
+                            "items": [
+                              {
+                                "type": "integer"
+                              },
+                              {
+                                "type": "integer"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "format": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "size_bytes": {
+                        "type": "integer"
+                      },
+                      "channel": {
+                        "type": "string"
+                      },
+                      "color_space": {
+                        "type": "string"
+                      },
+                      "used_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "material": {
+                              "type": "string"
+                            },
+                            "input": {
+                              "type": "string"
+                            },
+                            "channel": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "material",
+                            "input",
+                            "channel"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "memory_estimate_mb": {
+                        "type": "number"
+                      },
+                      "is_power_of_two": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "path",
+                      "resolved",
+                      "resolution",
+                      "format",
+                      "size_bytes",
+                      "channel",
+                      "color_space",
+                      "used_by",
+                      "memory_estimate_mb",
+                      "is_power_of_two"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "missing_textures": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "texture": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "material": {
+                        "type": "string"
+                      },
+                      "input": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "texture",
+                      "path",
+                      "material",
+                      "input"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "texture_memory_estimate_mb": {
+                  "type": "number"
+                },
+                "non_power_of_two": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "oversized": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "oversized_threshold": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "materials",
+                "unbound_meshes",
+                "textures",
+                "missing_textures",
+                "texture_memory_estimate_mb",
+                "non_power_of_two",
+                "oversized",
+                "oversized_threshold"
+              ],
+              "additionalProperties": false
+            },
+            "performance": {
+              "type": "object",
+              "properties": {
+                "total_triangles": {
+                  "type": "integer"
+                },
+                "total_vertices": {
+                  "type": "integer"
+                },
+                "draw_call_estimate": {
+                  "type": "integer"
+                },
+                "material_count": {
+                  "type": "integer"
+                },
+                "texture_count": {
+                  "type": "integer"
+                },
+                "file_size_bytes": {
+                  "type": "integer"
+                },
+                "estimated_gpu_memory_mb": {
+                  "type": "number"
+                },
+                "gpu_memory_breakdown_mb": {
+                  "type": "object",
+                  "properties": {
+                    "textures": {
+                      "type": "number"
+                    },
+                    "geometry": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "textures",
+                    "geometry"
+                  ],
+                  "additionalProperties": false
+                },
+                "texture_bytes": {
+                  "type": "integer"
+                },
+                "largest_texture_px": {
+                  "type": "integer"
+                },
+                "prim_count": {
+                  "type": "integer"
+                },
+                "scene_graph_depth": {
+                  "type": "integer"
+                },
+                "animation_seconds": {
+                  "type": "number"
+                },
+                "instancing_candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prims": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "copies": {
+                        "type": "integer"
+                      },
+                      "triangle_count": {
+                        "type": "integer"
+                      }
+                    },
+                    "required": [
+                      "prims",
+                      "copies",
+                      "triangle_count"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "budget_check": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "type": "string"
+                    },
+                    "pass": {
+                      "type": "boolean"
+                    },
+                    "overages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "metric": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "number"
+                          },
+                          "limit": {
+                            "type": "number"
+                          },
+                          "worst_offender_prim_path": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "metric",
+                          "value",
+                          "limit",
+                          "worst_offender_prim_path"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "profile",
+                    "pass",
+                    "overages"
+                  ],
+                  "additionalProperties": false
+                },
+                "profile_limits": {
+                  "type": "object",
+                  "additionalProperties": {},
+                  "description": "The limits that were applied"
+                }
+              },
+              "required": [
+                "total_triangles",
+                "total_vertices",
+                "draw_call_estimate",
+                "material_count",
+                "texture_count",
+                "file_size_bytes",
+                "estimated_gpu_memory_mb",
+                "gpu_memory_breakdown_mb",
+                "texture_bytes",
+                "largest_texture_px",
+                "prim_count",
+                "scene_graph_depth",
+                "animation_seconds",
+                "instancing_candidates",
+                "budget_check",
+                "profile_limits"
+              ],
+              "additionalProperties": false
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "validation",
+            "geometry",
+            "animation",
+            "materials",
+            "performance",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false,
+          "description": "Empty when ok is false"
+        }
+      ]
+    }
+  },
+  "required": [
+    "ok",
+    "summary",
+    "duration_ms",
+    "errors",
+    "data"
+  ],
+  "additionalProperties": false
+}

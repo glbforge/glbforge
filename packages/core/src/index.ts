@@ -21,7 +21,7 @@ export { toStl, type StlOptions, type StlResult } from './stl.js';
 export { detectGenerator, type GeneratorGuess, type GeneratorProfile } from './detect.js';
 export { alignmentScore, sampleSurface, triangleSoup, type AlignmentScore } from './harness/align.js';
 export {
-  renderViews, renderRaw, computeFrame, defaultRig, verifyRig, thumbnailRig, sharpTextureDecoder,
+  renderViews, renderRaw, renderRawFragments, frameOfFragments, computeFrame, defaultRig, verifyRig, thumbnailRig, sharpTextureDecoder,
   type RenderedView, type RawView, type RenderCamera, type RenderFrame, type RenderOptions, type TextureDecoder,
 } from './harness/render.js';
 export { composeSheet, renderSheetPng, type SheetImage } from './harness/sheet.js';
@@ -29,3 +29,5 @@ export {
   perceptualDiff, perceptualSnapshot, perceptualCompare, compareViews, ssim, diffHeatmap, applyPerceptualVerdict,
   PERCEPTUAL_RULE, type PerceptualResult, type PerceptualVerdict, type PerceptualOptions, type ViewScore,
 } from './harness/perceptual.js';
+export * from './inspect/index.js';
+export * from './usd-read/index.js';

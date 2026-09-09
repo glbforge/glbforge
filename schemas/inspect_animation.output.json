@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.5.0/inspect_animation.output.json",
+  "title": "inspect_animation.output",
+  "description": "Response envelope of the inspect_animation tool.",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "false only when the tool could not run; an asset with errors in it is still ok:true"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line, human-readable"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "FILE_NOT_FOUND",
+              "FILE_UNREADABLE",
+              "FORMAT_UNSUPPORTED",
+              "GLTF_VERSION_UNSUPPORTED",
+              "EXTENSION_UNSUPPORTED",
+              "BUFFER_UNRESOLVED",
+              "USDZ_ENTRY_COMPRESSED",
+              "USDZ_ENTRY_MISALIGNED",
+              "USDZ_FILE_TYPE_DISALLOWED",
+              "USDZ_NO_LAYER",
+              "USDZ_LAYER_NOT_FIRST",
+              "USDZ_NESTED_PACKAGE",
+              "USDZ_ARCHIVE_INVALID",
+              "MISSING_DEFAULT_PRIM",
+              "DEFAULT_PRIM_NOT_FOUND",
+              "UP_AXIS_Z",
+              "MISSING_UP_AXIS",
+              "METERS_PER_UNIT_NONSTANDARD",
+              "MISSING_METERS_PER_UNIT",
+              "UNRESOLVED_COMPOSITION_ARC",
+              "USD_SCHEMA_ERROR",
+              "MESH_INDEX_OUT_OF_RANGE",
+              "PRIM_TYPE_UNSUPPORTED_ARKIT",
+              "SHADER_NOT_PREVIEWSURFACE",
+              "SUBDIVISION_UNSUPPORTED",
+              "MESH_EMPTY",
+              "MESH_NON_MANIFOLD",
+              "MESH_DEGENERATE_FACES",
+              "NORMALS_MISSING",
+              "NORMALS_INVERTED",
+              "UV_MISSING",
+              "UV_OUT_OF_RANGE",
+              "MESH_UNINDEXED",
+              "MESH_UNWELDED",
+              "SCALE_TOO_SMALL",
+              "SCALE_TOO_LARGE",
+              "PIVOT_NOT_AT_BASE",
+              "ZUP_SUSPECTED",
+              "SKELETON_UNBOUND",
+              "MESH_NOT_DEFORMING",
+              "SKIN_UNBOUND_VERTICES",
+              "SKIN_TOO_MANY_INFLUENCES",
+              "BLENDSHAPE_UNDRIVEN",
+              "ANIMATION_ZERO_LENGTH",
+              "ANIMATION_NO_MOTION",
+              "SKELETON_NO_ANIMATION",
+              "ROOT_MOTION",
+              "NODE_ANIMATION_DROPPED",
+              "CLIPS_DROPPED",
+              "INFLUENCES_TRUNCATED",
+              "TEXTURE_UNRESOLVED",
+              "MATERIAL_UNBOUND",
+              "MESH_NO_MATERIAL",
+              "TEXTURE_OVERSIZED",
+              "TEXTURE_NPOT",
+              "TEXTURE_FORMAT_UNSUPPORTED",
+              "TEXTURE_UNUSED",
+              "MATERIAL_FEATURE_UNSUPPORTED",
+              "MATERIAL_ALPHA_BLEND",
+              "MATERIAL_BLEND_WITHOUT_ALPHA",
+              "MATERIALS_DUPLICATE",
+              "DEFAULT_MATERIAL_BOUND",
+              "TEXTURE_TRANSCODED",
+              "TRIANGLE_BUDGET_EXCEEDED",
+              "VERTEX_BUDGET_EXCEEDED",
+              "DRAW_CALL_BUDGET_EXCEEDED",
+              "FILE_SIZE_BUDGET_EXCEEDED",
+              "GPU_MEMORY_BUDGET_EXCEEDED",
+              "TEXTURE_SIZE_BUDGET_EXCEEDED",
+              "TEXTURE_BYTES_BUDGET_EXCEEDED",
+              "MATERIAL_BUDGET_EXCEEDED",
+              "PRIM_COUNT_BUDGET_EXCEEDED",
+              "SCENE_DEPTH_BUDGET_EXCEEDED",
+              "INSTANCING_CANDIDATE",
+              "FIDELITY_BELOW_FLOOR",
+              "FIDELITY_MEASURED",
+              "LOD_TARGET_MISSED",
+              "NORMALS_GENERATED",
+              "PRIMITIVES_JOINED",
+              "MATERIALS_PALETTED",
+              "HIERARCHY_FLATTENED",
+              "MESH_WELDED",
+              "MESH_SIMPLIFIED",
+              "TEXTURES_REENCODED",
+              "DEGENERATE_PRUNED",
+              "UV_FLIPPED",
+              "AXIS_CONVERTED",
+              "SCALE_CONVERTED",
+              "MORPH_TARGETS_DROPPED",
+              "ANIMATED_ASSET",
+              "GENERATOR_FINGERPRINT",
+              "NO_GEOMETRY_TO_RENDER",
+              "FRAME_OUT_OF_RANGE",
+              "CLIP_FORMAT_UNSUPPORTED",
+              "DRY_RUN",
+              "ROUTED_TO_GENERATION",
+              "TOOL_ERROR"
+            ],
+            "description": "Stable, enumerable code — branch on this, not on message text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+          },
+          "prim_path": {
+            "type": "string",
+            "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+          },
+          "property": {
+            "type": "string",
+            "description": "Property / attribute the issue concerns"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete next step, naming the tool call when one fixes it"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "prim_path",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "One diagnostic"
+      },
+      "description": "Every diagnostic (error, warning, info), errors first"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "has_animation": {
+              "type": "boolean"
+            },
+            "time_code_range": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "items": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "time_unit": {
+              "type": "string",
+              "enum": [
+                "seconds",
+                "timecodes"
+              ]
+            },
+            "frames_per_second": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "duration_seconds": {
+              "type": "number"
+            },
+            "clips": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "number"
+                  },
+                  "end": {
+                    "type": "number"
+                  },
+                  "duration_seconds": {
+                    "type": "number"
+                  },
+                  "channel_count": {
+                    "type": "integer"
+                  },
+                  "has_motion": {
+                    "type": "boolean"
+                  },
+                  "animated_prims": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "prim_path",
+                  "name",
+                  "start",
+                  "end",
+                  "duration_seconds",
+                  "channel_count",
+                  "has_motion",
+                  "animated_prims"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "animated_prims": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "properties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "clips": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "prim_path",
+                  "properties",
+                  "clips"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "skeletons": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "joint_count": {
+                    "type": "integer"
+                  },
+                  "root_joint_path": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bound_meshes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "max_influences_per_vertex": {
+                    "type": "integer"
+                  },
+                  "unbound_vertex_count": {
+                    "type": "integer"
+                  },
+                  "animated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "prim_path",
+                  "name",
+                  "joint_count",
+                  "root_joint_path",
+                  "bound_meshes",
+                  "max_influences_per_vertex",
+                  "unbound_vertex_count",
+                  "animated"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "blend_shapes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "target_mesh": {
+                    "type": "string"
+                  },
+                  "is_driven": {
+                    "type": "boolean"
+                  },
+                  "default_weight": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "name",
+                  "prim_path",
+                  "target_mesh",
+                  "is_driven",
+                  "default_weight"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "root_motion_detected": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "has_animation",
+            "time_code_range",
+            "time_unit",
+            "frames_per_second",
+            "duration_seconds",
+            "clips",
+            "animated_prims",
+            "skeletons",
+            "blend_shapes",
+            "root_motion_detected"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false,
+          "description": "Empty when ok is false"
+        }
+      ]
+    }
+  },
+  "required": [
+    "ok",
+    "summary",
+    "duration_ms",
+    "errors",
+    "data"
+  ],
+  "additionalProperties": false
+}

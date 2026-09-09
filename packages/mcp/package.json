@@ -6,8 +6,9 @@
     "glbforge-mcp": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "build": "tsc -p tsconfig.json && tsx scripts/emit-schemas.ts",
+    "test": "vitest run",
+    "schemas": "tsx scripts/emit-schemas.ts"
   },
   "dependencies": {
     "@glbforge/core": "workspace:^",
@@ -20,7 +21,11 @@
   "devDependencies": {
     "@types/node": "^22.20.1",
     "typescript": "^5.6.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "zod-to-json-schema": "^3.25.2",
+    "tsx": "^4.19.0"
   },
   "license": "MIT",
   "homepage": "https://glbforge.dev",
@@ -32,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge MCP server — 8 tools that let AI agents take 3D assets from generation to web-ready.",
+  "description": "GLBForge MCP server \u2014 agent-oriented 3D asset tooling: validate / inspect / render GLB and USDZ with stable error codes and prim paths, plus optimize, export, and generation.",
   "keywords": [
     "gltf",
     "glb",

@@ -14,7 +14,8 @@ let dir: string;
 let glb: string;
 let client: Client;
 
-const parse = (r: Result) => JSON.parse(r.content[0].text!);
+const envelope = (r: Result) => JSON.parse(r.content[0].text!);
+const parse = (r: Result) => envelope(r).data;
 const image = (r: Result) => r.content.find((b) => b.type === 'image');
 
 beforeAll(async () => {
@@ -50,9 +51,9 @@ describe('agent-friendly MCP surface', () => {
   it('lists every tool with the preview/drill-down surface', async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      'analyze_glb', 'audit_directory', 'capabilities', 'compare_glb', 'export_stl', 'export_usdz', 'extrude_image', 'generate_image_to_3d',
-      'generation_status', 'inspect_report', 'list_profiles', 'meshy_create_task', 'meshy_download',
-      'meshy_task_status', 'optimize_glb', 'render_preview', 'ship_asset',
+      'analyze_glb', 'analyze_performance', 'audit_directory', 'capabilities', 'compare_glb', 'export_stl', 'export_usdz', 'extrude_image', 'generate_image_to_3d',
+      'generation_status', 'inspect_all', 'inspect_animation', 'inspect_geometry', 'inspect_materials', 'inspect_report', 'list_profiles', 'meshy_create_task', 'meshy_download',
+      'meshy_task_status', 'optimize_glb', 'render', 'render_animation_strip', 'render_preview', 'ship_asset', 'validate',
     ]);
   });
 
@@ -63,8 +64,13 @@ describe('agent-friendly MCP surface', () => {
     expect(card.verdict).toMatch(/budget/);
     expect(card.drillDown.tool).toBe('inspect_report');
     expect(card.textures).toBeTypeOf('number'); // count, not the per-texture table
-    expect(r.structuredContent?.score).toBe(card.score);
-    expect(r.content[0].text!.length).toBeLessThan(2500);
+    expect((r.structuredContent?.data as { score: number }).score).toBe(card.score);
+    const env = envelope(r);
+    expect(env.ok).toBe(true);
+    expect(env.summary).toMatch(/score \d+\/100/);
+    expect(env.duration_ms).toBeTypeOf('number');
+    expect(Array.isArray(env.errors)).toBe(true);
+    expect(r.content[0].text!.length).toBeLessThan(6000);
     const img = image(r)!;
     expect(img.mimeType).toBe('image/png');
     expect(Buffer.from(img.data!, 'base64').subarray(1, 4).toString()).toBe('PNG');
