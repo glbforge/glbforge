@@ -312,3 +312,25 @@ whether the underlying capability is there for each input family.
 7. **Docs**: `docs/error-codes.md`, `docs/performance-profiles.md`,
    `CHANGELOG.md`, and the sync targets from `CLAUDE.md` (`README.md`,
    `site/llms.txt`, `packages/mcp/README.md`, `ROADMAP.md`).
+
+## 8. Outcome (same day)
+
+Everything in §5 marked missing/partial is implemented except the items in
+§6, which remain as stated (single-layer USD, no mp4, structural-subset
+schema checks, heuristic Z-up detection for glTF). Concretely:
+
+- 8 new tools (`validate`, `inspect_geometry`, `inspect_animation`,
+  `inspect_materials`, `analyze_performance`, `render`,
+  `render_animation_strip`, `inspect_all`), 17 existing tools retrofitted
+  with the envelope, `outputSchema`, codes and prim paths; mutating tools
+  gained `dry_run`, `render`, `diff`, `post_validation`.
+- `schemas/` (52 files + index), `docs/error-codes.md` (generated),
+  `docs/performance-profiles.md`, `CHANGELOG.md`.
+- Fixtures for all eight failure modes (glTF and USD variants where the mode
+  applies) with integration tests asserting code + `prim_path` and validating
+  every response against the published schemas; `validate(quick)` on a
+  50k-triangle GLB measures tens of milliseconds (test asserts < 1 s).
+- The crate reader was checked value-for-value against a file written by
+  Pixar's `usd-core` 0.26 (crate 0.8.0: compressed int/float arrays, time
+  samples, references with layer offsets, dictionaries, variant selections)
+  and against GLBForge's own writer.

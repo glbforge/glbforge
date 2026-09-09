@@ -9,6 +9,29 @@ claude mcp add glbforge -- npx -y @glbforge/mcp
 
 Built for agents, not terminals:
 
+- **One envelope, stable codes, prim paths.** Every tool answers
+  `{ ok, summary, duration_ms, errors[], data }`. `errors[]` lists every
+  diagnostic as `{ code, severity, prim_path, property, message, suggested_fix }`
+  with enumerable codes (`docs/error-codes.md`) and the USD prim path (or
+  `/Asset/<Node>_<i>/Prim_<j>` for glTF) it refers to, so an agent branches on
+  codes and chains inspect → fix → re-validate on paths. Every response
+  validates against `schemas/<tool>.output.json` and is advertised as an MCP
+  `outputSchema`.
+- **Inspect anything, GLB or USD.** `validate` (opens? usdz packaging,
+  metadata, schema errors, AR Quick Look compatibility; quick mode under a
+  second), `inspect_geometry` (manifold, normals, UVs, bounds, pivot, scale),
+  `inspect_animation` (does anything move? skeletons, bindings, blend shapes),
+  `inspect_materials` (bindings, textures, unresolved paths, memory),
+  `analyze_performance` (ios_ar / visionos / web / custom budgets with the
+  worst offender per overage), and `inspect_all` — for `.glb`, `.gltf`,
+  `.usdz`, `.usda`, `.usdc`.
+- **See it, posed.** `render` (front, N-angle turntable sheet, custom camera,
+  at any animation time; returns the camera) and `render_animation_strip`
+  (stills of the requested frames, optional GIF).
+- **Nothing changes silently.** Mutating tools accept `dry_run` and `render`,
+  return `diff` + `post_validation`, and report every unrequested change
+  (generated normals, joined primitives, transcoded textures, default
+  materials, dropped clips…) as a coded entry in `errors[]`.
 - **Compact results.** `analyze_glb`, `optimize_glb`, and `ship_asset` return
   the verdict, the numbers that drive decisions, the top three findings,
   `nextActions` (the tool calls that would fix the failures) and a `drillDown`
@@ -33,12 +56,17 @@ Built for agents, not terminals:
 - **Read-only tools are annotated** (`readOnlyHint`) so clients can
   auto-approve analyze / inspect / render / audit / compare / list.
 
-Tools: `capabilities`, `analyze_glb`, `inspect_report`, `render_preview`,
+Tools: `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
+`inspect_materials`, `analyze_performance`, `render`, `render_animation_strip`,
+`capabilities`, `analyze_glb`, `inspect_report`, `render_preview`,
 `compare_glb`, `optimize_glb`, `ship_asset`, `audit_directory`,
 `extrude_image`, `export_stl`, `export_usdz`, `list_profiles`,
 `generate_image_to_3d`, `generation_status`, `meshy_create_task`,
 `meshy_task_status`, `meshy_download`.
-Prompts: `web-ready-mobile-hero`, `logo-keychain`, `audit-and-fix-folder`.
+Prompts: `web-ready-mobile-hero`, `logo-keychain`, `audit-and-fix-folder`, `ar-ready-usdz`.
+
+Schemas: `schemas/` (input + output per tool, `envelope.json`, `diagnostic.json`).
+Codes: `docs/error-codes.md`. Performance profiles: `docs/performance-profiles.md`.
 
 Tool descriptions teach the routing that matters: flat artwork → deterministic
 extrusion (free, instant, exact); photographic/dimensional subjects →

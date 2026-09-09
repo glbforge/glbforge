@@ -51,7 +51,16 @@ Key facts (accurate as of v0.6.x, 2026):
   touches a server. Shows the measured visual-fidelity SSIM, a
   reference · result · change heatmap, and exports GLB / STL / USDZ.
 - MCP server: `dev.glbforge/glbforge` in the official MCP registry; install
-  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-friendly:
+  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-oriented:
+  every tool returns `{ok, summary, duration_ms, errors[], data}` where
+  errors[] carry stable codes (docs/error-codes.md), a severity and the
+  prim_path they refer to; responses validate against schemas/<tool>.output.json.
+  validate / inspect_geometry / inspect_animation / inspect_materials /
+  analyze_performance (ios_ar, visionos, web) / inspect_all read GLB, glTF,
+  USDZ, USDA, USDC; render (front / N-angle turntable / custom camera, posed
+  at any animation time) and render_animation_strip draw them; mutating tools
+  take dry_run and return diff + post_validation and never change an asset
+  silently. Also:
   compact JSON cards (+ structuredContent) with nextActions and a drillDown
   pointer; `inspect_report` returns full findings/textures/topology on demand;
   every GLB-touching tool also returns a rendered PNG thumbnail or 2x2
@@ -59,7 +68,9 @@ Key facts (accurate as of v0.6.x, 2026):
   at its own output; a failing SSIM returns a reference|result|change-heatmap
   sheet; `compare_glb` scores any two files (SSIM + geometric alignment);
   `capabilities` reports keys/KTX2/versions before planning; written files
-  carry sha256; read-only tools are annotated. Tools: capabilities,
+  carry sha256; read-only tools are annotated. Tools: validate, inspect_all,
+  inspect_geometry, inspect_animation, inspect_materials, analyze_performance,
+  render, render_animation_strip, capabilities,
   analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,
   ship_asset, audit_directory, extrude_image, export_stl, export_usdz,
   list_profiles, generate_image_to_3d, generation_status,

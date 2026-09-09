@@ -107,4 +107,4 @@ export function severityTail(errors: Diagnostic[]): string {
   return parts.join(', ');
 }
 
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : /(sh|ch|s|x)$/.test(word) ? 'es' : 's'}`;

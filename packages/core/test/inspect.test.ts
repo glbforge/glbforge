@@ -123,6 +123,52 @@ def Xform "Root" (
   });
 });
 
+describe('Pixar oracle (opt-in: GLBFORGE_PXR_PYTHON=<venv>/bin/python)', () => {
+  const python = process.env.GLBFORGE_PXR_PYTHON;
+  it.skipIf(!python)('reads a crate file written by usd-core value-for-value and agrees with the usda twin', async () => {
+    const { execFileSync } = await import('node:child_process');
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const dir = await mkdtemp(join(tmpdir(), 'glbforge-usd-oracle-'));
+    try {
+      const out = execFileSync(python!, [join(dirname(fileURLToPath(import.meta.url)), 'usd-reader-oracle.py'), dir], { encoding: 'utf8' });
+      expect(out).toMatch(/OK usdz True/);
+      const c = readUsdc(new Uint8Array(readFileSync(join(dir, 'scene.usdc'))));
+      const a = readUsda(readFileSync(join(dir, 'scene.usda'), 'utf8'));
+      expect(c.crateVersion).toMatch(/^0\.(8|9|10)\./);
+      expect(c.warnings).toEqual([]);
+      const byPath = (l: typeof c) => new Map([...walkPrims(l.prims)].map((p) => [p.path, p]));
+      const pc = byPath(c), pa = byPath(a);
+      expect([...pc.keys()].sort()).toEqual([...pa.keys()].sort());
+      const gridC = pc.get('/Root/Geo/Grid')!, gridA = pa.get('/Root/Geo/Grid')!;
+      const val = (p: typeof gridC, n: string) => p.properties.find((x) => x.name === n)!;
+      expect(Array.from(val(gridC, 'faceVertexIndices').value as Int32Array)).toEqual(Array.from(val(gridA, 'faceVertexIndices').value as Int32Array)); // compressed ints
+      expect(Array.from(val(gridC, 'primvars:lut').value as Float32Array)).toEqual(Array.from(val(gridA, 'primvars:lut').value as Float32Array)); // 't' lookup-table floats
+      expect(Array.from(val(gridC, 'primvars:ints').value as Float32Array)).toEqual(Array.from(val(gridA, 'primvars:ints').value as Float32Array)); // 'i' integral floats
+      expect(val(gridC, 'doubleSided').value).toBe(true);
+      expect((pc.get('/Root')!.meta.customData as { glbforge: { note: string; n: number } }).glbforge).toEqual({ note: 'hello', n: 3 });
+      expect(pc.get('/Root/Referenced')!.arcs[0]).toMatch(/references: \.\/ref\.usda/);
+      const geo = pc.get('/Root/Geo')!;
+      expect(val(geo, 'xformOp:translate').timeSamples!.times).toEqual([0, 24, 48]);
+      const anim = pc.get('/Root/Char/Skel/Anim')!;
+      // Authored as Gf.Quatf(real=0.7071, i=0, j=0, k=0.7071): 90° about Z. Both readers yield (x,y,z,w) memory order.
+      const rot = val(anim, 'rotations').timeSamples!.values[1] as Float32Array;
+      expect(Array.from(rot.subarray(4, 8)).map((x) => +x.toFixed(4))).toEqual([0, 0, 0.7071, 0.7071]);
+      const rotA = val(pa.get('/Root/Char/Skel/Anim')!, 'rotations').timeSamples!.values[1] as Float32Array;
+      expect(Array.from(rotA.subarray(4, 8)).map((x) => +x.toFixed(4))).toEqual([0, 0, 0.7071, 0.7071]);
+      expect(Array.from(val(anim, 'scales').timeSamples!.values[0] as Float32Array)).toEqual([1, 1, 1, 1, 1, 1]); // half3
+      // The usdz package round-trips through the loader-level pieces too.
+      const z = readUsdz(new Uint8Array(readFileSync(join(dir, 'scene.usdz'))));
+      expect(z.specCompliant).toBe(true);
+      const ir = fromUsd(readUsdc(z.layer!.data), { format: 'usdz' });
+      expect(ir.meshes.map((m) => m.path)).toEqual(['/Root/Geo/Grid', '/Root/Char/Tube']);
+      expect(inspectAnimation(ir).blend_shapes[0]).toMatchObject({ name: 'bulge', is_driven: true });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+});
+
 describe('inspectors on the built-in rig', () => {
   it('sees the skeleton, the driven blend shape, and poses the clip', async () => {
     const doc = makeRiggedCylinder();

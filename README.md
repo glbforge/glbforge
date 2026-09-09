@@ -82,7 +82,7 @@ shifted or shrunken result cannot re-frame itself into a good score.
 | `@glbforge/core`  | pure analysis library: stats, topology, rules, budgets |
 | `glbforge` (CLI)   | `glbforge` command-line interface                          |
 | `@glbforge/meshy` | typed Meshy REST client: tasks, polling w/ backoff, downloads |
-| `@glbforge/mcp`   | MCP server: compact report cards + `inspect_report` drill-down, rendered previews from every tool, optimize/ship/forge/STL, generation |
+| `@glbforge/mcp`   | MCP server: validate / inspect / render GLB and USD with stable error codes + prim paths, compact report cards, optimize/ship/forge/STL/USDZ with dry-run + diff, generation |
 
 ## MCP server
 
@@ -93,7 +93,18 @@ shifted or shrunken result cannot re-frame itself into a good score.
 claude mcp add glbforge -- node /path/to/XUI/packages/mcp/dist/index.js
 ```
 
-Built for agents: results are compact cards (verdict, key numbers, every
+Built for agents. Every tool answers one envelope —
+`{ ok, summary, duration_ms, errors[], data }` — where `errors[]` carries
+every diagnostic with a stable code (`docs/error-codes.md`), a severity and
+the prim path it refers to, and every response validates against
+`schemas/<tool>.output.json`. `validate`, `inspect_geometry`,
+`inspect_animation`, `inspect_materials`, `analyze_performance` and
+`inspect_all` read GLB, glTF, USDZ, USDA and USDC (pure-TypeScript USD
+readers, single layer); `render` / `render_animation_strip` draw any of them,
+posed at any animation time. Mutating tools take `dry_run` and return a
+`diff` plus `post_validation`, and report every change they made on their own
+(generated normals, joined primitives, transcoded textures…) as a coded entry.
+Results are compact cards (verdict, key numbers, every
 error plus top findings, `nextActions`, a `drillDown` pointer) with
 `inspect_report` for the full findings/textures/topology on demand; every
 tool that touches a GLB returns a rendered thumbnail or 2x2 turntable, and a
