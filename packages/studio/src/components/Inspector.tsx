@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, getBackend, type AssetDetail, type AssetSummary } from '../api';
+import { api, getBackend, isIOS, type AssetDetail, type AssetSummary } from '../api';
 
 const mb = (bytes: number) => (bytes / 1048576).toFixed(1) + 'MB';
 const num = (value: number) => value.toLocaleString('en-US');
@@ -153,9 +153,18 @@ export function Inspector(props: {
         >
           Re-analyze with {profile}
         </button>
+        {isIOS() ? (
+          <>
+            <button onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬇ Export USDZ — open in AR Quick Look</button>
+            <div style={{ color: 'var(--dim)', fontSize: 11 }}>
+              iPhone/iPad cannot open .glb files natively — the USDZ opens in AR from the Downloads list. Save the GLB for desktop or web viewers.
+            </div>
+          </>
+        ) : (
+          <button className="ghost" onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬇ Export USDZ (iOS AR)</button>
+        )}
         <button className="ghost" onClick={() => void api.downloadStl(asset.id, asset.name)}>⬇ Export STL (80mm)</button>
-        <button className="ghost" onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬇ Export USDZ (iOS AR)</button>
-        <button className="ghost" onClick={() => void api.downloadGlb(asset.id, asset.name)}>⬇ Download GLB</button>
+        <button className="ghost" onClick={() => void api.downloadGlb(asset.id, asset.name)}>⬇ Download GLB{isIOS() ? ' (desktop/web)' : ''}</button>
         {meshy && <div style={{ color: 'var(--dim)', fontSize: 11 }}>Meshy connected — drop an image on the rail to forge or generate.</div>}
       </div>
 

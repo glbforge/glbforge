@@ -108,7 +108,8 @@ export const api = {
     const blob = backend === 'local'
       ? await (await local()).glbBlob(id)
       : await fetch(`/api/assets/${id}/file`).then((r) => r.blob());
-    triggerDownload(blob, name);
+    // Single extension for the saved file: iOS Files / mail clients mis-handle "name.web.glb".
+    triggerDownload(blob, name.replace(/\.web(\.lod\d+)?\.glb$/i, '-web$1.glb'));
   },
 
   upload: async (name: string, bytes: ArrayBuffer, profile: string) =>
@@ -164,6 +165,10 @@ export const api = {
 let localUrls: ((id: string) => string) | null = null;
 export function registerLocalUrls(fn: (id: string) => string): void { localUrls = fn; }
 function localFileUrl(id: string): string { return localUrls ? localUrls(id) : ''; }
+
+/** iPhone / iPad (incl. iPadOS desktop UA with touch): AR Quick Look opens USDZ; GLB has no native viewer. */
+export const isIOS = (): boolean =>
+  typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
