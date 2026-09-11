@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/inspect_report.output.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/inspect_report.output.json",
   "title": "inspect_report.output",
   "description": "Response envelope of the inspect_report tool.",
   "type": "object",

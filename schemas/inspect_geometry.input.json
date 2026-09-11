@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/inspect_geometry.input.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/inspect_geometry.input.json",
   "title": "inspect_geometry.input",
   "description": "Arguments of the inspect_geometry tool.",
   "type": "object",

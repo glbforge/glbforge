@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/extrude_image.input.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/extrude_image.input.json",
   "title": "extrude_image.input",
   "description": "Arguments of the extrude_image tool.",
   "type": "object",
