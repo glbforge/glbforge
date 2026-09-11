@@ -15,6 +15,14 @@
   Forge output is still watertight and byte-deterministic; pillow/emboss
   vertex positions and triangle counts change (better-shaped caps), so
   re-render any pixel baselines built on them.
+- Regenerated with the fixed extruder: `assets/sample-ring.glb` (the Action
+  self-test asset; `--bevel 0.01` at current defaults), the landing-page
+  showcase models `site/models/plush.glb` and `neon.glb`, and the Studio
+  bundle under `site/studio`. The local forge examples were rebuilt the same
+  way; the dogfood table's three bevel rows now read `open-edges non-manifold`,
+  which the pre-fix extruder produces identically at those settings (bevel
+  inset clamping on dense contours), so that is a tracked bevel limitation,
+  not a winding regression.
 
 ## 0.7.0 — 2026-09-11 — agent-oriented feedback for MCP consumers
 
