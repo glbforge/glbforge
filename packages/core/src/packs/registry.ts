@@ -121,6 +121,8 @@ export interface RunPacksOptions {
   topology?: boolean;
   /** Param overrides per pack name, applied over the profile's. */
   params?: Record<string, ParamValues>;
+  /** Caller-owned memo of mesh topology (IR mesh index → result) so a report and its packs share one pass. */
+  topologyCache?: Map<number, MeshTopology | null>;
 }
 
 const RANK: Record<DiagnosticSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -155,7 +157,7 @@ export function runPacks(ir: SceneIR, opts: RunPacksOptions = {}): PackRunResult
   const profile = opts.profile ? resolveRuleProfile(opts.profile) : null;
   const packSpecs = opts.packs ?? profile?.packs ?? ['core-geometry'];
   const resolved = packSpecs.map((p) => (typeof p === 'string' ? getPack(p) : p));
-  const shared = { topology: new Map<number, MeshTopology | null>(), provenance: detectProvenance(ir) };
+  const shared = { topology: opts.topologyCache ?? new Map<number, MeshTopology | null>(), provenance: detectProvenance(ir) };
   const findings: RuleFinding[] = [];
   const skipped: PackRunResult['skipped'] = [];
   for (const pack of resolved) {

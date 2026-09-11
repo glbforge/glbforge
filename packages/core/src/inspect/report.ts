@@ -1,0 +1,246 @@
+/**
+ * `inspectScene` — the inner-loop read of an asset: the semantic questions
+ * an agent gets wrong (is it one piece, is it closed, how big is it in real
+ * units, which way is up, where is the origin, are transforms applied),
+ * answered as measured facts, plus the rule-pack findings for a profile,
+ * plus a deterministic one-paragraph summary.
+ *
+ * Facts and findings are separate on purpose: findings describe problems
+ * (with cause and fix), facts describe the asset whether or not anything
+ * is wrong. Anything this report cannot measure says so — `front` is
+ * always `unknown` here because no heuristic is honest on the symmetric
+ * objects that make up most assets; declare it with an expectation.
+ */
+import { runPacks, type RunPacksOptions } from '../packs/registry.js';
+import type { PackRunResult, RuleFinding } from '../packs/types.js';
+import { IDENTITY, transformPoint, type SceneIR } from './ir.js';
+import { meshTopology, type MeshTopology } from './topology.js';
+
+export interface InspectOptions extends Omit<RunPacksOptions, 'topologyCache'> {
+  /** Fraction of the bounding-box size within which the origin counts as "at" a landmark. Default 0.05. */
+  originTolerance?: number;
+}
+
+export interface InspectMeshFacts {
+  prim_path: string;
+  name: string;
+  triangles: number;
+  vertices: number;
+  /** null when the topology pass was disabled or the mesh is not triangles. */
+  shells: number | null;
+  watertight: boolean | null;
+  boundary_loops: number | null;
+  boundary_edges: number | null;
+  non_manifold_edges: number | null;
+  degenerate_triangles: number | null;
+}
+
+export interface UnappliedTransform {
+  prim_path: string;
+  name: string;
+  translation: number[];
+  /** Rotation angle in degrees (0 = none). */
+  rotation_deg: number;
+  scale: number[];
+}
+
+export type OriginLandmark = 'base-center' | 'center' | 'centroid' | 'elsewhere';
+
+export interface InspectReport {
+  format: SceneIR['format'];
+  source_path: string | null;
+  profile: string;
+  packs: string[];
+  provenance: PackRunResult['provenance'];
+  /** Deterministic one-paragraph reading of the facts and the top findings. */
+  summary: string;
+  scene: { meshes: number; triangles: number; vertices: number; materials: number; nodes: number; depth: number };
+  topology: {
+    /** Sum over meshes; null when the pass was disabled. */
+    shells: number | null;
+    /** Every triangle mesh closed and manifold. */
+    watertight: boolean | null;
+    meshes: InspectMeshFacts[];
+  };
+  scale: {
+    units: 'm';
+    meters_per_unit: number;
+    bounding_box: { min: number[]; max: number[]; size: number[] } | null;
+    largest_dimension_m: number | null;
+    /** Plausibility needs a category; without one this is honestly unknown. */
+    plausibility: 'unknown';
+  };
+  orientation: {
+    up_axis: 'Y' | 'Z';
+    /** glTF is Y-up by definition; USD declares it. */
+    up_axis_source: 'format' | 'metadata';
+    /** Never inferred: symmetric objects defeat every heuristic. Declare it with an expectation. */
+    front: 'unknown';
+  };
+  origin: {
+    at: OriginLandmark;
+    /** Where the world origin sits inside the bounds, 0 = min … 1 = max per axis; null without geometry. */
+    position_in_bounds: number[] | null;
+    /** Signed height of the origin above the bottom of the bounds along the up axis (negative = below). */
+    height_above_base_m: number | null;
+    /** Distance from the origin to the mean vertex position. */
+    distance_to_centroid_m: number | null;
+  };
+  hierarchy: {
+    nodes: number;
+    mesh_nodes: number;
+    depth: number;
+    /** Mesh-bearing nodes whose local transform is not identity. */
+    unapplied_transforms: UnappliedTransform[];
+    non_uniform_scale: string[];
+    /** Negative determinant: mirrored, which flips winding. */
+    mirrored: string[];
+    /** Top-level node names, first eight. */
+    root_names: string[];
+  };
+  findings: RuleFinding[];
+  skipped: PackRunResult['skipped'];
+}
+
+const fmt = (n: number) => n.toLocaleString('en-US');
+const m3 = (v: number[]) => v.map((x) => x.toFixed(2)).join(' × ');
+const plural = (n: number, word: string) => `${fmt(n)} ${word}${n === 1 ? '' : /(sh|ch|s|x)$/.test(word) ? 'es' : 's'}`;
+const isId = (n: SceneIR['nodes'][number]) =>
+  n.translation.every((v) => Math.abs(v) < 1e-9) && n.scale.every((v) => Math.abs(v - 1) < 1e-9) && Math.abs(n.rotation[3]) > 1 - 1e-9;
+const det3 = (m: number[]) => m[0] * (m[5] * m[10] - m[6] * m[9]) - m[4] * (m[1] * m[10] - m[2] * m[9]) + m[8] * (m[1] * m[6] - m[2] * m[5]);
+
+export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectReport {
+  const tol = opts.originTolerance ?? 0.05;
+  const mpu = ir.metersPerUnit || 1;
+  const topologyEnabled = opts.topology !== false;
+  const topologyCache = new Map<number, MeshTopology | null>();
+
+  // --- packs (shares the topology memo) ---
+  const run = runPacks(ir, { ...opts, profile: opts.profile ?? 'authoring', topologyCache });
+
+  // --- per-mesh facts ---
+  const meshes: InspectMeshFacts[] = [];
+  let tris = 0, verts = 0, shells = 0, watertight = true, anyTopo = false;
+  for (const m of ir.meshes) {
+    tris += m.triangleCount; verts += m.vertexCount;
+    let t: MeshTopology | null = null;
+    if (topologyEnabled && m.mode === 'triangles' && m.triangleCount > 0) {
+      t = topologyCache.get(m.index) ?? null;
+      if (t === null && !topologyCache.has(m.index)) { t = meshTopology(m); topologyCache.set(m.index, t); }
+      if (t) { anyTopo = true; shells += t.shells; if (!t.watertight) watertight = false; }
+    }
+    meshes.push({
+      prim_path: m.path, name: m.name, triangles: m.triangleCount, vertices: m.vertexCount,
+      shells: t?.shells ?? null, watertight: t?.watertight ?? null, boundary_loops: t?.boundaryLoops ?? null,
+      boundary_edges: t?.boundaryEdges ?? null, non_manifold_edges: t?.nonManifoldEdges ?? null, degenerate_triangles: t?.degenerateTriangles ?? null,
+    });
+  }
+
+  // --- world bounds + vertex centroid in one pass (metres) ---
+  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  const sum = [0, 0, 0];
+  let count = 0;
+  for (const m of ir.meshes) {
+    const w = ir.nodes[m.node]?.world ?? IDENTITY;
+    const p = m.positions;
+    for (let i = 0; i < m.vertexCount; i++) {
+      const v = transformPoint(w, p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+      for (let a = 0; a < 3; a++) { if (v[a] < min[a]) min[a] = v[a]; if (v[a] > max[a]) max[a] = v[a]; sum[a] += v[a]; }
+      count++;
+    }
+  }
+  const hasGeometry = Number.isFinite(min[0]) && count > 0;
+  const bbox = hasGeometry ? { min: min.map((v) => v * mpu), max: max.map((v) => v * mpu), size: max.map((v, i) => (v - min[i]) * mpu) } : null;
+  const largest = bbox ? Math.max(...bbox.size) : null;
+  const centroid = hasGeometry ? sum.map((v) => (v / count) * mpu) : null;
+  const up = ir.upAxis === 'Z' ? 2 : 1;
+
+  // --- origin landmark ---
+  let at: OriginLandmark = 'elsewhere';
+  let position_in_bounds: number[] | null = null, height_above_base_m: number | null = null, distance_to_centroid_m: number | null = null;
+  if (bbox && centroid && largest !== null) {
+    const z0 = (v: number) => (v === 0 ? 0 : v); // no negative zero in reports
+    position_in_bounds = bbox.size.map((s, i) => z0(s > 0 ? (0 - bbox.min[i]) / s : 0.5));
+    height_above_base_m = z0(-bbox.min[up]);
+    distance_to_centroid_m = Math.hypot(centroid[0], centroid[1], centroid[2]);
+    const within = (i: number, target: number) => Math.abs(position_in_bounds![i] - target) <= tol || bbox.size[i] <= largest * 1e-3;
+    const centeredAcross = [0, 1, 2].filter((i) => i !== up).every((i) => within(i, 0.5));
+    if (centeredAcross && within(up, 0)) at = 'base-center';
+    else if (centeredAcross && within(up, 0.5)) at = 'center';
+    else if (distance_to_centroid_m <= tol * largest) at = 'centroid';
+  }
+
+  // --- hierarchy ---
+  const realNodes = ir.nodes.filter((n) => !n.isJoint);
+  const unapplied: UnappliedTransform[] = [];
+  const nonUniform: string[] = [], mirrored: string[] = [];
+  for (const n of realNodes) {
+    if (n.meshes.length === 0) continue;
+    if (!isId(n)) {
+      const angle = 2 * Math.acos(Math.min(1, Math.abs(n.rotation[3]))) * (180 / Math.PI);
+      unapplied.push({ prim_path: n.path, name: n.name, translation: n.translation.map((v) => +v.toFixed(6)), rotation_deg: +angle.toFixed(3), scale: n.scale.map((v) => +v.toFixed(6)) });
+    }
+    const [sx, sy, sz] = n.scale.map(Math.abs); // sign is mirroring, reported separately
+    if (Math.abs(sx - sy) > 1e-6 || Math.abs(sy - sz) > 1e-6) nonUniform.push(n.path);
+    if (det3(n.world) < 0) mirrored.push(n.path);
+  }
+  let depth = 0;
+  const visit = (i: number, d: number) => { if (d > depth) depth = d; for (const c of ir.nodes[i].children) visit(c, d + 1); };
+  for (const r of ir.roots) visit(r, 1);
+  const root_names = ir.roots.slice(0, 8).map((i) => ir.nodes[i].name);
+
+  const report: InspectReport = {
+    format: ir.format,
+    source_path: ir.sourcePath,
+    profile: run.profile ?? 'authoring@1',
+    packs: run.packs,
+    provenance: run.provenance,
+    summary: '',
+    scene: { meshes: ir.meshes.length, triangles: tris, vertices: verts, materials: ir.materials.length, nodes: realNodes.length, depth },
+    topology: { shells: anyTopo ? shells : null, watertight: anyTopo ? watertight : null, meshes },
+    scale: { units: 'm', meters_per_unit: mpu, bounding_box: bbox, largest_dimension_m: largest, plausibility: 'unknown' },
+    orientation: { up_axis: ir.upAxis, up_axis_source: ir.format.startsWith('usd') ? 'metadata' : 'format', front: 'unknown' },
+    origin: { at, position_in_bounds, height_above_base_m, distance_to_centroid_m },
+    hierarchy: { nodes: realNodes.length, mesh_nodes: realNodes.filter((n) => n.meshes.length).length, depth, unapplied_transforms: unapplied, non_uniform_scale: nonUniform, mirrored, root_names },
+    findings: run.findings,
+    skipped: run.skipped,
+  };
+  report.summary = summarize(report);
+  return report;
+}
+
+/** The paragraph an agent reads first. Facts, then the top three findings. Deterministic. */
+export function summarize(r: InspectReport): string {
+  const parts: string[] = [];
+  const size = r.scale.bounding_box ? `${m3(r.scale.bounding_box.size)} m` : 'no geometry';
+  parts.push(`${plural(r.scene.meshes, 'mesh')}, ${fmt(r.scene.triangles)} triangles, ${size}, ${r.orientation.up_axis}-up.`);
+
+  if (r.topology.shells === null) parts.push('Topology not checked.');
+  else if (r.topology.shells === 1 && r.topology.watertight) parts.push('One watertight shell.');
+  else if (r.topology.shells === 1) parts.push('One shell, not watertight.');
+  else parts.push(`${plural(r.topology.shells, 'shell')}, ${r.topology.watertight ? 'all watertight' : 'not watertight'}.`);
+
+  if (r.origin.position_in_bounds) {
+    const h = r.origin.height_above_base_m!;
+    const where = r.origin.at === 'base-center' ? 'at the base centre'
+      : r.origin.at === 'center' ? 'at the bounding-box centre'
+        : r.origin.at === 'centroid' ? 'at the vertex centroid'
+          : `not on a landmark (${r.origin.position_in_bounds.map((v) => v.toFixed(2)).join(', ')} inside the bounds)`;
+    const base = r.origin.at === 'base-center' ? '' : Math.abs(h) < 1e-6 ? ', on the base plane' : h > 0 ? `, ${h.toFixed(2)} m above the base` : `, ${(-h).toFixed(2)} m below the base`;
+    parts.push(`Origin ${where}${base}.`);
+  }
+
+  const hx = r.hierarchy;
+  const bits: string[] = [];
+  if (hx.unapplied_transforms.length) bits.push(`${plural(hx.unapplied_transforms.length, 'mesh node')} with unapplied transforms`);
+  if (hx.mirrored.length) bits.push(`${plural(hx.mirrored.length, 'mirrored node')}`);
+  if (hx.non_uniform_scale.length) bits.push(`${plural(hx.non_uniform_scale.length, 'node')} with non-uniform scale`);
+  parts.push(`${plural(hx.nodes, 'node')}${hx.depth > 1 ? ` (depth ${hx.depth})` : ''}${bits.length ? ': ' + bits.join(', ') : ', transforms applied'}.`);
+
+  parts.push('Front: unknown (declare it with an expectation).');
+
+  const top = r.findings.slice(0, 3);
+  if (top.length) parts.push(top.map((f) => `${f.severity.toUpperCase()} ${f.rule}: ${f.message}`).join(' '));
+  if (r.findings.length > 3) parts.push(`${fmt(r.findings.length - 3)} more finding${r.findings.length - 3 === 1 ? '' : 's'}.`);
+  return parts.join(' ');
+}
