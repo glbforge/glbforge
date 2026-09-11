@@ -114,7 +114,7 @@ describe('inspectScene facts', () => {
   it('carries findings and the summary names the top ones; topology off says so', () => {
     const c = cube();
     const r = report([{ name: 'lid', mesh: { positions: c.positions, indices: c.indices.slice(6) } }]);
-    expect(r.findings.map((f) => f.rule)).toEqual(['topo/open-edges']);
+    expect(r.findings.map((f) => f.rule)).toEqual(['topo/open-edges', 'origin/not-at-base']);
     expect(r.topology).toMatchObject({ shells: 1, watertight: false });
     expect(r.summary).toMatch(/One shell, not watertight\./);
     expect(r.summary).toMatch(/WARNING topo\/open-edges: lid is not a closed surface: 1 boundary loop totalling 4 open edges/);
@@ -153,9 +153,10 @@ describe('inspectScene facts', () => {
     expect(r.topology).toMatchObject({ shells: 1, watertight: false });
     expect(r.scale.largest_dimension_m).toBeCloseTo(1.904, 2);
     expect(r.origin.at).toBe('center');
-    expect(r.hierarchy.unapplied_transforms.length).toBe(1); // mesh_node carries a 0.952 scale
+    expect(r.hierarchy.unapplied_transforms).toHaveLength(1); // mesh_node carries the 0.952 dequantization scale
+    expect(r.hierarchy.unapplied_transforms[0].dequantization).toBe(true);
     expect(r.provenance.optimized).toBe(true);
-    expect(r.summary).toMatch(/^1 mesh, 150,000 triangles, 1\.43 × 1\.90 × 1\.28 m, Y-up\. One shell, not watertight\. Origin at the bounding-box centre, 0\.95 m above the base\. 1 node: 1 mesh node with unapplied transforms\. Front: unknown/);
+    expect(r.summary).toMatch(/^1 mesh, 150,000 triangles, 1\.43 × 1\.90 × 1\.28 m, Y-up\. One shell, not watertight\. Origin at the bounding-box centre, 0\.95 m above the base\. 1 node: 1 quantized mesh node \(node transform is the encoding\)\. Front: unknown/);
     expect(r.summary).toMatch(/WARNING topo\/non-manifold: mesh has 152 non-manifold edges/);
   });
 });

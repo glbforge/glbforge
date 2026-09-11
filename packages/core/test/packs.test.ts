@@ -71,6 +71,9 @@ const irOf = (doc: Document) => fromGltf(doc, { format: 'glb' });
 const asOptimized = (ir: SceneIR): SceneIR => ({ ...ir, extensions: { used: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'EXT_texture_webp'], required: [] } });
 const topo = (parts: { positions: number[]; indices: number[] }) => meshTopology(irOf(meshDoc(parts.positions, parts.indices)).meshes[0])!;
 const rulesFired = (findings: RuleFinding[]) => findings.map((f) => f.rule);
+/** Run only the geometry pack (the scene pack has its own spec). */
+const geo = (ir: SceneIR, opts: Parameters<typeof runPacks>[1] = {}) => runPacks(ir, { packs: ['core-geometry@1'], ...opts });
+const topoOnly = (findings: RuleFinding[]) => findings.filter((f) => f.rule.startsWith('topo/'));
 const withFin = (c: ReturnType<typeof cube>) => ({ positions: [...c.positions, 0.5, -1, 0], indices: [...c.indices, 0, 1, 8] });
 
 describe('meshTopology (welded space)', () => {
@@ -130,9 +133,10 @@ describe('core-geometry@1', () => {
     expect(() => getPack('core-geometry@9')).toThrow(/no version 9/);
     expect(() => getPack('nope')).toThrow(/Unknown rule pack/);
     expect(PACK_VERSIONS['core-geometry'].map((p) => p.version)).toEqual([1]);
-    const rules = listRules();
+    const all = listRules().map((r) => r.id);
+    expect(new Set(all).size).toBe(all.length);
+    const rules = listRules([getPack('core-geometry@1')]);
     const ids = rules.map((r) => r.id);
-    expect(new Set(ids).size).toBe(ids.length);
     for (const r of rules) {
       expect(r.id).toMatch(/^[a-z]+\/[a-z0-9-]+$/);
       expect(r.code in ERROR_CODES).toBe(true);
@@ -142,7 +146,7 @@ describe('core-geometry@1', () => {
   });
 
   it('a clean solid produces no findings', () => {
-    const r = runPacks(irOf(meshDoc(cube().positions, cube().indices)));
+    const r = geo(irOf(meshDoc(cube().positions, cube().indices)));
     expect(r).toMatchObject({ profile: null, packs: ['core-geometry@1'], findings: [], skipped: [] });
     expect(r.provenance).toEqual({ optimized: false, forged: false, evidence: [] });
   });
@@ -168,7 +172,7 @@ describe('core-geometry@1', () => {
 
   it('open-edges: counts loops in the message, reads holes vs sheet in the cause', () => {
     const c = cube();
-    const holes = runPacks(irOf(meshDoc(c.positions, c.indices.slice(12), 'lid')));
+    const holes = geo(irOf(meshDoc(c.positions, c.indices.slice(12), 'lid')));
     expect(rulesFired(holes.findings)).toEqual(['topo/open-edges']);
     const f = holes.findings[0];
     expect(f).toMatchObject({ pack: 'core-geometry@1', code: 'TOPO_OPEN_EDGES', severity: 'warning', certainty: 'measured', prim_path: '/Asset/lid_0/Prim_0' });
@@ -177,7 +181,7 @@ describe('core-geometry@1', () => {
     expect(f.fix).toMatch(/Fill the holes/);
     expect(f.data).toMatchObject({ boundary_loops: 2, boundary_edges: 8 });
 
-    const sheet = runPacks(irOf(meshDoc(grid(20).positions, grid(20).indices, 'sheet')));
+    const sheet = geo(irOf(meshDoc(grid(20).positions, grid(20).indices, 'sheet')));
     expect(sheet.findings[0].message).toMatch(/1 boundary loop totalling 80 open edges/);
     expect(sheet.findings[0].likely_cause).toMatchObject({ confidence: 0.8 });
     expect(sheet.findings[0].likely_cause!.text).toMatch(/open sheet/);
@@ -186,7 +190,7 @@ describe('core-geometry@1', () => {
 
   it('shells vs floating fragments: a body with debris fires fragments, two equal parts fire shells only', () => {
     const debris = concat(grid(20), { positions: [50, 50, 50, 51, 50, 50, 50, 51, 50, 51, 51, 50], indices: [0, 1, 2, 1, 3, 2] });
-    const r = runPacks(irOf(meshDoc(debris.positions, debris.indices, 'body')));
+    const r = geo(irOf(meshDoc(debris.positions, debris.indices, 'body')));
     expect(rulesFired(r.findings)).toEqual(['topo/open-edges', 'topo/floating-fragments', 'topo/shells']);
     const frag = r.findings.find((f) => f.rule === 'topo/floating-fragments')!;
     expect(frag.severity).toBe('warning');
@@ -194,19 +198,19 @@ describe('core-geometry@1', () => {
     expect(frag.data).toMatchObject({ fragments: 1, shells: 2 });
 
     const two = concat(cube(), cube([3, 0, 0]));
-    const r2 = runPacks(irOf(meshDoc(two.positions, two.indices, 'pair')));
+    const r2 = geo(irOf(meshDoc(two.positions, two.indices, 'pair')));
     expect(rulesFired(r2.findings)).toEqual(['topo/shells']);
     expect(r2.findings[0]).toMatchObject({ severity: 'info', certainty: 'measured' });
     expect(r2.findings[0].message).toMatch(/2 separate pieces/);
 
     // Lower the threshold and the sliver becomes a "part".
-    const r3 = runPacks(irOf(meshDoc(debris.positions, debris.indices, 'body')), { params: { 'core-geometry': { fragmentFraction: 0.001 } } });
+    const r3 = geo(irOf(meshDoc(debris.positions, debris.indices, 'body')), { params: { 'core-geometry': { fragmentFraction: 0.001 } } });
     expect(rulesFired(r3.findings)).toEqual(['topo/open-edges', 'topo/shells']);
   });
 
   it('non-manifold: authoring cause by default, hedged simplification-artifact cause on optimizer output', () => {
     const fin = withFin(cube());
-    const authored = runPacks(irOf(meshDoc(fin.positions, fin.indices, 'joined')));
+    const authored = geo(irOf(meshDoc(fin.positions, fin.indices, 'joined')));
     const nm = authored.findings.find((f) => f.rule === 'topo/non-manifold')!;
     expect(nm).toMatchObject({ code: 'MESH_NON_MANIFOLD', severity: 'warning' });
     expect(nm.message).toMatch(/1 non-manifold edge /);
@@ -215,7 +219,7 @@ describe('core-geometry@1', () => {
 
     // 1 pinched edge in 150k triangles after our optimizer: the cause says so, and says it is a proxy.
     const big = concat(grid(274), withFin(cube([1000, 0, 0])));
-    const optimized = runPacks(asOptimized(irOf(meshDoc(big.positions, big.indices, 'hero'))));
+    const optimized = geo(asOptimized(irOf(meshDoc(big.positions, big.indices, 'hero'))));
     expect(optimized.provenance).toMatchObject({ optimized: true, evidence: ['EXT_meshopt_compression', 'KHR_mesh_quantization', 'EXT_texture_webp'] });
     const nm2 = optimized.findings.find((f) => f.rule === 'topo/non-manifold')!;
     expect(nm2.likely_cause!.text).toMatch(/simplification artifact rather than an authoring error/);
@@ -234,9 +238,9 @@ describe('core-geometry@1', () => {
 
   it('topology disabled: topology rules are reported as skipped, not silently absent', () => {
     const c = cube();
-    const r = runPacks(irOf(meshDoc(c.positions, c.indices.slice(6))), { topology: false });
+    const r = geo(irOf(meshDoc(c.positions, c.indices.slice(6))), { topology: false });
     expect(r.findings).toEqual([]);
-    expect(r.skipped.map((s) => s.rule)).toEqual(listRules().map((x) => x.id));
+    expect(r.skipped.map((s) => s.rule)).toEqual(listRules([getPack('core-geometry@1')]).map((x) => x.id));
     expect(r.skipped[0].reason).toMatch(/topology/);
   });
 
@@ -273,17 +277,18 @@ describe('severity is the profile\'s call', () => {
     const bare = runPacks(ir());
     const auth = runPacks(ir(), { profile: 'authoring' });
     expect(auth.profile).toBe('authoring@1');
-    expect(auth.packs).toEqual(['core-geometry@1']);
+    expect(auth.packs).toEqual(['core-geometry@1', 'core-scene@1']);
     expect(auth.findings.map((f) => [f.rule, f.severity])).toEqual(bare.findings.map((f) => [f.rule, f.severity]));
-    expect(auth.findings.map((f) => f.severity)).toEqual(['warning', 'warning']);
+    expect(auth.findings.map((f) => [f.rule, f.severity])).toEqual([['topo/open-edges', 'warning'], ['topo/non-manifold', 'warning'], ['origin/not-at-base', 'info']]);
   });
 
   it('web budget profiles downgrade topology to info and keep the default visible', () => {
     for (const name of ['mobile-hero', 'desktop-hero@1', 'product-configurator']) {
       const r = runPacks(ir(), { profile: name });
       expect(r.profile).toMatch(/@1$/);
-      expect(r.packs).toEqual(['core-geometry@1']);
-      for (const f of r.findings) { expect(f.severity).toBe('info'); expect(f.default_severity).toBe('warning'); }
+      expect(r.packs).toEqual(['core-geometry@1', 'core-scene@1']);
+      expect(topoOnly(r.findings)).toHaveLength(2);
+      for (const f of topoOnly(r.findings)) { expect(f.severity).toBe('info'); expect(f.default_severity).toBe('warning'); }
     }
     expect(getProfile('mobile-hero').rules?.severity?.['topo/non-manifold']).toBe('info');
   });
@@ -314,16 +319,16 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     expect(meshTopology(ir.meshes[0])).toMatchObject({ nonManifoldEdges: 152, boundaryEdges: 0, boundaryLoops: 0, degenerateTriangles: 32, shells: 1, watertight: false });
     const r = runPacks(ir, { profile: 'authoring' });
     expect(r.provenance.optimized).toBe(true);
-    expect(rulesFired(r.findings)).toEqual(['topo/non-manifold', 'topo/degenerate']);
+    expect(rulesFired(r.findings)).toEqual(['topo/non-manifold', 'topo/degenerate', 'origin/not-at-base']);
     expect(r.findings[0].likely_cause!.text).toMatch(/simplification artifact/);
-    expect(runPacks(ir, { profile: 'mobile-hero' }).findings.map((f) => f.severity)).toEqual(['info', 'info']);
+    expect(runPacks(ir, { profile: 'mobile-hero' }).findings.map((f) => f.severity)).toEqual(['info', 'info', 'info']);
   });
 
   it('Hunyuan plush: a clean watertight solid, no findings', async () => {
     const ir = await load('examples/plush-hunyuan.glb');
     if (!ir) return;
     expect(meshTopology(ir.meshes[0])).toMatchObject({ nonManifoldEdges: 0, boundaryEdges: 0, degenerateTriangles: 0, shells: 1, watertight: true });
-    expect(runPacks(ir).findings).toEqual([]);
+    expect(topoOnly(runPacks(ir).findings)).toEqual([]);
   });
 
   /**
@@ -333,37 +338,37 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
    * marked OPT carry the optimizer signature.
    */
   const EXPECTED: Record<string, string> = {
-    'boat-shipped.web.glb': 'floating-fragments shells',
-    'dede-bevel-mcp.glb': 'open-edges shells',
-    'dede-bevel.glb': 'open-edges',
-    'dede-mcp-test.glb': '',
-    'dede-mcp-test.web.glb': '',
-    'dede-neon.glb': 'open-edges open-edges open-edges non-manifold non-manifold non-manifold floating-fragments shells shells shells',
-    'dede-v2.glb': 'open-edges open-edges open-edges non-manifold non-manifold floating-fragments floating-fragments shells shells shells',
-    'dede.glb': '',
-    'guardian.web.glb': 'non-manifold degenerate',
-    'guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate',
-    'guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate',
-    'lucky-cat.glb': '',
-    'lucky-cat.ktx2.glb': 'non-manifold',
-    'lucky-cat.web.glb': 'non-manifold',
-    'plush-hunyuan.glb': '',
-    'plush-hunyuan.web.glb': 'degenerate',
-    'plushqlty-bevel.glb': '',
-    'plushqlty-layered.glb': 'open-edges open-edges open-edges non-manifold non-manifold floating-fragments floating-fragments shells shells shells shells',
-    'plushqlty-plush.glb': 'open-edges floating-fragments floating-fragments floating-fragments floating-fragments shells shells shells shells',
-    'plushqlty-plush.web.glb': 'open-edges non-manifold non-manifold non-manifold non-manifold floating-fragments floating-fragments floating-fragments shells shells shells shells degenerate degenerate',
-    'plushqlty-v2.glb': 'floating-fragments floating-fragments floating-fragments shells shells shells shells',
-    'plushqlty-v2.web.glb': 'non-manifold floating-fragments shells degenerate',
-    'plushqlty.glb': '',
-    'smoke.glb': '',
-    'smoke.web.glb': 'non-manifold',
-    'sneakercon.glb': '',
-    'sneakercon.web.glb': '',
-    'svg-test.glb': '',
-    'veiled-guardian.web.glb': 'non-manifold degenerate',
-    'veiled-guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate',
-    'veiled-guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate',
+    'boat-shipped.web.glb': 'floating-fragments shells origin/not-at-base',
+    'dede-bevel-mcp.glb': 'open-edges shells origin/not-at-base',
+    'dede-bevel.glb': 'open-edges origin/not-at-base',
+    'dede-mcp-test.glb': 'origin/not-at-base',
+    'dede-mcp-test.web.glb': 'origin/not-at-base',
+    'dede-neon.glb': 'open-edges open-edges open-edges non-manifold non-manifold non-manifold floating-fragments xform/unapplied xform/unapplied shells shells shells origin/not-at-base',
+    'dede-v2.glb': 'open-edges open-edges open-edges non-manifold non-manifold floating-fragments floating-fragments xform/unapplied xform/unapplied shells shells shells origin/not-at-base',
+    'dede.glb': 'origin/not-at-base',
+    'guardian.web.glb': 'non-manifold degenerate origin/not-at-base',
+    'guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'lucky-cat.glb': 'origin/not-at-base',
+    'lucky-cat.ktx2.glb': 'non-manifold origin/not-at-base',
+    'lucky-cat.web.glb': 'non-manifold origin/not-at-base',
+    'plush-hunyuan.glb': 'origin/not-at-base',
+    'plush-hunyuan.web.glb': 'degenerate origin/not-at-base',
+    'plushqlty-bevel.glb': 'origin/not-at-base',
+    'plushqlty-layered.glb': 'open-edges open-edges open-edges non-manifold non-manifold floating-fragments floating-fragments xform/unapplied xform/unapplied xform/unapplied shells shells shells shells origin/not-at-base',
+    'plushqlty-plush.glb': 'open-edges floating-fragments floating-fragments floating-fragments floating-fragments xform/unapplied xform/unapplied xform/unapplied shells shells shells shells origin/not-at-base',
+    'plushqlty-plush.web.glb': 'open-edges non-manifold non-manifold non-manifold non-manifold floating-fragments floating-fragments floating-fragments shells shells shells shells degenerate degenerate origin/not-at-base',
+    'plushqlty-v2.glb': 'floating-fragments floating-fragments floating-fragments xform/unapplied xform/unapplied xform/unapplied shells shells shells shells origin/not-at-base',
+    'plushqlty-v2.web.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'plushqlty.glb': 'origin/not-at-base',
+    'smoke.glb': 'origin/not-at-base',
+    'smoke.web.glb': 'non-manifold origin/not-at-base',
+    'sneakercon.glb': 'origin/not-at-base',
+    'sneakercon.web.glb': 'origin/not-at-base',
+    'svg-test.glb': 'origin/not-at-base',
+    'veiled-guardian.web.glb': 'non-manifold degenerate origin/not-at-base',
+    'veiled-guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'veiled-guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
   };
 
   it('every checked-in example produces exactly the frozen finding set under authoring@1', async () => {
@@ -374,6 +379,7 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     for (const f of files) {
       const ir = await load(`examples/${f}`);
       actual[f] = rulesFired(runPacks(ir!, { profile: 'authoring' }).findings).map((r) => r.replace('topo/', '')).join(' ');
+      if (process.env.GLBFORGE_PRINT_DOGFOOD) console.log(`    '${f}': '${actual[f]}',`);
     }
     expect(actual).toEqual(EXPECTED);
   }, 60_000);

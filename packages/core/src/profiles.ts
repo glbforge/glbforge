@@ -12,11 +12,16 @@ export const BUDGET_METHODOLOGY_URL = 'https://glbforge.dev/budgets/';
  * otherwise about the same edges. Additive — caps and exit codes unchanged.
  */
 const WEB_RULES: RuleOverrides = {
-  packs: ['core-geometry@1'],
+  packs: ['core-geometry@1', 'core-scene@1'],
   severity: {
     'topo/open-edges': 'info',
     'topo/non-manifold': 'info',
     'topo/floating-fragments': 'info',
+    // A viewer frames whatever it gets; where the pivot sits and whether a
+    // node transform is baked changes nothing on screen. Mirroring and
+    // wrong units do (culling, camera framing), so those keep their default.
+    'origin/outside-bounds': 'info',
+    'xform/unapplied': 'info',
   },
 };
 

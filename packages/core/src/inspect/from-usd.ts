@@ -460,7 +460,7 @@ export function fromUsd(layer: UsdLayerData, opts: FromUsdOptions): SceneIR {
       const index = meshes.length;
       meshes.push({
         index, path, name, node: ni, sourceMesh: meshOrdinal, primitiveIndex, mode: 'triangles',
-        positions: vPositions, vertexCount, indices, faceCount, triangleCount: indices.length / 3,
+        positions: vPositions, positionsQuantized: false, vertexCount, indices, faceCount, triangleCount: indices.length / 3,
         normals: vNormals, normalsSource: vNormals ? 'authored' : 'missing', uvs: vUvs,
         joints: vJoints, weights: vWeights, influences, skin: skinIndex, material,
         targets: vTargets.map((t) => ({ ...t, path: t.path })), doubleSided: attr(prim, 'doubleSided') === true, geometryBytes: faceFilter ? Math.round(geometryBytes * (faceCount / Math.max(1, counts.length))) : geometryBytes,

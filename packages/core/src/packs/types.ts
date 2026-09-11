@@ -19,6 +19,7 @@
  *   belong in the report the caller assembles, not in findings.
  */
 import type { DiagnosticCode, DiagnosticSeverity } from '../inspect/diagnostics.js';
+import type { SceneExtent } from '../inspect/extent.js';
 import type { IRMesh, SceneIR } from '../inspect/ir.js';
 import type { MeshTopology } from '../inspect/topology.js';
 
@@ -81,6 +82,8 @@ export interface RuleContext {
   /** Welded-space topology of a mesh, memoized; null when disabled or not a triangle mesh. */
   topology(mesh: IRMesh): MeshTopology | null;
   topologyEnabled: boolean;
+  /** World-space bounds / centroid in metres, memoized; null without geometry. */
+  extent(): SceneExtent | null;
   provenance: Provenance;
   /** `/Asset` for glTF, the default prim for USD. */
   rootPath: string;

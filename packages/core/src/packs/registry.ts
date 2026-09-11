@@ -8,7 +8,9 @@ import type { IRMesh, SceneIR } from '../inspect/ir.js';
 import { meshTopology, type MeshTopology } from '../inspect/topology.js';
 import { getProfile } from '../profiles.js';
 import type { Profile } from '../types.js';
+import { sceneExtent, type SceneExtent } from '../inspect/extent.js';
 import { coreGeometryV1 } from './core-geometry.js';
+import { coreSceneV1 } from './core-scene.js';
 import type { PackRunResult, ParamValues, Provenance, RuleContext, RuleFinding, RulePack, RuleProfile } from './types.js';
 
 // --- packs ---------------------------------------------------------------
@@ -16,7 +18,11 @@ import type { PackRunResult, ParamValues, Provenance, RuleContext, RuleFinding, 
 /** Every published version of every pack, oldest first. Never edit a published entry. */
 export const PACK_VERSIONS: Record<string, RulePack[]> = {
   'core-geometry': [coreGeometryV1],
+  'core-scene': [coreSceneV1],
 };
+
+/** What runs when nothing names packs: every core pack, latest. */
+export const DEFAULT_PACKS = ['core-geometry', 'core-scene'];
 
 /** Latest version of each pack. */
 export const PACKS: Record<string, RulePack> = Object.fromEntries(
@@ -57,7 +63,7 @@ const authoringV1: RuleProfile = {
   name: 'authoring',
   version: 1,
   description: 'Inner-loop authoring: topology problems are warnings because they are most likely the last edit\'s doing.',
-  packs: ['core-geometry@1'],
+  packs: ['core-geometry@1', 'core-scene@1'],
   severity: {},
   params: {},
 };
@@ -76,7 +82,7 @@ const isBudgetProfile = (x: unknown): x is Profile => typeof x === 'object' && x
 export function ruleProfileOf(profile: Profile): RuleProfile {
   return {
     name: profile.name, version: profile.version, description: profile.description,
-    packs: profile.rules?.packs ?? ['core-geometry'],
+    packs: profile.rules?.packs ?? DEFAULT_PACKS,
     severity: profile.rules?.severity ?? {},
     params: profile.rules?.params ?? {},
   };
@@ -123,14 +129,17 @@ export interface RunPacksOptions {
   params?: Record<string, ParamValues>;
   /** Caller-owned memo of mesh topology (IR mesh index → result) so a report and its packs share one pass. */
   topologyCache?: Map<number, MeshTopology | null>;
+  /** Precomputed extent (see sceneExtent) so a report and its packs share one pass; null = no geometry. */
+  extent?: SceneExtent | null;
 }
 
 const RANK: Record<DiagnosticSeverity, number> = { error: 0, warning: 1, info: 2 };
 
 /** Evaluation context for one pack over one asset. */
-export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOptions = {}, shared?: { topology: Map<number, MeshTopology | null>; provenance: Provenance }): RuleContext {
+export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOptions = {}, shared?: { topology: Map<number, MeshTopology | null>; provenance: Provenance; extent: { value?: SceneExtent | null } }): RuleContext {
   const topologyEnabled = opts.topology !== false;
   const cache = shared?.topology ?? new Map<number, MeshTopology | null>();
+  const extentBox = shared?.extent ?? { value: opts.extent };
   const profile = opts.profile ? resolveRuleProfile(opts.profile) : null;
   const params: ParamValues = {};
   for (const [k, spec] of Object.entries(pack.params)) params[k] = spec.default;
@@ -141,6 +150,10 @@ export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOpt
     ir,
     params,
     topologyEnabled,
+    extent() {
+      if (extentBox.value === undefined) extentBox.value = sceneExtent(ir);
+      return extentBox.value;
+    },
     provenance: shared?.provenance ?? detectProvenance(ir),
     rootPath: ir.format.startsWith('usd') ? ir.defaultPrim ?? '/' : '/Asset',
     topology(mesh: IRMesh) {
@@ -155,9 +168,9 @@ export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOpt
 /** Run packs over an asset. Deterministic: same IR + same options = same findings in the same order. */
 export function runPacks(ir: SceneIR, opts: RunPacksOptions = {}): PackRunResult {
   const profile = opts.profile ? resolveRuleProfile(opts.profile) : null;
-  const packSpecs = opts.packs ?? profile?.packs ?? ['core-geometry'];
+  const packSpecs = opts.packs ?? profile?.packs ?? DEFAULT_PACKS;
   const resolved = packSpecs.map((p) => (typeof p === 'string' ? getPack(p) : p));
-  const shared = { topology: opts.topologyCache ?? new Map<number, MeshTopology | null>(), provenance: detectProvenance(ir) };
+  const shared = { topology: opts.topologyCache ?? new Map<number, MeshTopology | null>(), provenance: detectProvenance(ir), extent: { value: opts.extent } };
   const findings: RuleFinding[] = [];
   const skipped: PackRunResult['skipped'] = [];
   for (const pack of resolved) {

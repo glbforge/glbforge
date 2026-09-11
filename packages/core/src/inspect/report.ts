@@ -13,11 +13,14 @@
  */
 import { runPacks, type RunPacksOptions } from '../packs/registry.js';
 import type { PackRunResult, RuleFinding } from '../packs/types.js';
-import { IDENTITY, transformPoint, type SceneIR } from './ir.js';
+import { classifyOrigin, sceneExtent, type OriginLandmark } from './extent.js';
+import type { SceneIR } from './ir.js';
 import { meshTopology, type MeshTopology } from './topology.js';
 
-export interface InspectOptions extends Omit<RunPacksOptions, 'topologyCache'> {
-  /** Fraction of the bounding-box size within which the origin counts as "at" a landmark. Default 0.05. */
+export type { OriginLandmark } from './extent.js';
+
+export interface InspectOptions extends Omit<RunPacksOptions, 'topologyCache' | 'extent'> {
+  /** Fraction of the bounding-box size within which the origin counts as "at" a landmark. Default 0.05 (also the core-scene originTolerance param). */
   originTolerance?: number;
 }
 
@@ -42,9 +45,9 @@ export interface UnappliedTransform {
   /** Rotation angle in degrees (0 = none). */
   rotation_deg: number;
   scale: number[];
+  /** True when the node's meshes store quantized positions: this transform is the encoding, not an unapplied edit, and raises no finding. */
+  dequantization: boolean;
 }
-
-export type OriginLandmark = 'base-center' | 'center' | 'centroid' | 'elsewhere';
 
 export interface InspectReport {
   format: SceneIR['format'];
@@ -85,6 +88,8 @@ export interface InspectReport {
     height_above_base_m: number | null;
     /** Distance from the origin to the mean vertex position. */
     distance_to_centroid_m: number | null;
+    /** Translation that would put the origin at the base centre. */
+    offset_to_base_center_m: number[] | null;
   };
   hierarchy: {
     nodes: number;
@@ -114,9 +119,12 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
   const mpu = ir.metersPerUnit || 1;
   const topologyEnabled = opts.topology !== false;
   const topologyCache = new Map<number, MeshTopology | null>();
+  const extent = sceneExtent(ir);
 
-  // --- packs (shares the topology memo) ---
-  const run = runPacks(ir, { ...opts, profile: opts.profile ?? 'authoring', topologyCache });
+  // --- packs (share the topology memo and the extent) ---
+  const { originTolerance: _t, ...packOpts } = opts;
+  const params = { ...(opts.params ?? {}), 'core-scene': { originTolerance: tol, ...(opts.params?.['core-scene'] ?? {}) } };
+  const run = runPacks(ir, { ...packOpts, params, profile: opts.profile ?? 'authoring', topologyCache, extent });
 
   // --- per-mesh facts ---
   const meshes: InspectMeshFacts[] = [];
@@ -136,39 +144,11 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
     });
   }
 
-  // --- world bounds + vertex centroid in one pass (metres) ---
-  const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
-  const sum = [0, 0, 0];
-  let count = 0;
-  for (const m of ir.meshes) {
-    const w = ir.nodes[m.node]?.world ?? IDENTITY;
-    const p = m.positions;
-    for (let i = 0; i < m.vertexCount; i++) {
-      const v = transformPoint(w, p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
-      for (let a = 0; a < 3; a++) { if (v[a] < min[a]) min[a] = v[a]; if (v[a] > max[a]) max[a] = v[a]; sum[a] += v[a]; }
-      count++;
-    }
-  }
-  const hasGeometry = Number.isFinite(min[0]) && count > 0;
-  const bbox = hasGeometry ? { min: min.map((v) => v * mpu), max: max.map((v) => v * mpu), size: max.map((v, i) => (v - min[i]) * mpu) } : null;
-  const largest = bbox ? Math.max(...bbox.size) : null;
-  const centroid = hasGeometry ? sum.map((v) => (v / count) * mpu) : null;
-  const up = ir.upAxis === 'Z' ? 2 : 1;
-
-  // --- origin landmark ---
-  let at: OriginLandmark = 'elsewhere';
-  let position_in_bounds: number[] | null = null, height_above_base_m: number | null = null, distance_to_centroid_m: number | null = null;
-  if (bbox && centroid && largest !== null) {
-    const z0 = (v: number) => (v === 0 ? 0 : v); // no negative zero in reports
-    position_in_bounds = bbox.size.map((s, i) => z0(s > 0 ? (0 - bbox.min[i]) / s : 0.5));
-    height_above_base_m = z0(-bbox.min[up]);
-    distance_to_centroid_m = Math.hypot(centroid[0], centroid[1], centroid[2]);
-    const within = (i: number, target: number) => Math.abs(position_in_bounds![i] - target) <= tol || bbox.size[i] <= largest * 1e-3;
-    const centeredAcross = [0, 1, 2].filter((i) => i !== up).every((i) => within(i, 0.5));
-    if (centeredAcross && within(up, 0)) at = 'base-center';
-    else if (centeredAcross && within(up, 0.5)) at = 'center';
-    else if (distance_to_centroid_m <= tol * largest) at = 'centroid';
-  }
+  // --- bounds / origin (metres) ---
+  const bbox = extent ? { min: extent.min, max: extent.max, size: extent.size } : null;
+  const largest = extent?.largest ?? null;
+  const placement = extent ? classifyOrigin(extent, tol) : null;
+  const at: OriginLandmark = placement?.at ?? 'elsewhere';
 
   // --- hierarchy ---
   const realNodes = ir.nodes.filter((n) => !n.isJoint);
@@ -178,7 +158,8 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
     if (n.meshes.length === 0) continue;
     if (!isId(n)) {
       const angle = 2 * Math.acos(Math.min(1, Math.abs(n.rotation[3]))) * (180 / Math.PI);
-      unapplied.push({ prim_path: n.path, name: n.name, translation: n.translation.map((v) => +v.toFixed(6)), rotation_deg: +angle.toFixed(3), scale: n.scale.map((v) => +v.toFixed(6)) });
+      const dequantization = n.meshes.every((i) => ir.meshes[i]?.positionsQuantized);
+      unapplied.push({ prim_path: n.path, name: n.name, translation: n.translation.map((v) => +v.toFixed(6)), rotation_deg: +angle.toFixed(3), scale: n.scale.map((v) => +v.toFixed(6)), dequantization });
     }
     const [sx, sy, sz] = n.scale.map(Math.abs); // sign is mirroring, reported separately
     if (Math.abs(sx - sy) > 1e-6 || Math.abs(sy - sz) > 1e-6) nonUniform.push(n.path);
@@ -200,7 +181,13 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
     topology: { shells: anyTopo ? shells : null, watertight: anyTopo ? watertight : null, meshes },
     scale: { units: 'm', meters_per_unit: mpu, bounding_box: bbox, largest_dimension_m: largest, plausibility: 'unknown' },
     orientation: { up_axis: ir.upAxis, up_axis_source: ir.format.startsWith('usd') ? 'metadata' : 'format', front: 'unknown' },
-    origin: { at, position_in_bounds, height_above_base_m, distance_to_centroid_m },
+    origin: {
+      at,
+      position_in_bounds: placement?.position_in_bounds ?? null,
+      height_above_base_m: placement?.height_above_base_m ?? null,
+      distance_to_centroid_m: placement?.distance_to_centroid_m ?? null,
+      offset_to_base_center_m: placement?.offset_to_base_center_m ?? null,
+    },
     hierarchy: { nodes: realNodes.length, mesh_nodes: realNodes.filter((n) => n.meshes.length).length, depth, unapplied_transforms: unapplied, non_uniform_scale: nonUniform, mirrored, root_names },
     findings: run.findings,
     skipped: run.skipped,
@@ -232,7 +219,10 @@ export function summarize(r: InspectReport): string {
 
   const hx = r.hierarchy;
   const bits: string[] = [];
-  if (hx.unapplied_transforms.length) bits.push(`${plural(hx.unapplied_transforms.length, 'mesh node')} with unapplied transforms`);
+  const realUnapplied = hx.unapplied_transforms.filter((t) => !t.dequantization).length;
+  const dequant = hx.unapplied_transforms.length - realUnapplied;
+  if (realUnapplied) bits.push(`${plural(realUnapplied, 'mesh node')} with unapplied transforms`);
+  if (dequant) bits.push(`${plural(dequant, 'quantized mesh node')} (node transform is the encoding)`);
   if (hx.mirrored.length) bits.push(`${plural(hx.mirrored.length, 'mirrored node')}`);
   if (hx.non_uniform_scale.length) bits.push(`${plural(hx.non_uniform_scale.length, 'node')} with non-uniform scale`);
   parts.push(`${plural(hx.nodes, 'node')}${hx.depth > 1 ? ` (depth ${hx.depth})` : ''}${bits.length ? ': ' + bits.join(', ') : ', transforms applied'}.`);

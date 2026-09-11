@@ -211,7 +211,7 @@ export function fromGltf(doc: Document, opts: FromGltfOptions = {}): SceneIR {
       meshes.push({
         index: irIndex, path, name: mesh.getName() || `mesh_${meshIndex.get(mesh)}`,
         node: ni, sourceMesh: meshIndex.get(mesh)!, primitiveIndex: pi, mode,
-        positions, vertexCount, indices, faceCount: triangleCount, triangleCount,
+        positions, positionsQuantized: !(posAcc.getArray() instanceof Float32Array), vertexCount, indices, faceCount: triangleCount, triangleCount,
         normals: nrmAcc ? readFloat(nrmAcc) : null, normalsSource: nrmAcc ? 'authored' : 'missing',
         uvs, joints, weights, influences,
         skin: skin ? skinIndex.get(skin)! : null,

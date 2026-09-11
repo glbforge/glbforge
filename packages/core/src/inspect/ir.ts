@@ -69,6 +69,8 @@ export interface IRMesh {
   mode: 'triangles' | 'points' | 'lines' | 'other';
   /** Vertex positions in the mesh's own space (bind space for skinned meshes). */
   positions: Float32Array;
+  /** Stored as normalized integers (KHR_mesh_quantization): the owning node's transform is the dequantization, not an authoring choice. */
+  positionsQuantized: boolean;
   vertexCount: number;
   /** Triangle list indices (n-gons already fan-triangulated), or null when the mesh is not triangles. */
   indices: Uint32Array | null;
