@@ -51,6 +51,13 @@ the last edit's doing; a budget profile (`mobile-hero`) reports them as info.
 `--packs core-geometry@1,core-scene@1` pins rule packs, `--no-topology` skips
 the welded pass (rules are listed as skipped, never silently absent),
 `--strict` exits 1 on warnings, `--json` emits the full report.
+`--expect "chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y,
+watertight, origin base"` turns the run into a contract (`intent@1`): shell
+count, watertight, size range and origin are measured and fail as errors
+(exit 1); a bare category gives a plausibility warning from a coarse size
+table with a stated confidence; `front` is recorded as declared and never
+measured; `Z-up` on a GLB is informational because glTF is Y-up by
+definition. Tokens the parser cannot place are reported, not dropped.
 
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,
 `--json`, `--no-topology`. Exits non-zero when the asset is over budget — wire

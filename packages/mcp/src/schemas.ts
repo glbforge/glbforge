@@ -185,6 +185,20 @@ export const RuleFindingSchema = z.object({
   data: z.record(z.unknown()).optional(),
 });
 
+const measure = z.enum(['height', 'width', 'largest']);
+
+/** What the caller meant to make. Structured form of `expect`; the string form is parsed into this. */
+export const ExpectationSchema = z.object({
+  category: z.string().optional().describe('e.g. "chair" — looked up in a coarse size table for a plausibility check (heuristic)'),
+  up: z.enum(['Y', 'Z']).optional().describe('Authoring up axis. glTF files are Y-up by definition, so Z-up is reported as informational there'),
+  units: z.enum(['m', 'cm', 'mm']).optional().describe('Unit of the numbers in this expectation (the file must be metres)'),
+  shells: z.union([z.number().int().nonnegative(), z.object({ min: z.number().int().optional(), max: z.number().int().optional() })]).optional().describe('Exact connected-shell count or a range (welded space)'),
+  watertight: z.boolean().optional(),
+  size: z.object({ min: z.number(), max: z.number(), measure }).optional().describe('Range in metres along height (up axis), width (largest across), or largest'),
+  origin: z.enum(['base-center', 'center', 'centroid']).optional(),
+  front: z.enum(['+X', '-X', '+Y', '-Y', '+Z', '-Z']).optional().describe('Recorded as declared, never verified'),
+});
+
 const InspectMeshSchema = z.object({
   prim_path: z.string(), name: z.string(), triangles: z.number().int(), vertices: z.number().int(),
   shells: z.number().int().nullable(), watertight: z.boolean().nullable(), boundary_loops: z.number().int().nullable(),
@@ -201,8 +215,17 @@ export const InspectDataSchema = z.object({
   summary: z.string().describe('Deterministic paragraph: facts first, then the top findings. Read this first.'),
   scene: z.object({ meshes: z.number().int(), triangles: z.number().int(), vertices: z.number().int(), materials: z.number().int(), nodes: z.number().int(), depth: z.number().int() }),
   topology: z.object({ shells: z.number().int().nullable(), watertight: z.boolean().nullable(), meshes: z.array(InspectMeshSchema) }).describe('Welded space: UV seams are not holes; null when topology was disabled'),
-  scale: z.object({ units: z.literal('m'), meters_per_unit: z.number(), bounding_box: BoundingBoxSchema.nullable(), largest_dimension_m: z.number().nullable(), plausibility: z.literal('unknown').describe('Needs a category to judge; declare one with an expectation') }),
-  orientation: z.object({ up_axis: z.enum(['Y', 'Z']), up_axis_source: z.enum(['format', 'metadata']), front: z.literal('unknown').describe('Never inferred: symmetric objects defeat every heuristic') }),
+  scale: z.object({
+    units: z.literal('m'), meters_per_unit: z.number(), bounding_box: BoundingBoxSchema.nullable(), largest_dimension_m: z.number().nullable(),
+    plausibility: z.enum(['unknown', 'plausible', 'implausible']).describe('unknown without a declared category or size range; with a category it is a table prior (see plausibility_basis.confidence), with an explicit range it is exact'),
+    plausibility_basis: z.object({ category: z.string(), typical_m: z.tuple([z.number(), z.number()]), measure: z.string(), confidence: z.number() }).nullable(),
+  }),
+  orientation: z.object({
+    up_axis: z.enum(['Y', 'Z']), up_axis_source: z.enum(['format', 'metadata']),
+    front: z.string().describe('"unknown" unless declared in `expect`; never inferred, symmetric objects defeat every heuristic'),
+    front_source: z.enum(['none', 'declared']),
+  }),
+  expectation: z.object({ raw: z.string().nullable(), expectation: ExpectationSchema, unparsed: z.array(z.string()).describe('Tokens the parser could not place — never silently dropped') }).nullable(),
   origin: z.object({
     at: z.enum(['base-center', 'center', 'centroid', 'elsewhere']),
     position_in_bounds: z.array(z.number()).nullable().describe('0 = min … 1 = max per axis'),

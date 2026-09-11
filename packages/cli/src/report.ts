@@ -157,7 +157,15 @@ export function printInspect(r: InspectReport, path: string, durationMs: number)
 
   console.log(pc.bold('  Scale & orientation'));
   console.log(`    bounds (m)     ${r.scale.bounding_box ? m3(r.scale.bounding_box.size) : 'no geometry'}   largest ${r.scale.largest_dimension_m?.toFixed(3) ?? '-'} m`);
-  console.log(`    up axis        ${r.orientation.up_axis} (${r.orientation.up_axis_source})   front ${pc.dim('unknown — declare it')}   plausibility ${pc.dim('unknown — needs a category')}`);
+  const front = r.orientation.front_source === 'declared' ? `${r.orientation.front} ${pc.dim('(declared, not measured)')}` : pc.dim('unknown — declare it with --expect');
+  const b = r.scale.plausibility_basis;
+  const plaus = r.scale.plausibility === 'unknown' ? pc.dim('unknown — needs a category (--expect)') : `${r.scale.plausibility === 'plausible' ? pc.green('plausible') : pc.yellow('implausible')} ${pc.dim(`for a ${b!.category}: ${b!.typical_m.map((v) => v.toFixed(2)).join('–')} m ${b!.measure}${b!.confidence < 1 ? `, ${Math.round(b!.confidence * 100)}% prior` : ''}`)}`;
+  console.log(`    up axis        ${r.orientation.up_axis} (${r.orientation.up_axis_source})   front ${front}`);
+  console.log(`    plausibility   ${plaus}`);
+  if (r.expectation) {
+    const e = r.expectation;
+    console.log(`    expectation    ${e.raw ?? JSON.stringify(e.expectation)}${e.unparsed.length ? pc.yellow(`   could not parse: ${e.unparsed.map((u) => `"${u}"`).join(', ')}`) : ''}`);
+  }
 
   console.log(pc.bold('  Origin'));
   if (r.origin.position_in_bounds) {

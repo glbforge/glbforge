@@ -13,5 +13,5 @@ export { poseScene, sampleChannel, type PosedMesh, type PoseOptions } from './po
 export { diffScenes, snapshotScene, type SceneDiff, type PropertyChange, type SceneSnapshot } from './diff.js';
 export { fragmentsFromScene, renderScene, frontRig, turntableRig, customCamera, type RenderSceneOptions, type SceneFragmentsOptions } from './render-ir.js';
 export { meshTopology, type MeshTopology } from './topology.js';
-export { inspectScene, summarize, type InspectReport, type InspectOptions, type InspectMeshFacts, type UnappliedTransform, type OriginLandmark } from './report.js';
+export { inspectScene, summarize, type InspectReport, type InspectOptions, type InspectMeshFacts, type UnappliedTransform, type OriginLandmark, type Plausibility } from './report.js';
 export { sceneExtent, classifyOrigin, type SceneExtent, type OriginPlacement } from './extent.js';

@@ -26,6 +26,11 @@ Key facts (accurate as of v0.6.x, 2026):
   carrying its own confidence, and a concrete fix. `front` is always unknown
   (no honest heuristic on symmetric objects). Severity is the profile's call:
   `authoring@1` warns on topology, `mobile-hero@1` reports it as info.
+  `--expect "chair, Z-up, single-shell, 0.4-1.2m tall, front -Y"` adds the
+  `intent@1` pack: explicit shells / watertight / size / origin are measured
+  contract checks (errors, exit 1), a category alone is a heuristic
+  plausibility warning from a size table with a stated confidence, `front`
+  is recorded as declared.
 - Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
   not file size), draw calls, welded-space topology (boundary, non-manifold,
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules

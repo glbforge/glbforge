@@ -17,7 +17,7 @@ import {
 } from '@glbforge/core';
 import { note, noteAll, plural, reply, severityTail, withContext } from './envelope.js';
 import { renderContactSheet, renderGif, type Preview } from './preview.js';
-import { envelopeShape, ToolDataSchemas, type ToolName } from './schemas.js';
+import { envelopeShape, ExpectationSchema, ToolDataSchemas, type ToolName } from './schemas.js';
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
 const WRITES_FILES = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -82,19 +82,22 @@ export function registerAgentTools(server: McpServer): void {
       'or are there holes / overlapping faces; how big it is in real metres; which way is up; where the origin sits (base centre, centre, or floating off the object); ' +
       'whether node transforms are applied or mirrored. Read `summary` first. Every finding names a versioned rule (e.g. topo/open-edges from core-geometry@1), ' +
       'says whether it was measured, and carries a likely cause with its confidence plus a concrete fix; the same findings appear in errors[] with alias codes. ' +
-      '`front` is always unknown (no honest heuristic exists) — declare it. profile decides severities: authoring (default: topology problems are warnings, ' +
+      '`front` is always unknown (no honest heuristic exists) unless you declare it. Pass `expect` with what you meant to make ' +
+      '("chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y, watertight, origin base") and it is checked as a contract: shell count, watertight, size range, origin ' +
+      'are measured and fail as errors; a bare category gives a plausibility warning from a size table with a confidence. profile decides severities: authoring (default: topology problems are warnings, ' +
       'because they are most likely the last edit\'s doing) or a web budget such as mobile-hero (topology is informational). ' +
       'For per-mesh detail behind a finding use inspect_geometry; for materials, animation and budgets use inspect_all.',
     inputSchema: {
       path: PATH,
+      expect: z.union([z.string(), ExpectationSchema]).optional().describe('What you meant to make, free text ("chair, Z-up, single-shell, 0.4-1.2m tall, front -Y") or structured. Adds the intent@1 pack; unparsed tokens are reported'),
       profile: z.string().default('authoring').describe(`Rule profile: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile ${Object.keys(PROFILE_VERSIONS).join(' | ')} (pin with @N)`),
       topology: z.boolean().default(true).describe('Welded-space topology pass (shells, watertight, non-manifold). ~70 ms per 150k triangles; when false the topology rules are listed in `skipped`'),
       packs: z.array(z.string()).optional().describe(`Rule packs to run instead of the profile's: ${Object.keys(PACK_VERSIONS).join(' | ')} (pin with @N)`),
       params: z.record(z.record(z.union([z.number(), z.string(), z.boolean()]))).optional().describe('Pack param overrides, e.g. { "core-geometry": { "fragmentFraction": 0.02 } }'),
     },
-  }, async ({ path, profile, topology, packs, params }) => {
+  }, async ({ path, expect, profile, topology, packs, params }) => {
     const loaded = await loadScene(path);
-    const report = inspectScene(loaded.ir, { profile, topology, packs, params });
+    const report = inspectScene(loaded.ir, { profile, topology, packs, params, expect: expect as string | undefined });
     const errors = [...loadErrors(loaded.ir), ...packFindingsToDiagnostics(report.findings)];
     return reply({ path, ...report, sha256: sha256(loaded.bytes) }, { summary: report.summary, errors });
   });

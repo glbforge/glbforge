@@ -19,6 +19,11 @@ Built for agents, not terminals:
   carrying its own confidence, and a concrete fix; `front` is always
   `unknown` because no honest heuristic exists. Severity is the profile's
   call: `authoring` (default) warns on topology, `mobile-hero` reports it.
+  Pass `expect` ("chair, Z-up, single-shell, 0.4-1.2m tall, front -Y,
+  watertight, origin base", or structured) and `intent@1` checks it as a
+  contract: shells, watertight, size and origin are measured errors; a bare
+  category is a plausibility warning with a confidence; `front` is recorded
+  as declared.
 - **One envelope, stable codes, prim paths.** Every tool answers
   `{ ok, summary, duration_ms, errors[], data }`. `errors[]` lists every
   diagnostic as `{ code, severity, prim_path, property, message, suggested_fix }`

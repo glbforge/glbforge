@@ -69,6 +69,14 @@
               "XFORM_UNAPPLIED",
               "XFORM_MIRRORED",
               "XFORM_NON_UNIFORM_SCALE",
+              "INTENT_UP_AXIS",
+              "INTENT_UNITS",
+              "INTENT_SHELLS",
+              "INTENT_WATERTIGHT",
+              "INTENT_SIZE",
+              "INTENT_CATEGORY_SCALE",
+              "INTENT_CATEGORY_UNKNOWN",
+              "INTENT_ORIGIN",
               "ZUP_SUSPECTED",
               "SKELETON_UNBOUND",
               "MESH_NOT_DEFORMING",
@@ -443,8 +451,53 @@
                 },
                 "plausibility": {
                   "type": "string",
-                  "const": "unknown",
-                  "description": "Needs a category to judge; declare one with an expectation"
+                  "enum": [
+                    "unknown",
+                    "plausible",
+                    "implausible"
+                  ],
+                  "description": "unknown without a declared category or size range; with a category it is a table prior (see plausibility_basis.confidence), with an explicit range it is exact"
+                },
+                "plausibility_basis": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "category": {
+                          "type": "string"
+                        },
+                        "typical_m": {
+                          "type": "array",
+                          "minItems": 2,
+                          "maxItems": 2,
+                          "items": [
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ]
+                        },
+                        "measure": {
+                          "type": "string"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "category",
+                        "typical_m",
+                        "measure",
+                        "confidence"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 }
               },
               "required": [
@@ -452,7 +505,8 @@
                 "meters_per_unit",
                 "bounding_box",
                 "largest_dimension_m",
-                "plausibility"
+                "plausibility",
+                "plausibility_basis"
               ],
               "additionalProperties": false
             },
@@ -475,16 +529,151 @@
                 },
                 "front": {
                   "type": "string",
-                  "const": "unknown",
-                  "description": "Never inferred: symmetric objects defeat every heuristic"
+                  "description": "\"unknown\" unless declared in `expect`; never inferred, symmetric objects defeat every heuristic"
+                },
+                "front_source": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "declared"
+                  ]
                 }
               },
               "required": [
                 "up_axis",
                 "up_axis_source",
-                "front"
+                "front",
+                "front_source"
               ],
               "additionalProperties": false
+            },
+            "expectation": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "raw": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "expectation": {
+                      "type": "object",
+                      "properties": {
+                        "category": {
+                          "type": "string",
+                          "description": "e.g. \"chair\" — looked up in a coarse size table for a plausibility check (heuristic)"
+                        },
+                        "up": {
+                          "type": "string",
+                          "enum": [
+                            "Y",
+                            "Z"
+                          ],
+                          "description": "Authoring up axis. glTF files are Y-up by definition, so Z-up is reported as informational there"
+                        },
+                        "units": {
+                          "type": "string",
+                          "enum": [
+                            "m",
+                            "cm",
+                            "mm"
+                          ],
+                          "description": "Unit of the numbers in this expectation (the file must be metres)"
+                        },
+                        "shells": {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "min": {
+                                  "type": "integer"
+                                },
+                                "max": {
+                                  "type": "integer"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Exact connected-shell count or a range (welded space)"
+                        },
+                        "watertight": {
+                          "type": "boolean"
+                        },
+                        "size": {
+                          "type": "object",
+                          "properties": {
+                            "min": {
+                              "type": "number"
+                            },
+                            "max": {
+                              "type": "number"
+                            },
+                            "measure": {
+                              "type": "string",
+                              "enum": [
+                                "height",
+                                "width",
+                                "largest"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "min",
+                            "max",
+                            "measure"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Range in metres along height (up axis), width (largest across), or largest"
+                        },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "base-center",
+                            "center",
+                            "centroid"
+                          ]
+                        },
+                        "front": {
+                          "type": "string",
+                          "enum": [
+                            "+X",
+                            "-X",
+                            "+Y",
+                            "-Y",
+                            "+Z",
+                            "-Z"
+                          ],
+                          "description": "Recorded as declared, never verified"
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "unparsed": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Tokens the parser could not place — never silently dropped"
+                    }
+                  },
+                  "required": [
+                    "raw",
+                    "expectation",
+                    "unparsed"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "origin": {
               "type": "object",
@@ -696,6 +885,14 @@
                       "XFORM_UNAPPLIED",
                       "XFORM_MIRRORED",
                       "XFORM_NON_UNIFORM_SCALE",
+                      "INTENT_UP_AXIS",
+                      "INTENT_UNITS",
+                      "INTENT_SHELLS",
+                      "INTENT_WATERTIGHT",
+                      "INTENT_SIZE",
+                      "INTENT_CATEGORY_SCALE",
+                      "INTENT_CATEGORY_UNKNOWN",
+                      "INTENT_ORIGIN",
                       "ZUP_SUSPECTED",
                       "SKELETON_UNBOUND",
                       "MESH_NOT_DEFORMING",
@@ -879,6 +1076,7 @@
             "topology",
             "scale",
             "orientation",
+            "expectation",
             "origin",
             "hierarchy",
             "findings",

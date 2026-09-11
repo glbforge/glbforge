@@ -25,8 +25,12 @@ answers everything in tens of ms).
 - [x] `inspectScene` report + `glbforge inspect` + MCP `inspect` (2026-09-11):
   shells / watertight / metres / up / origin landmark / unapplied,
   mirrored, non-uniform transforms; `front` always unknown
-- [ ] `--expect` intent pack (`intent@1`): category → height range table,
-  up-axis, units, shells, front
+- [x] `--expect` intent pack (`intent@1`, 2026-09-11): free-text or structured
+  expectation; shells / watertight / size range / origin / USD units are
+  measured contract checks (errors), category plausibility from a ~45-entry
+  size table is a heuristic warning with confidence, `Z-up` on glTF is
+  informational (the format is Y-up), `front` is recorded as declared only;
+  unparsed tokens are reported. CLI `-e/--expect`, MCP `expect`
 - [ ] `glbforge diff <before> <after>` + MCP `diff`: structural + topology
   regressions + optional 4-view render delta; diff edges feed lineage
 - [ ] Usage counter (opt-in JSONL under `~/.config/glbforge/`, lineage =

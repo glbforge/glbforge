@@ -11,6 +11,7 @@
  * always `unknown` here because no heuristic is honest on the symmetric
  * objects that make up most assets; declare it with an expectation.
  */
+import { CATEGORY_SIZES, parseExpectation, type Expectation, type ParsedExpectation } from '../packs/intent.js';
 import { runPacks, type RunPacksOptions } from '../packs/registry.js';
 import type { PackRunResult, RuleFinding } from '../packs/types.js';
 import { classifyOrigin, sceneExtent, type OriginLandmark } from './extent.js';
@@ -19,10 +20,14 @@ import { meshTopology, type MeshTopology } from './topology.js';
 
 export type { OriginLandmark } from './extent.js';
 
-export interface InspectOptions extends Omit<RunPacksOptions, 'topologyCache' | 'extent'> {
+export interface InspectOptions extends Omit<RunPacksOptions, 'topologyCache' | 'extent' | 'expect'> {
   /** Fraction of the bounding-box size within which the origin counts as "at" a landmark. Default 0.05 (also the core-scene originTolerance param). */
   originTolerance?: number;
+  /** What the caller meant to make: free text ("chair, Z-up, single-shell, 0.4-1.2m tall, front -Y") or structured. Runs intent@1. */
+  expect?: string | Expectation | null;
 }
+
+export type Plausibility = 'unknown' | 'plausible' | 'implausible';
 
 export interface InspectMeshFacts {
   prim_path: string;
@@ -70,16 +75,20 @@ export interface InspectReport {
     meters_per_unit: number;
     bounding_box: { min: number[]; max: number[]; size: number[] } | null;
     largest_dimension_m: number | null;
-    /** Plausibility needs a category; without one this is honestly unknown. */
-    plausibility: 'unknown';
+    /** Needs a declared category (or explicit range); without one this is honestly unknown. With one, a table prior — see plausibility_basis. */
+    plausibility: Plausibility;
+    plausibility_basis: { category: string; typical_m: [number, number]; measure: string; confidence: number } | null;
   };
   orientation: {
     up_axis: 'Y' | 'Z';
     /** glTF is Y-up by definition; USD declares it. */
     up_axis_source: 'format' | 'metadata';
-    /** Never inferred: symmetric objects defeat every heuristic. Declare it with an expectation. */
-    front: 'unknown';
+    /** Never inferred: symmetric objects defeat every heuristic. `declared` only when the caller said so. */
+    front: 'unknown' | string;
+    front_source: 'none' | 'declared';
   };
+  /** The caller's expectation as parsed, with tokens that could not be placed; null when none was given. */
+  expectation: ParsedExpectation | null;
   origin: {
     at: OriginLandmark;
     /** Where the world origin sits inside the bounds, 0 = min … 1 = max per axis; null without geometry. */
@@ -122,9 +131,14 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
   const extent = sceneExtent(ir);
 
   // --- packs (share the topology memo and the extent) ---
-  const { originTolerance: _t, ...packOpts } = opts;
-  const params = { ...(opts.params ?? {}), 'core-scene': { originTolerance: tol, ...(opts.params?.['core-scene'] ?? {}) } };
-  const run = runPacks(ir, { ...packOpts, params, profile: opts.profile ?? 'authoring', topologyCache, extent });
+  const { originTolerance: _t, expect: _e, ...packOpts } = opts;
+  const expectation = opts.expect ? parseExpectation(opts.expect) : null;
+  const params = {
+    ...(opts.params ?? {}),
+    'core-scene': { originTolerance: tol, ...(opts.params?.['core-scene'] ?? {}) },
+    intent: { originTolerance: tol, ...(opts.params?.intent ?? {}) },
+  };
+  const run = runPacks(ir, { ...packOpts, params, profile: opts.profile ?? 'authoring', topologyCache, extent, expect: expectation?.expectation ?? null });
 
   // --- per-mesh facts ---
   const meshes: InspectMeshFacts[] = [];
@@ -170,6 +184,20 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
   for (const r of ir.roots) visit(r, 1);
   const root_names = ir.roots.slice(0, 8).map((i) => ir.nodes[i].name);
 
+  // --- plausibility: only with a declared category (table prior) or explicit range ---
+  let plausibility: Plausibility = 'unknown';
+  let plausibility_basis: InspectReport['scale']['plausibility_basis'] = null;
+  const cat = expectation?.expectation.category;
+  const prior = cat ? CATEGORY_SIZES[cat] ?? CATEGORY_SIZES[cat.replace(/s$/, '')] : undefined;
+  if (expectation?.expectation.size) {
+    plausibility = run.findings.some((f) => f.rule === 'intent/size') ? 'implausible' : 'plausible';
+    plausibility_basis = { category: cat ?? 'explicit range', typical_m: [expectation.expectation.size.min, expectation.expectation.size.max], measure: expectation.expectation.size.measure, confidence: 1 };
+  } else if (cat && prior) {
+    const f = run.findings.find((x) => x.rule === 'intent/category-scale');
+    plausibility = f ? 'implausible' : 'plausible';
+    plausibility_basis = { category: cat, typical_m: [prior.min, prior.max], measure: prior.measure, confidence: f?.confidence ?? 0.6 };
+  }
+
   const report: InspectReport = {
     format: ir.format,
     source_path: ir.sourcePath,
@@ -179,8 +207,12 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
     summary: '',
     scene: { meshes: ir.meshes.length, triangles: tris, vertices: verts, materials: ir.materials.length, nodes: realNodes.length, depth },
     topology: { shells: anyTopo ? shells : null, watertight: anyTopo ? watertight : null, meshes },
-    scale: { units: 'm', meters_per_unit: mpu, bounding_box: bbox, largest_dimension_m: largest, plausibility: 'unknown' },
-    orientation: { up_axis: ir.upAxis, up_axis_source: ir.format.startsWith('usd') ? 'metadata' : 'format', front: 'unknown' },
+    scale: { units: 'm', meters_per_unit: mpu, bounding_box: bbox, largest_dimension_m: largest, plausibility, plausibility_basis },
+    orientation: {
+      up_axis: ir.upAxis, up_axis_source: ir.format.startsWith('usd') ? 'metadata' : 'format',
+      front: expectation?.expectation.front ?? 'unknown', front_source: expectation?.expectation.front ? 'declared' : 'none',
+    },
+    expectation,
     origin: {
       at,
       position_in_bounds: placement?.position_in_bounds ?? null,
@@ -227,7 +259,15 @@ export function summarize(r: InspectReport): string {
   if (hx.non_uniform_scale.length) bits.push(`${plural(hx.non_uniform_scale.length, 'node')} with non-uniform scale`);
   parts.push(`${plural(hx.nodes, 'node')}${hx.depth > 1 ? ` (depth ${hx.depth})` : ''}${bits.length ? ': ' + bits.join(', ') : ', transforms applied'}.`);
 
-  parts.push('Front: unknown (declare it with an expectation).');
+  parts.push(r.orientation.front_source === 'declared' ? `Front: ${r.orientation.front} (declared, not measured).` : 'Front: unknown (declare it with an expectation).');
+
+  if (r.expectation) {
+    const violations = r.findings.filter((f) => f.pack.startsWith('intent@') && f.severity === 'error').length;
+    const warned = r.findings.filter((f) => f.pack.startsWith('intent@') && f.severity === 'warning').length;
+    const basis = r.scale.plausibility_basis;
+    const plaus = r.scale.plausibility === 'unknown' ? '' : ` Size ${r.scale.plausibility} for a ${basis!.category} (${basis!.typical_m.map((v) => v.toFixed(2)).join('–')} m ${basis!.measure}${basis!.confidence < 1 ? `, ${Math.round(basis!.confidence * 100)}% prior` : ''}).`;
+    parts.push(`Expectation${r.expectation.raw ? ` "${r.expectation.raw}"` : ''}: ${violations ? `${plural(violations, 'violation')}` : 'met'}${warned ? `, ${plural(warned, 'warning')}` : ''}${r.expectation.unparsed.length ? `; could not parse: ${r.expectation.unparsed.map((u) => `"${u}"`).join(', ')}` : ''}.${plaus}`);
+  }
 
   const top = r.findings.slice(0, 3);
   if (top.length) parts.push(top.map((f) => `${f.severity.toUpperCase()} ${f.rule}: ${f.message}`).join(' '));

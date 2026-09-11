@@ -145,15 +145,17 @@ program
   .option('-p, --profile <name>', `rule profile deciding severities: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile (${Object.keys(PROFILES).join(' | ')}); pin with name@N`, 'authoring')
   .option('--packs <list>', `comma-separated rule packs instead of the profile's (${Object.keys(PACK_VERSIONS).join(', ')}; pin with name@N)`)
   .option('--no-topology', 'skip the welded topology pass (shells / watertight rules are reported as skipped)')
+  .option('-e, --expect <spec>', 'what you meant to make, checked as a contract: e.g. "chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y, watertight, origin base". Violations are errors (exit 1); a bare category gives a plausibility warning; front is recorded, never measured')
   .option('--strict', 'exit 1 on warnings as well as errors')
   .option('--json', 'emit the full report as JSON')
-  .action(async (file: string, opts: { profile: string; packs?: string; topology: boolean; strict?: boolean; json?: boolean }) => {
+  .action(async (file: string, opts: { profile: string; packs?: string; topology: boolean; expect?: string; strict?: boolean; json?: boolean }) => {
     const t0 = performance.now();
     const loaded = await loadScene(file);
     const report = inspectScene(loaded.ir, {
       profile: opts.profile,
       topology: opts.topology,
       packs: opts.packs ? opts.packs.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
+      expect: opts.expect,
     });
     const duration_ms = Math.round(performance.now() - t0);
     if (opts.json) console.log(JSON.stringify({ path: file, ...report, duration_ms }, null, 2));

@@ -65,7 +65,9 @@ describe('inspectScene facts', () => {
     expect(r.topology.meshes[0]).toMatchObject({ prim_path: '/Asset/box_0/Prim_0', shells: 1, watertight: true, boundary_loops: 0, non_manifold_edges: 0 });
     expect(r.scale).toMatchObject({ units: 'm', meters_per_unit: 1, largest_dimension_m: 1, plausibility: 'unknown' });
     expect(r.scale.bounding_box!.size).toEqual([1, 1, 1]);
-    expect(r.orientation).toEqual({ up_axis: 'Y', up_axis_source: 'format', front: 'unknown' });
+    expect(r.orientation).toEqual({ up_axis: 'Y', up_axis_source: 'format', front: 'unknown', front_source: 'none' });
+    expect(r.expectation).toBeNull();
+    expect(r.scale.plausibility_basis).toBeNull();
     expect(r.origin).toMatchObject({ at: 'base-center', height_above_base_m: 0 });
     expect(r.origin.position_in_bounds).toEqual([0.5, 0, 0.5]);
     expect(r.hierarchy).toMatchObject({ nodes: 1, mesh_nodes: 1, unapplied_transforms: [], non_uniform_scale: [], mirrored: [], root_names: ['box'] });

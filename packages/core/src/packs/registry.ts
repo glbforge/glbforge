@@ -11,6 +11,7 @@ import type { Profile } from '../types.js';
 import { sceneExtent, type SceneExtent } from '../inspect/extent.js';
 import { coreGeometryV1 } from './core-geometry.js';
 import { coreSceneV1 } from './core-scene.js';
+import { intentV1, parseExpectation, type Expectation } from './intent.js';
 import type { PackRunResult, ParamValues, Provenance, RuleContext, RuleFinding, RulePack, RuleProfile } from './types.js';
 
 // --- packs ---------------------------------------------------------------
@@ -19,9 +20,10 @@ import type { PackRunResult, ParamValues, Provenance, RuleContext, RuleFinding, 
 export const PACK_VERSIONS: Record<string, RulePack[]> = {
   'core-geometry': [coreGeometryV1],
   'core-scene': [coreSceneV1],
+  intent: [intentV1],
 };
 
-/** What runs when nothing names packs: every core pack, latest. */
+/** What runs when nothing names packs: every core pack, latest. `intent` is added whenever an expectation is given. */
 export const DEFAULT_PACKS = ['core-geometry', 'core-scene'];
 
 /** Latest version of each pack. */
@@ -131,6 +133,8 @@ export interface RunPacksOptions {
   topologyCache?: Map<number, MeshTopology | null>;
   /** Precomputed extent (see sceneExtent) so a report and its packs share one pass; null = no geometry. */
   extent?: SceneExtent | null;
+  /** The caller's expectation (free text or structured). Adds the `intent` pack (latest, unless the profile pins one). */
+  expect?: string | Expectation | null;
 }
 
 const RANK: Record<DiagnosticSeverity, number> = { error: 0, warning: 1, info: 2 };
@@ -140,6 +144,7 @@ export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOpt
   const topologyEnabled = opts.topology !== false;
   const cache = shared?.topology ?? new Map<number, MeshTopology | null>();
   const extentBox = shared?.extent ?? { value: opts.extent };
+  const expect = opts.expect ? parseExpectation(opts.expect).expectation : null;
   const profile = opts.profile ? resolveRuleProfile(opts.profile) : null;
   const params: ParamValues = {};
   for (const [k, spec] of Object.entries(pack.params)) params[k] = spec.default;
@@ -155,6 +160,7 @@ export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOpt
       return extentBox.value;
     },
     provenance: shared?.provenance ?? detectProvenance(ir),
+    expect,
     rootPath: ir.format.startsWith('usd') ? ir.defaultPrim ?? '/' : '/Asset',
     topology(mesh: IRMesh) {
       if (!topologyEnabled) return null;
@@ -168,7 +174,8 @@ export function createRuleContext(ir: SceneIR, pack: RulePack, opts: RunPacksOpt
 /** Run packs over an asset. Deterministic: same IR + same options = same findings in the same order. */
 export function runPacks(ir: SceneIR, opts: RunPacksOptions = {}): PackRunResult {
   const profile = opts.profile ? resolveRuleProfile(opts.profile) : null;
-  const packSpecs = opts.packs ?? profile?.packs ?? DEFAULT_PACKS;
+  const packSpecs = [...(opts.packs ?? profile?.packs ?? DEFAULT_PACKS)];
+  if (opts.expect && !packSpecs.some((p) => (typeof p === 'string' ? /^intent(@|$)/.test(p) : p.name === 'intent'))) packSpecs.push('intent');
   const resolved = packSpecs.map((p) => (typeof p === 'string' ? getPack(p) : p));
   const shared = { topology: opts.topologyCache ?? new Map<number, MeshTopology | null>(), provenance: detectProvenance(ir), extent: { value: opts.extent } };
   const findings: RuleFinding[] = [];

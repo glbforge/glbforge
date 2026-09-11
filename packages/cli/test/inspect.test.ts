@@ -43,6 +43,17 @@ describe.skipIf(!ready)('glbforge inspect (built CLI)', () => {
     expect((await inspect(hero, '--json', '--strict', '--profile', 'mobile-hero')).code).toBe(0);
   }, 20_000);
 
+  it('--expect turns the run into a contract: violations exit 1, a met expectation exits 0', async () => {
+    const bad = await inspect(hero, '--json', '--expect', 'chair, watertight, 0.4-1.2m tall');
+    expect(bad.code).toBe(1);
+    const r = JSON.parse(bad.stdout);
+    expect(r.packs).toContain('intent@1');
+    expect(r.findings.filter((f: { rule: string }) => f.rule.startsWith('intent/')).map((f: { rule: string }) => f.rule)).toEqual(['intent/watertight', 'intent/size']);
+    const ok = await inspect(hero, '--json', '--expect', 'character, 1.5-2.5m tall, front -Z');
+    expect(ok.code).toBe(0);
+    expect(JSON.parse(ok.stdout).orientation).toMatchObject({ front: '-Z', front_source: 'declared' });
+  }, 30_000);
+
   it('prints the summary first in human mode and lists skipped rules with --no-topology', async () => {
     const { stdout } = await inspect(hero, '--no-topology');
     expect(stdout).toMatch(/1 mesh, 150,000 triangles/);

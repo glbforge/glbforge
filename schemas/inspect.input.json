@@ -9,6 +9,111 @@
       "type": "string",
       "description": "Absolute path to a .glb, .gltf, .usdz, .usda, .usdc or .usd file"
     },
+    "expect": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": "string",
+              "description": "e.g. \"chair\" — looked up in a coarse size table for a plausibility check (heuristic)"
+            },
+            "up": {
+              "type": "string",
+              "enum": [
+                "Y",
+                "Z"
+              ],
+              "description": "Authoring up axis. glTF files are Y-up by definition, so Z-up is reported as informational there"
+            },
+            "units": {
+              "type": "string",
+              "enum": [
+                "m",
+                "cm",
+                "mm"
+              ],
+              "description": "Unit of the numbers in this expectation (the file must be metres)"
+            },
+            "shells": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "integer"
+                    },
+                    "max": {
+                      "type": "integer"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              ],
+              "description": "Exact connected-shell count or a range (welded space)"
+            },
+            "watertight": {
+              "type": "boolean"
+            },
+            "size": {
+              "type": "object",
+              "properties": {
+                "min": {
+                  "type": "number"
+                },
+                "max": {
+                  "type": "number"
+                },
+                "measure": {
+                  "type": "string",
+                  "enum": [
+                    "height",
+                    "width",
+                    "largest"
+                  ]
+                }
+              },
+              "required": [
+                "min",
+                "max",
+                "measure"
+              ],
+              "additionalProperties": false,
+              "description": "Range in metres along height (up axis), width (largest across), or largest"
+            },
+            "origin": {
+              "type": "string",
+              "enum": [
+                "base-center",
+                "center",
+                "centroid"
+              ]
+            },
+            "front": {
+              "type": "string",
+              "enum": [
+                "+X",
+                "-X",
+                "+Y",
+                "-Y",
+                "+Z",
+                "-Z"
+              ],
+              "description": "Recorded as declared, never verified"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "What you meant to make, free text (\"chair, Z-up, single-shell, 0.4-1.2m tall, front -Y\") or structured. Adds the intent@1 pack; unparsed tokens are reported"
+    },
     "profile": {
       "type": "string",
       "default": "authoring",
@@ -24,7 +129,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Rule packs to run instead of the profile's: core-geometry | core-scene (pin with @N)"
+      "description": "Rule packs to run instead of the profile's: core-geometry | core-scene | intent (pin with @N)"
     },
     "params": {
       "type": "object",

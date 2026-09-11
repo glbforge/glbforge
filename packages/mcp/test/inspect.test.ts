@@ -108,6 +108,25 @@ describe('inspect', () => {
     expect(cd.findings.map((f) => f.rule)).not.toContain('scale/too-small');
   });
 
+  it('expect: contract violations are errors, front is declared, unparsed tokens are reported; structured form works too', async () => {
+    const env = await call('inspect', { path: fx['centimeters.glb'], expect: 'chair, single-shell, watertight, 0.4-1.2m tall, front -Y, purple' });
+    const d = env.data as { packs: string[]; orientation: { front: string; front_source: string }; expectation: { unparsed: string[] }; scale: { plausibility: string }; findings: Array<{ rule: string; severity: string }> };
+    expect(d.packs).toContain('intent@1');
+    expect(d.orientation).toMatchObject({ front: '-Y', front_source: 'declared' });
+    expect(d.expectation.unparsed).toEqual(['purple']);
+    expect(d.scale.plausibility).toBe('implausible');
+    const intent = d.findings.filter((f) => f.rule.startsWith('intent/'));
+    expect(intent.map((f) => [f.rule, f.severity])).toEqual([['intent/watertight', 'error'], ['intent/size', 'error']]);
+    expect(env.errors.some((e) => e.code === 'INTENT_SIZE' && e.severity === 'error')).toBe(true);
+    expect(env.summary).toMatch(/2 violations/);
+
+    const structured = await call('inspect', { path: fx['centimeters.glb'], expect: { category: 'coin', watertight: false } });
+    const sd = structured.data as { expectation: { raw: string | null }; scale: { plausibility: string }; findings: Array<{ rule: string }> };
+    expect(sd.expectation.raw).toBeNull();
+    expect(sd.scale.plausibility).toBe('implausible'); // a 5 mm sheet against a coin's 15–40 mm prior
+    expect(sd.findings.map((f) => f.rule)).toContain('intent/category-scale');
+  });
+
   it('fails cleanly on a missing file', async () => {
     const env = await call('inspect', { path: join(dir, 'nope.glb') });
     expect(env.ok).toBe(false);

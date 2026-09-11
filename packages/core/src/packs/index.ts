@@ -6,3 +6,4 @@ export {
 } from './registry.js';
 export { coreGeometryV1 } from './core-geometry.js';
 export { coreSceneV1 } from './core-scene.js';
+export { intentV1, parseExpectation, CATEGORY_SIZES, type Expectation, type ParsedExpectation, type Unit, type Measure, type FrontAxis } from './intent.js';

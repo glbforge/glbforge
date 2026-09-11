@@ -85,6 +85,8 @@ export interface RuleContext {
   /** World-space bounds / centroid in metres, memoized; null without geometry. */
   extent(): SceneExtent | null;
   provenance: Provenance;
+  /** The caller's declared expectation, when one was given (intent@1 runs only then). */
+  expect: import('./intent.js').Expectation | null;
   /** `/Asset` for glTF, the default prim for USD. */
   rootPath: string;
 }
