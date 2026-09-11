@@ -347,8 +347,8 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     'dede-v2.glb': 'floating-fragments floating-fragments shells shells shells origin/not-at-base',
     'dede.glb': 'origin/not-at-base',
     'guardian.web.glb': 'non-manifold degenerate origin/not-at-base',
-    'guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
-    'guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'guardian.web.lod1.glb': 'non-manifold origin/not-at-base',
+    'guardian.web.lod2.glb': 'non-manifold origin/not-at-base',
     'lucky-cat.glb': 'origin/not-at-base',
     'lucky-cat.ktx2.glb': 'non-manifold origin/not-at-base',
     'lucky-cat.web.glb': 'non-manifold origin/not-at-base',
@@ -367,8 +367,8 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     'sneakercon.web.glb': 'origin/not-at-base',
     'svg-test.glb': 'origin/not-at-base',
     'veiled-guardian.web.glb': 'non-manifold degenerate origin/not-at-base',
-    'veiled-guardian.web.lod1.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
-    'veiled-guardian.web.lod2.glb': 'non-manifold floating-fragments shells degenerate origin/not-at-base',
+    'veiled-guardian.web.lod1.glb': 'non-manifold origin/not-at-base',
+    'veiled-guardian.web.lod2.glb': 'non-manifold origin/not-at-base',
   };
 
   it('every checked-in example produces exactly the frozen finding set under authoring@1', async () => {
