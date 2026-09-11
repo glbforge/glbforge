@@ -32,7 +32,8 @@ answers everything in tens of ms).
 - [ ] Usage counter (opt-in JSONL under `~/.config/glbforge/`, lineage =
   same path within a session ∪ diff edges ∪ explicit id); `glbforge usage`
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
-  disagree on 100% of wall faces; layered forge stacks by node translation;
+  disagree on 100% of wall faces; ~~layered forge stacks by node translation~~
+  (baked into vertices 2026-09-11, layer nodes are identity);
   some bevelled forge outputs have open edges despite the "watertight" claim
 
 ## Status after v0.5.0 (2026-09-08) — what's left
