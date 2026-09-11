@@ -32,3 +32,7 @@ export {
 export * from './inspect/index.js';
 export * from './usd-read/index.js';
 export * from './packs/index.js';
+export {
+  recordUsage, readUsage, clearUsage, isUsageEnabled, setUsageEnabled, usageConfigDir, usageFile, usageSummary, usageReport, lineagesOf, assetKey, cliSession,
+  type UsageEvent, type UsageReport, type UsageOptions,
+} from './usage.js';

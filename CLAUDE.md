@@ -48,6 +48,12 @@ the same registration into another checkout.
   pipeline change that alters it must update the table on purpose. Welded-
   space topology for packs and `inspectGeometry` is `inspect/topology.ts`
   (radix-sorted edge pairs; ~70 ms per 150k triangles, ~360 ms per 2M).
+- **Usage counter is local and opt-in, non-negotiably** (`core/src/usage.ts`).
+  It never makes a network call; do not add one. Records only exist after
+  `GLBFORGE_USAGE=1` / `glbforge usage --enable`; `recordUsage` never throws
+  into a tool. The metric is invocations per asset *lineage* (hashes joined
+  by session+path, path+time window, diff edges, explicit id) — a content
+  hash alone would read 1.0 forever in an edit loop.
 - **Skinned / morphing prims** go through `core/src/skinning.ts`, not the plain
   simplifier; `join()` already skips them.
 - **"No visible loss" is measured**: `optimize()` renders 4 fixed cameras before

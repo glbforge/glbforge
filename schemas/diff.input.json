@@ -34,6 +34,10 @@
       "maximum": 512,
       "default": 128,
       "description": "Pixels per view for visual=true"
+    },
+    "lineage": {
+      "type": "string",
+      "description": "Optional id naming the asset across renames, for the local opt-in usage counter (never sent anywhere)"
     }
   },
   "required": [

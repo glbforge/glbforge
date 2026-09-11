@@ -31,6 +31,13 @@ Built for agents, not terminals:
   top / iso SSIM delta with cameras fixed to the before framing. `diff@1`
   rules: regressions at warning, neutral changes at info. Returns the two
   sha256s as `lineage` — an explicit statement that they are the same asset.
+- **Local, opt-in usage counter.** `capabilities` reports whether it is on.
+  When the user opts in (`GLBFORGE_USAGE=1` or `glbforge usage --enable`),
+  every call appends one JSON line to `~/.config/glbforge/usage.jsonl` with
+  the server-process session id, the asset path and hash, and (for `diff`)
+  the before → after edge. Nothing leaves the machine. `glbforge usage`
+  reports invocations per asset lineage. `inspect` and `diff` accept an
+  optional `lineage` id to name an asset across renames.
 - **One envelope, stable codes, prim paths.** Every tool answers
   `{ ok, summary, duration_ms, errors[], data }`. `errors[]` lists every
   diagnostic as `{ code, severity, prim_path, property, message, suggested_fix }`

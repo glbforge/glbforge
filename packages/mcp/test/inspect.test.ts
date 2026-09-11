@@ -146,6 +146,36 @@ describe('inspect', () => {
     expect(edit.summary).toBe(ed.summary);
   });
 
+  it('usage counter: off by default; when opted in, every call is a local JSONL line with session, hash and diff edge', async () => {
+    const { readUsage, lineagesOf } = await import('@glbforge/core');
+    const cfg = join(dir, 'usage-config');
+    process.env.GLBFORGE_CONFIG_DIR = cfg;
+    delete process.env.GLBFORGE_USAGE;
+    try {
+      await call('inspect', { path: fx['fifty-k.glb'] });
+      expect(await readUsage()).toEqual([]);
+      process.env.GLBFORGE_USAGE = '1';
+      await call('inspect', { path: fx['fifty-k.glb'], lineage: 'demo' });
+      await call('diff', { before: fx['fifty-k.glb'], after: fx['centimeters.glb'] });
+      await call('capabilities', {});
+      const events = await readUsage();
+      expect(events.map((e) => e.tool)).toEqual(['inspect', 'diff', 'capabilities']);
+      expect(new Set(events.map((e) => e.session)).size).toBe(1);
+      expect(events[0]).toMatchObject({ surface: 'mcp', path: fx['fifty-k.glb'], lineage: 'demo', ok: true });
+      expect(events[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(events[1].edge).toEqual({ from: events[0].sha256, to: events[1].sha256 });
+      expect(events[1].path).toBe(fx['centimeters.glb']);
+      expect(events[2]).toMatchObject({ path: null, sha256: null });
+      // The diff edge joins the two files into one lineage.
+      expect([...lineagesOf(events).values()].map((l) => l.length)).toEqual([2]);
+      const caps = await call('capabilities', {});
+      expect((caps.data as { usage: { enabled: boolean; file: string } }).usage).toMatchObject({ enabled: true, file: join(cfg, 'usage.jsonl') });
+    } finally {
+      delete process.env.GLBFORGE_USAGE;
+      delete process.env.GLBFORGE_CONFIG_DIR;
+    }
+  });
+
   it('fails cleanly on a missing file', async () => {
     const env = await call('inspect', { path: join(dir, 'nope.glb') });
     expect(env.ok).toBe(false);

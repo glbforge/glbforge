@@ -32,7 +32,7 @@ export function registerEnvelopeTool<Args extends z.ZodRawShape>(
   server: McpServer, name: ToolName, config: { description: string; annotations: Record<string, boolean>; inputSchema: Args },
   handler: (args: z.objectOutputType<Args, z.ZodTypeAny>) => Promise<ReturnType<typeof reply>>,
 ): void {
-  server.registerTool(name, { ...config, outputSchema: envelopeShape(ToolDataSchemas[name]) } as never, ((args: z.objectOutputType<Args, z.ZodTypeAny>) => withContext(name, () => handler(args))) as never);
+  server.registerTool(name, { ...config, outputSchema: envelopeShape(ToolDataSchemas[name]) } as never, ((args: z.objectOutputType<Args, z.ZodTypeAny>) => withContext(name, () => handler(args), args as Record<string, unknown>)) as never);
 }
 
 const cameraOf = (v: RawView) => ({ position: v.camera.position, target: v.camera.target, fov: v.camera.fovDeg });
@@ -94,6 +94,7 @@ export function registerAgentTools(server: McpServer): void {
       topology: z.boolean().default(true).describe('Welded-space topology pass (shells, watertight, non-manifold). ~70 ms per 150k triangles; when false the topology rules are listed in `skipped`'),
       packs: z.array(z.string()).optional().describe(`Rule packs to run instead of the profile's: ${Object.keys(PACK_VERSIONS).join(' | ')} (pin with @N)`),
       params: z.record(z.record(z.union([z.number(), z.string(), z.boolean()]))).optional().describe('Pack param overrides, e.g. { "core-geometry": { "fragmentFraction": 0.02 } }'),
+      lineage: z.string().optional().describe('Optional id naming the asset across renames, for the local opt-in usage counter (never sent anywhere)'),
     },
   }, async ({ path, expect, profile, topology, packs, params }) => {
     const loaded = await loadScene(path);
@@ -117,6 +118,7 @@ export function registerAgentTools(server: McpServer): void {
       topology: z.boolean().default(true).describe('Welded topology pass on both files (shells, watertight, open loops, non-manifold deltas)'),
       visual: z.boolean().default(false).describe('Render four canonical views of both and score SSIM per view (~150 ms per file at 128 px)'),
       size: z.number().int().min(32).max(512).default(128).describe('Pixels per view for visual=true'),
+      lineage: z.string().optional().describe('Optional id naming the asset across renames, for the local opt-in usage counter (never sent anywhere)'),
     },
   }, async ({ before, after, profile, topology, visual, size }) => {
     const [b, a] = await Promise.all([loadScene(before), loadScene(after)]);

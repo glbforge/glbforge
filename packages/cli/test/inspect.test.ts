@@ -69,6 +69,31 @@ describe.skipIf(!ready)('glbforge inspect (built CLI)', () => {
     expect(same.stdout).toMatch(/No change\./);
   }, 30_000);
 
+  it('usage: opt-in via env, inspect + diff on the same path become one lineage, `usage` reports it', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const cfg = await mkdtemp(join(tmpdir(), 'glbforge-cli-usage-'));
+    const env = { ...process.env, GLBFORGE_CONFIG_DIR: cfg, GLBFORGE_USAGE: '1', GLBFORGE_SESSION: 'cli-test' };
+    try {
+      const off = await run('node', [cli, 'usage', '--json'], { env: { ...process.env, GLBFORGE_CONFIG_DIR: cfg } });
+      expect(JSON.parse(off.stdout)).toMatchObject({ enabled: false, events: 0 });
+      await run('node', [cli, 'inspect', hero, '--json']).catch((e) => e); // default env: not opted in → no record
+      await run('node', [cli, 'inspect', hero, '--json'], { env }).catch((e) => e);
+      await run('node', [cli, 'inspect', hero, '--json', '--profile', 'mobile-hero'], { env });
+      const raw = join(root, 'examples', 'plush-hunyuan.glb');
+      await run('node', [cli, 'diff', raw, hero, '--json'], { env }).catch((e) => e);
+      const { stdout } = await run('node', [cli, 'usage', '--json'], { env });
+      const r = JSON.parse(stdout);
+      expect(r).toMatchObject({ enabled: true, events: 3, sessions: 1, lineages: 1, tools: { inspect: 2, diff: 1 } });
+      expect(r.invocations_per_lineage).toMatchObject({ max: 3 });
+      const human = await run('node', [cli, 'usage'], { env });
+      expect(human.stdout).toMatch(/3 invocations across 1 asset lineage in 1 session/);
+      expect(human.stdout).toMatch(/invocations per asset   median 3/);
+    } finally {
+      await rm(cfg, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('prints the summary first in human mode and lists skipped rules with --no-topology', async () => {
     const { stdout } = await inspect(hero, '--no-topology');
     expect(stdout).toMatch(/1 mesh, 150,000 triangles/);

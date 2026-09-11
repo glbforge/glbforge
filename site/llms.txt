@@ -38,6 +38,11 @@ Key facts (accurate as of v0.6.x, 2026):
   removed, optional front/side/top/iso SSIM delta with cameras fixed to the
   before framing. `diff@1` rules; the summary is a change note with
   regressions first. Returns both sha256s as lineage.
+- Usage (`glbforge usage`): local, opt-in, never networked. Counts
+  invocations per asset lineage (same path in a session, same path within
+  two hours, diff edges, explicit `--lineage`) so the project can tell
+  whether it is in an agent's edit loop; the log is a JSONL file the user
+  owns and can delete.
 - Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
   not file size), draw calls, welded-space topology (boundary, non-manifold,
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules

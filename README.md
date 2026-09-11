@@ -65,6 +65,18 @@ table with a stated confidence; `front` is recorded as declared and never
 measured; `Z-up` on a GLB is informational because glTF is Y-up by
 definition. Tokens the parser cannot place are reported, not dropped.
 
+`glbforge usage` is the local, opt-in counter behind the one metric that
+says whether GLBForge is in the loop: **invocations per asset**. Off by
+default; opt in with `glbforge usage --enable` or `GLBFORGE_USAGE=1`. Every
+`inspect` / `diff` / `analyze` (and every MCP call) then appends one JSON
+line to `~/.config/glbforge/usage.jsonl` (`GLBFORGE_CONFIG_DIR` to move
+it). Nothing is ever sent anywhere; `--clear` deletes it. Because every
+edit changes the file's hash, assets are grouped into *lineages*: the same
+path in the same session, the same path within two hours, a `diff` edge
+(before → after), or an explicit `--lineage <id>`. The report gives median /
+p90 invocations per lineage and the share of assets inspected at least five
+times.
+
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,
 `--json`, `--no-topology`. Exits non-zero when the asset is over budget — wire
 it into CI like a linter. `optimize` flags: `--target <tris>`, `--lods a,b`,

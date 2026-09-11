@@ -50,6 +50,7 @@ import {
   fromGltf,
   fromUsd,
   getProfile,
+  isUsageEnabled,
   optimize,
   perceptualDiff,
   buildLod,
@@ -61,6 +62,7 @@ import {
   snapshotScene,
   toStl,
   toUsdz,
+  usageFile,
   validateScene,
   type AnalysisResult,
   type Diagnostic,
@@ -272,9 +274,11 @@ export function createServer(): McpServer {
       coreVersion = JSON.parse(readFileSync(joinPath(entry, '..', '..', 'package.json'), 'utf8')).version;
     } catch { /* optional */ }
     const fal = !!process.env.FAL_KEY, meshy = !!process.env.MESHY_API_KEY;
+    const usageOn = await isUsageEnabled();
     return reply({
       versions: { mcp: VERSION, core: coreVersion, node: process.version },
       cwd: process.cwd(),
+      usage: { enabled: usageOn, file: await usageFile(), note: usageOn ? 'local opt-in usage counter is on: every call is appended to the file above, nothing leaves the machine; `glbforge usage` reports invocations per asset' : 'off; opt in with GLBFORGE_USAGE=1 or `glbforge usage --enable` (local only, never networked)' },
       generation: {
         fal: { available: fal, models: ['hunyuan', 'trellis', 'triposr'], tool: 'generate_image_to_3d' },
         meshy: { available: meshy, tool: 'meshy_create_task' },

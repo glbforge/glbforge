@@ -40,8 +40,15 @@ answers everything in tens of ms).
   opt-in); meshes paired by path then by unique name across renumbering;
   summary is a change note with regressions first; both sha256s returned
   as lineage
-- [ ] Usage counter (opt-in JSONL under `~/.config/glbforge/`, lineage =
-  same path within a session ∪ diff edges ∪ explicit id); `glbforge usage`
+- [x] Usage counter (2026-09-11): opt-in (`GLBFORGE_USAGE=1` /
+  `glbforge usage --enable`), JSONL under `~/.config/glbforge/`
+  (`GLBFORGE_CONFIG_DIR`), never networked. Every CLI inspect / diff /
+  analyze and every MCP call records tool, session (MCP process id or
+  shell ppid / `GLBFORGE_SESSION`), path, sha256, diff edge, explicit
+  lineage. `glbforge usage` unions lineages (same session + path within
+  12 h, same path within 2 h, diff edges, explicit id) and reports median /
+  p90 invocations per lineage and the in-the-loop share; `capabilities`
+  shows the state. Baseline to collect: today ≈ 1 per asset
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
   disagree on 100% of wall faces; ~~layered forge stacks by node translation~~
   (baked into vertices 2026-09-11, layer nodes are identity);

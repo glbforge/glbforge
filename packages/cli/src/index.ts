@@ -17,7 +17,12 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, renderViews, RULE_PROFILE_VERSIONS, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { resolve as resolvePath } from 'node:path';
+
+/** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
+const usage = (tool: string, path: string, extra: { sha256?: string | null; edge?: { from: string; to: string } | null; lineage?: string | null; duration_ms: number; ok: boolean }) =>
+  recordUsage({ tool, surface: 'cli', session: cliSession(), path: resolvePath(path), sha256: extra.sha256 ?? null, edge: extra.edge ?? null, lineage: extra.lineage ?? null, duration_ms: extra.duration_ms, ok: extra.ok });
 import { printDiff, printDiffReport, printInspect, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
@@ -136,6 +141,7 @@ program
     }
     // CI contract: non-zero exit when the asset is over budget.
     process.exitCode = result.passed ? 0 : 1;
+    await usage('analyze', file, { sha256: createHash('sha256').update(bytes).digest('hex'), duration_ms: 0, ok: true });
   });
 
 program
@@ -147,8 +153,9 @@ program
   .option('--no-topology', 'skip the welded topology pass (shells / watertight rules are reported as skipped)')
   .option('-e, --expect <spec>', 'what you meant to make, checked as a contract: e.g. "chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y, watertight, origin base". Violations are errors (exit 1); a bare category gives a plausibility warning; front is recorded, never measured')
   .option('--strict', 'exit 1 on warnings as well as errors')
+  .option('--lineage <id>', 'name this asset across renames for the local opt-in usage counter (see `glbforge usage`)')
   .option('--json', 'emit the full report as JSON')
-  .action(async (file: string, opts: { profile: string; packs?: string; topology: boolean; expect?: string; strict?: boolean; json?: boolean }) => {
+  .action(async (file: string, opts: { profile: string; packs?: string; topology: boolean; expect?: string; strict?: boolean; lineage?: string; json?: boolean }) => {
     const t0 = performance.now();
     const loaded = await loadScene(file);
     const report = inspectScene(loaded.ir, {
@@ -162,6 +169,7 @@ program
     else printInspect(report, file, duration_ms);
     const failing = report.findings.some((f) => f.severity === 'error' || (opts.strict && f.severity === 'warning'));
     process.exitCode = failing ? 1 : 0;
+    await usage('inspect', file, { sha256: createHash('sha256').update(loaded.bytes).digest('hex'), lineage: opts.lineage, duration_ms, ok: true });
   });
 
 program
@@ -174,16 +182,45 @@ program
   .option('--size <px>', 'pixels per view for --visual', (v) => parseInt(v, 10), 128)
   .option('--no-topology', 'skip the welded topology pass (shell / watertight deltas become null)')
   .option('--strict', 'exit 1 on warnings (regressions) as well as errors')
+  .option('--lineage <id>', 'name this asset across renames for the local opt-in usage counter (see `glbforge usage`)')
   .option('--json', 'emit the full report as JSON')
-  .action(async (before: string, after: string, opts: { profile: string; visual?: boolean; size: number; topology: boolean; strict?: boolean; json?: boolean }) => {
+  .action(async (before: string, after: string, opts: { profile: string; visual?: boolean; size: number; topology: boolean; strict?: boolean; lineage?: string; json?: boolean }) => {
     const t0 = performance.now();
     const [b, a] = await Promise.all([loadScene(before), loadScene(after)]);
     const report = await diffAssets(b.ir, a.ir, { profile: opts.profile, topology: opts.topology, visual: opts.visual, visualSize: opts.size });
     const duration_ms = Math.round(performance.now() - t0);
-    if (opts.json) console.log(JSON.stringify({ ...report, duration_ms }, null, 2));
+    const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
+    const lineage = { before_sha256: sha(b.bytes), after_sha256: sha(a.bytes) };
+    if (opts.json) console.log(JSON.stringify({ ...report, lineage, duration_ms }, null, 2));
     else printDiffReport(report, before, after, duration_ms);
     const failing = report.findings.some((f) => f.severity === 'error' || (opts.strict && f.severity === 'warning'));
     process.exitCode = failing ? 1 : 0;
+    await usage('diff', after, { sha256: lineage.after_sha256, edge: { from: lineage.before_sha256, to: lineage.after_sha256 }, lineage: opts.lineage, duration_ms, ok: true });
+  });
+
+program
+  .command('usage')
+  .description('The local, opt-in usage counter: invocations per asset (lineage-aware), sessions, tools. Nothing is ever sent anywhere; the log is a JSONL file you can read and delete.')
+  .option('--enable', 'opt in: write { "usage": true } to the config dir (or set GLBFORGE_USAGE=1 per shell)')
+  .option('--disable', 'opt out')
+  .option('--clear', 'delete the log')
+  .option('--since <days>', 'only count events from the last N days', parseFloat)
+  .option('--threshold <n>', 'invocations per lineage that count as "in the loop"', (v) => parseInt(v, 10), 5)
+  .option('--json', 'emit JSON')
+  .action(async (opts: { enable?: boolean; disable?: boolean; clear?: boolean; since?: number; threshold: number; json?: boolean }) => {
+    if (opts.enable) console.log(`  usage counter enabled → ${await setUsageEnabled(true)}`);
+    if (opts.disable) console.log(`  usage counter disabled → ${await setUsageEnabled(false)}`);
+    if (opts.clear) { await clearUsage(); console.log('  usage log cleared'); }
+    const r = await usageSummary({ since: opts.since ? Date.now() - opts.since * 86_400_000 : undefined, innerLoopThreshold: opts.threshold });
+    if (opts.json) return void console.log(JSON.stringify(r, null, 2));
+    console.log(`  ${r.enabled ? 'enabled' : 'disabled'} · ${r.file}`);
+    if (!r.events) { console.log(r.enabled ? '  no events yet — run inspect / diff and come back' : '  opt in with `glbforge usage --enable` or GLBFORGE_USAGE=1; nothing leaves this machine'); return; }
+    console.log(`  ${r.events} invocations across ${r.lineages} asset lineage${r.lineages === 1 ? '' : 's'} in ${r.sessions} session${r.sessions === 1 ? '' : 's'}${r.window.from ? `  (${r.window.from.slice(0, 10)} → ${r.window.to!.slice(0, 10)})` : ''}`);
+    const m = r.invocations_per_lineage;
+    console.log(`  invocations per asset   median ${m.median}   p90 ${m.p90}   mean ${m.mean}   max ${m.max}`);
+    console.log(`  in the loop (≥ ${r.inner_loop_threshold})       ${(r.inner_loop_share * 100).toFixed(0)}% of assets`);
+    console.log(`  tools                   ${Object.entries(r.tools).sort((x, y) => y[1] - x[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    console.log(`  distribution            ${r.distribution.slice(0, 12).join(' ')}${r.distribution.length > 12 ? ' …' : ''}`);
   });
 
 program
