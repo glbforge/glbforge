@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/analyze_glb.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/analyze_glb.output.json",
   "title": "analyze_glb.output",
   "description": "Response envelope of the analyze_glb tool.",
   "type": "object",

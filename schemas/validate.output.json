@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/validate.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/validate.output.json",
   "title": "validate.output",
   "description": "Response envelope of the validate tool.",
   "type": "object",

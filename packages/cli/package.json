@@ -1,6 +1,6 @@
 {
   "name": "glbforge",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "bin": {
     "glbforge": "dist/index.js"

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/analyze_performance.input.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/analyze_performance.input.json",
   "title": "analyze_performance.input",
   "description": "Arguments of the analyze_performance tool.",
   "type": "object",

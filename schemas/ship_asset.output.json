@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/ship_asset.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/ship_asset.output.json",
   "title": "ship_asset.output",
   "description": "Response envelope of the ship_asset tool.",
   "type": "object",

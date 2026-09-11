@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/capabilities.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/capabilities.output.json",
   "title": "capabilities.output",
   "description": "Response envelope of the capabilities tool.",
   "type": "object",

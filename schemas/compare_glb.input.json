@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/compare_glb.input.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/compare_glb.input.json",
   "title": "compare_glb.input",
   "description": "Arguments of the compare_glb tool.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/generation_status.input.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/generation_status.input.json",
   "title": "generation_status.input",
   "description": "Arguments of the generation_status tool.",
   "type": "object",

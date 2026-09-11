@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/generate_image_to_3d.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/generate_image_to_3d.output.json",
   "title": "generate_image_to_3d.output",
   "description": "Response envelope of the generate_image_to_3d tool.",
   "type": "object",

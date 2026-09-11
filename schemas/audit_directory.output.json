@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/audit_directory.output.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/audit_directory.output.json",
   "title": "audit_directory.output",
   "description": "Response envelope of the audit_directory tool.",
   "type": "object",

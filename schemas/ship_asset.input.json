@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.6.0/ship_asset.input.json",
+  "$id": "https://glbforge.dev/schemas/0.7.0/ship_asset.input.json",
   "title": "ship_asset.input",
   "description": "Arguments of the ship_asset tool.",
   "type": "object",

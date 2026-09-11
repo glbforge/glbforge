@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — agent-oriented feedback for MCP consumers
+## 0.7.0 — 2026-09-11 — agent-oriented feedback for MCP consumers
 
 For agents driving the `@glbforge/mcp` server. Full spec background:
 `docs/agent-feedback-gap-analysis.md`. Codes: `docs/error-codes.md`.
