@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Forge extruder: triangle winding now agrees with the authored normals on
+  every face.** Walls and bevel strips were wound toward the interior (the
+  image-y flip in `pushVert` was applied to positions but not to the ring
+  order), so single-sided viewers culled the near walls and showed the far
+  walls' inner faces instead; `inspect` flagged every forge asset with
+  `NORMALS_INVERTED`. Displaced (pillow / emboss) caps were also re-tessellated:
+  earcut's tangential slivers are flipped toward Delaunay before and after each
+  subdivision round, so the height field is sampled by well-shaped triangles.
+  Forge output is still watertight and byte-deterministic; pillow/emboss
+  vertex positions and triangle counts change (better-shaped caps), so
+  re-render any pixel baselines built on them.
+
 ## 0.7.0 — 2026-09-11 — agent-oriented feedback for MCP consumers
 
 For agents driving the `@glbforge/mcp` server. Full spec background:
