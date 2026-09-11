@@ -167,6 +167,58 @@ export const InspectAllDataSchema = z.object({
   sha256: z.string(),
 });
 
+const severity = z.enum(['error', 'warning', 'info']);
+
+export const RuleFindingSchema = z.object({
+  rule: z.string().describe('Slash-namespaced rule id — the public API, e.g. topo/open-edges'),
+  pack: z.string().describe('Versioned pack the rule belongs to, e.g. core-geometry@1'),
+  code: z.enum(codes).describe('Alias code, the same one used in errors[]'),
+  severity: severity.describe('After the profile\'s override'),
+  default_severity: severity.describe('The pack\'s default, kept visible when a profile changed it'),
+  certainty: z.enum(['measured', 'heuristic']).describe('measured = a deterministic geometric fact; heuristic = carries confidence'),
+  confidence: z.number().min(0).max(1).optional().describe('Only on heuristic findings'),
+  prim_path: z.string(),
+  property: z.string().optional(),
+  message: z.string().describe('What was found — counts only for measured rules'),
+  likely_cause: z.object({ text: z.string(), confidence: z.number().min(0).max(1).describe('Authored prior for this pack version, not calibrated') }).optional(),
+  fix: z.string(),
+  data: z.record(z.unknown()).optional(),
+});
+
+const InspectMeshSchema = z.object({
+  prim_path: z.string(), name: z.string(), triangles: z.number().int(), vertices: z.number().int(),
+  shells: z.number().int().nullable(), watertight: z.boolean().nullable(), boundary_loops: z.number().int().nullable(),
+  boundary_edges: z.number().int().nullable(), non_manifold_edges: z.number().int().nullable(), degenerate_triangles: z.number().int().nullable(),
+});
+
+export const InspectDataSchema = z.object({
+  path: z.string(),
+  format: z.enum(['glb', 'gltf', 'usdz', 'usda', 'usdc']),
+  source_path: z.string().nullable(),
+  profile: z.string().describe('Rule profile the severities came from, e.g. authoring@1 or mobile-hero@1'),
+  packs: z.array(z.string()),
+  provenance: z.object({ optimized: z.boolean(), forged: z.boolean(), evidence: z.array(z.string()) }).describe('What the file metadata says about where it has been — evidence, not proof'),
+  summary: z.string().describe('Deterministic paragraph: facts first, then the top findings. Read this first.'),
+  scene: z.object({ meshes: z.number().int(), triangles: z.number().int(), vertices: z.number().int(), materials: z.number().int(), nodes: z.number().int(), depth: z.number().int() }),
+  topology: z.object({ shells: z.number().int().nullable(), watertight: z.boolean().nullable(), meshes: z.array(InspectMeshSchema) }).describe('Welded space: UV seams are not holes; null when topology was disabled'),
+  scale: z.object({ units: z.literal('m'), meters_per_unit: z.number(), bounding_box: BoundingBoxSchema.nullable(), largest_dimension_m: z.number().nullable(), plausibility: z.literal('unknown').describe('Needs a category to judge; declare one with an expectation') }),
+  orientation: z.object({ up_axis: z.enum(['Y', 'Z']), up_axis_source: z.enum(['format', 'metadata']), front: z.literal('unknown').describe('Never inferred: symmetric objects defeat every heuristic') }),
+  origin: z.object({
+    at: z.enum(['base-center', 'center', 'centroid', 'elsewhere']),
+    position_in_bounds: z.array(z.number()).nullable().describe('0 = min … 1 = max per axis'),
+    height_above_base_m: z.number().nullable(), distance_to_centroid_m: z.number().nullable(),
+    offset_to_base_center_m: z.array(z.number()).nullable().describe('Translate the geometry by this to put the origin at the base centre'),
+  }),
+  hierarchy: z.object({
+    nodes: z.number().int(), mesh_nodes: z.number().int(), depth: z.number().int(),
+    unapplied_transforms: z.array(z.object({ prim_path: z.string(), name: z.string(), translation: vec3, rotation_deg: z.number(), scale: vec3, dequantization: z.boolean().describe('true = the KHR_mesh_quantization encoding, not an unapplied edit') })),
+    non_uniform_scale: z.array(z.string()), mirrored: z.array(z.string()), root_names: z.array(z.string()),
+  }),
+  findings: z.array(RuleFindingSchema).describe('Problems only, errors first; the same items appear in errors[] as diagnostics'),
+  skipped: z.array(z.object({ rule: z.string(), reason: z.string() })).describe('Rules not evaluated (e.g. topology disabled) — never silently absent'),
+  sha256: z.string(),
+});
+
 /** Mutating tools add these fields to their existing payloads. */
 export const MutationShape = {
   dry_run: z.boolean(),
@@ -199,6 +251,7 @@ export const LegacyDataSchemas = {
 } as const;
 
 export const ToolDataSchemas = {
+  inspect: InspectDataSchema,
   validate: ValidationDataSchema,
   inspect_geometry: GeometryDataSchema,
   inspect_animation: AnimationDataSchema,

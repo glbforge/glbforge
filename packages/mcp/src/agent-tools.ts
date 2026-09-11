@@ -11,8 +11,8 @@ import { writeFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
-  analyzePerformance, customCamera, diag, frontRig, inspectAnimation, inspectGeometry, inspectMaterials, loadScene, PERFORMANCE_PROFILES, PROFILE_VERSIONS,
-  renderScene, resolvePerformanceProfile, sharpTextureDecoder, thumbnailRig, turntableRig, validateScene,
+  analyzePerformance, customCamera, diag, frontRig, inspectAnimation, inspectGeometry, inspectMaterials, inspectScene, loadScene, packFindingsToDiagnostics,
+  PACK_VERSIONS, PERFORMANCE_PROFILES, PROFILE_VERSIONS, renderScene, resolvePerformanceProfile, RULE_PROFILE_VERSIONS, sharpTextureDecoder, thumbnailRig, turntableRig, validateScene,
   type Diagnostic, type LoadedScene, type RawView, type RenderCamera, type SceneIR, type PerformanceProfile,
 } from '@glbforge/core';
 import { note, noteAll, plural, reply, severityTail, withContext } from './envelope.js';
@@ -74,6 +74,31 @@ async function renderIR(ir: SceneIR, opts: { cameras: RenderCamera[]; size: numb
 }
 
 export function registerAgentTools(server: McpServer): void {
+  registerEnvelopeTool(server, 'inspect', {
+    annotations: READ_ONLY,
+    description:
+      'Call this after EVERY edit to a mesh — each bpy script, boolean, join, export — before deciding what to do next. ' +
+      'In one sub-second call it answers what is easy to get wrong blind: is it one connected shell or several floating pieces; is it a closed solid (watertight) ' +
+      'or are there holes / overlapping faces; how big it is in real metres; which way is up; where the origin sits (base centre, centre, or floating off the object); ' +
+      'whether node transforms are applied or mirrored. Read `summary` first. Every finding names a versioned rule (e.g. topo/open-edges from core-geometry@1), ' +
+      'says whether it was measured, and carries a likely cause with its confidence plus a concrete fix; the same findings appear in errors[] with alias codes. ' +
+      '`front` is always unknown (no honest heuristic exists) — declare it. profile decides severities: authoring (default: topology problems are warnings, ' +
+      'because they are most likely the last edit\'s doing) or a web budget such as mobile-hero (topology is informational). ' +
+      'For per-mesh detail behind a finding use inspect_geometry; for materials, animation and budgets use inspect_all.',
+    inputSchema: {
+      path: PATH,
+      profile: z.string().default('authoring').describe(`Rule profile: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile ${Object.keys(PROFILE_VERSIONS).join(' | ')} (pin with @N)`),
+      topology: z.boolean().default(true).describe('Welded-space topology pass (shells, watertight, non-manifold). ~70 ms per 150k triangles; when false the topology rules are listed in `skipped`'),
+      packs: z.array(z.string()).optional().describe(`Rule packs to run instead of the profile's: ${Object.keys(PACK_VERSIONS).join(' | ')} (pin with @N)`),
+      params: z.record(z.record(z.union([z.number(), z.string(), z.boolean()]))).optional().describe('Pack param overrides, e.g. { "core-geometry": { "fragmentFraction": 0.02 } }'),
+    },
+  }, async ({ path, profile, topology, packs, params }) => {
+    const loaded = await loadScene(path);
+    const report = inspectScene(loaded.ir, { profile, topology, packs, params });
+    const errors = [...loadErrors(loaded.ir), ...packFindingsToDiagnostics(report.findings)];
+    return reply({ path, ...report, sha256: sha256(loaded.bytes) }, { summary: report.summary, errors });
+  });
+
   registerEnvelopeTool(server, 'validate', {
     annotations: READ_ONLY,
     description:
@@ -110,7 +135,7 @@ export function registerAgentTools(server: McpServer): void {
   registerEnvelopeTool(server, 'inspect_geometry', {
     annotations: READ_ONLY,
     description:
-      'Per-mesh geometry facts keyed by prim_path: vertex/face/triangle counts, is_manifold, degenerate faces, normals authored|missing and inverted-normal count, UV sets with out-of-range flags, world bounding box in metres; ' +
+      'Per-mesh drill-down behind an `inspect` finding (for the edit loop itself call `inspect`: faster, semantic, named rules). Keyed by prim_path: vertex/face/triangle counts, is_manifold, degenerate faces, normals authored|missing and inverted-normal count, UV sets with out-of-range flags, world bounding box in metres; ' +
       'scene-level bounds, pivot position (pivot_at_base for AR placement) and scale warnings (largest dimension < small_scale or > large_scale). Use it to decide whether an asset needs normals, rescaling or re-pivoting before export.',
     inputSchema: {
       path: PATH,
@@ -293,8 +318,8 @@ export function registerAgentTools(server: McpServer): void {
   registerEnvelopeTool(server, 'inspect_all', {
     annotations: READ_ONLY,
     description:
-      'Everything at once for an unfamiliar asset: validate + inspect_geometry + inspect_animation + inspect_materials + analyze_performance merged into one response, errors deduplicated. ' +
-      'Call this first, then the individual tools for details or after a fix.',
+      'Everything at once for an UNFAMILIAR asset you did not author: validate + inspect_geometry + inspect_animation + inspect_materials + analyze_performance merged into one response, errors deduplicated. ' +
+      'Call it once when a file arrives (a download, a generation result). While editing a mesh, call `inspect` instead after each change — it is the fast, rule-based read.',
     inputSchema: { path: PATH, profile: PERF_PROFILE, custom_limits: CUSTOM_LIMITS },
   }, async ({ path, profile, custom_limits }) => {
     const loaded = await loadScene(path);

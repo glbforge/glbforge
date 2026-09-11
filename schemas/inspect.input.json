@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.7.0/inspect.input.json",
+  "title": "inspect.input",
+  "description": "Arguments of the inspect tool.",
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "Absolute path to a .glb, .gltf, .usdz, .usda, .usdc or .usd file"
+    },
+    "profile": {
+      "type": "string",
+      "default": "authoring",
+      "description": "Rule profile: authoring or a budget profile mobile-hero | desktop-hero | product-configurator (pin with @N)"
+    },
+    "topology": {
+      "type": "boolean",
+      "default": true,
+      "description": "Welded-space topology pass (shells, watertight, non-manifold). ~70 ms per 150k triangles; when false the topology rules are listed in `skipped`"
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Rule packs to run instead of the profile's: core-geometry | core-scene (pin with @N)"
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": [
+            "number",
+            "string",
+            "boolean"
+          ]
+        }
+      },
+      "description": "Pack param overrides, e.g. { \"core-geometry\": { \"fragmentFraction\": 0.02 } }"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "additionalProperties": false
+}

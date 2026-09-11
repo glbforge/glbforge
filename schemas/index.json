@@ -5,6 +5,12 @@
   "description": "Every tool of the GLBForge MCP server with its input/output schema files.",
   "version": "0.7.0",
   "tools": {
+    "inspect": {
+      "description": "Call this after EVERY edit to a mesh — each bpy script, boolean, join, export — before deciding what to do next. In one sub-second call it answers what is easy to get wrong blind: is it one connected shell or several floating pieces; is it a closed solid (watertight) or are there holes / overlapping faces; how big it is in real metres; which way is up; where the origin sits (base centre, centre, or floating off the object); whether node transforms are applied or mirrored. Read `summary` first. Every finding names a versioned rule (e.g. topo/open-edges from core-geometry@1), says whether it was measured, and carries a likely cause with its confidence plus a concrete fix; the same findings appear in errors[] with alias codes. `front` is always unknown (no honest heuristic exists) — declare it. profile decides severities: authoring (default: topology problems are warnings, because they are most likely the last edit's doing) or a web budget such as mobile-hero (topology is informational). For per-mesh detail behind a finding use inspect_geometry; for materials, animation and budgets use inspect_all.",
+      "input": "inspect.input.json",
+      "output": "inspect.output.json",
+      "readOnly": true
+    },
     "validate": {
       "description": "Does the asset open, and is it well-formed for its target? Returns format, USDZ packaging compliance (stored entries, 64-byte alignment, allowed file types), layer metadata (default_prim, up_axis, meters_per_unit, layer_stack), schema errors, and AR Quick Look compatibility with arkit_issues — every issue with a stable code and prim_path. mode=quick (default) runs no renders and finishes well under a second; mode=full adds analyze_performance and a front render. Call it first on any file, and after every mutation.",
       "input": "validate.input.json",
@@ -12,7 +18,7 @@
       "readOnly": true
     },
     "inspect_geometry": {
-      "description": "Per-mesh geometry facts keyed by prim_path: vertex/face/triangle counts, is_manifold, degenerate faces, normals authored|missing and inverted-normal count, UV sets with out-of-range flags, world bounding box in metres; scene-level bounds, pivot position (pivot_at_base for AR placement) and scale warnings (largest dimension < small_scale or > large_scale). Use it to decide whether an asset needs normals, rescaling or re-pivoting before export.",
+      "description": "Per-mesh drill-down behind an `inspect` finding (for the edit loop itself call `inspect`: faster, semantic, named rules). Keyed by prim_path: vertex/face/triangle counts, is_manifold, degenerate faces, normals authored|missing and inverted-normal count, UV sets with out-of-range flags, world bounding box in metres; scene-level bounds, pivot position (pivot_at_base for AR placement) and scale warnings (largest dimension < small_scale or > large_scale). Use it to decide whether an asset needs normals, rescaling or re-pivoting before export.",
       "input": "inspect_geometry.input.json",
       "output": "inspect_geometry.output.json",
       "readOnly": true
@@ -48,7 +54,7 @@
       "readOnly": false
     },
     "inspect_all": {
-      "description": "Everything at once for an unfamiliar asset: validate + inspect_geometry + inspect_animation + inspect_materials + analyze_performance merged into one response, errors deduplicated. Call this first, then the individual tools for details or after a fix.",
+      "description": "Everything at once for an UNFAMILIAR asset you did not author: validate + inspect_geometry + inspect_animation + inspect_materials + analyze_performance merged into one response, errors deduplicated. Call it once when a file arrives (a download, a generation result). While editing a mesh, call `inspect` instead after each change — it is the fast, rule-based read.",
       "input": "inspect_all.input.json",
       "output": "inspect_all.output.json",
       "readOnly": true

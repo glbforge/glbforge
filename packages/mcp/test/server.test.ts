@@ -52,7 +52,7 @@ describe('agent-friendly MCP surface', () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([
       'analyze_glb', 'analyze_performance', 'audit_directory', 'capabilities', 'compare_glb', 'export_stl', 'export_usdz', 'extrude_image', 'generate_image_to_3d',
-      'generation_status', 'inspect_all', 'inspect_animation', 'inspect_geometry', 'inspect_materials', 'inspect_report', 'list_profiles', 'meshy_create_task', 'meshy_download',
+      'generation_status', 'inspect', 'inspect_all', 'inspect_animation', 'inspect_geometry', 'inspect_materials', 'inspect_report', 'list_profiles', 'meshy_create_task', 'meshy_download',
       'meshy_task_status', 'optimize_glb', 'render', 'render_animation_strip', 'render_preview', 'ship_asset', 'validate',
     ]);
   });

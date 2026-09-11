@@ -17,8 +17,8 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, extrudeImage, getProfile, optimize, perceptualDiff, PROFILES, renderViews, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
-import { printDiff, printReport } from './report.js';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, renderViews, RULE_PROFILE_VERSIONS, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
+import { printDiff, printInspect, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
 import { cliVersion, registerInitCommand } from './init.js';
@@ -136,6 +136,30 @@ program
     }
     // CI contract: non-zero exit when the asset is over budget.
     process.exitCode = result.passed ? 0 : 1;
+  });
+
+program
+  .command('inspect')
+  .description('Semantic read of a mesh for the edit loop: one shell or floating pieces, watertight or not, size in metres, up axis, origin placement, unapplied transforms — named, versioned rules with causes and fixes. Sub-second; run it after every edit.')
+  .argument('<file>', 'path to .glb / .gltf / .usdz / .usda / .usdc')
+  .option('-p, --profile <name>', `rule profile deciding severities: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile (${Object.keys(PROFILES).join(' | ')}); pin with name@N`, 'authoring')
+  .option('--packs <list>', `comma-separated rule packs instead of the profile's (${Object.keys(PACK_VERSIONS).join(', ')}; pin with name@N)`)
+  .option('--no-topology', 'skip the welded topology pass (shells / watertight rules are reported as skipped)')
+  .option('--strict', 'exit 1 on warnings as well as errors')
+  .option('--json', 'emit the full report as JSON')
+  .action(async (file: string, opts: { profile: string; packs?: string; topology: boolean; strict?: boolean; json?: boolean }) => {
+    const t0 = performance.now();
+    const loaded = await loadScene(file);
+    const report = inspectScene(loaded.ir, {
+      profile: opts.profile,
+      topology: opts.topology,
+      packs: opts.packs ? opts.packs.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
+    });
+    const duration_ms = Math.round(performance.now() - t0);
+    if (opts.json) console.log(JSON.stringify({ path: file, ...report, duration_ms }, null, 2));
+    else printInspect(report, file, duration_ms);
+    const failing = report.findings.some((f) => f.severity === 'error' || (opts.strict && f.severity === 'warning'));
+    process.exitCode = failing ? 1 : 0;
   });
 
 program

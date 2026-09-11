@@ -3,6 +3,38 @@
 Mission: **the web-readiness layer for AI-generated 3D** — generation is a
 commodity; the gap between "generated" and "shipped" is the product.
 
+## Reframe (2026-09-11): from finishing gate to the agent's eyes during authoring
+
+A tool invoked once per asset never becomes a habit. The inner loop is where
+usage lives: an agent editing a mesh in Blender is blind after every bpy
+call. Success metric: **invocations per asset** (~1 today, ~20 = in the
+loop), to be instrumented locally, opt-in, keyed by lineage (not content
+hash — every edit changes the hash). Ship narrow and fast: `inspect` and
+`diff`. Blender is not needed for any v1 check (measured: 1.2 s per
+headless call and wrong topology without a destructive merge; the IR
+answers everything in tens of ms).
+
+- [x] Rule packs (2026-09-11): slash ids are the public API, versioned by
+  pack (`core-geometry@1`, `core-scene@1`), SCREAMING codes are aliases;
+  severity is the profile's call (`authoring@1` vs `mobile-hero@1` on the
+  same edges); certainty invariant (measured messages, causes with their
+  own confidence); dogfood table freezes every example's findings —
+  the pipeline is not exempt from the linter and a rule never softens for it
+- [x] Welded topology engine (radix-sorted edge pairs + union-find shells):
+  2M-tri raw Meshy 1.4 s → 0.36 s, 150k-tri hero ~70 ms, numbers unchanged
+- [x] `inspectScene` report + `glbforge inspect` + MCP `inspect` (2026-09-11):
+  shells / watertight / metres / up / origin landmark / unapplied,
+  mirrored, non-uniform transforms; `front` always unknown
+- [ ] `--expect` intent pack (`intent@1`): category → height range table,
+  up-axis, units, shells, front
+- [ ] `glbforge diff <before> <after>` + MCP `diff`: structural + topology
+  regressions + optional 4-view render delta; diff edges feed lineage
+- [ ] Usage counter (opt-in JSONL under `~/.config/glbforge/`, lineage =
+  same path within a session ∪ diff edges ∪ explicit id); `glbforge usage`
+- [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
+  disagree on 100% of wall faces; layered forge stacks by node translation;
+  some bevelled forge outputs have open edges despite the "watertight" claim
+
 ## Status after v0.5.0 (2026-09-08) — what's left
 
 v0.5.0 shipped the six-item agent/quality pass: measured SSIM verification on

@@ -15,6 +15,17 @@ Key facts (accurate as of v0.6.x, 2026):
   product-configurator), so it drops into CI like a linter. Profiles are
   VERSIONED (`mobile-hero@1` pins; bare name = latest; a cap never changes in
   place) and every cap has a published rationale: https://glbforge.dev/budgets/
+- Inspect (`glbforge inspect`, MCP `inspect`): the after-every-edit read for
+  agents authoring meshes (sub-second; ~70 ms on 150k triangles). Measured
+  facts: connected shells, watertight or holes/overlaps (welded space, UV
+  seams are not holes), size in metres, up axis, origin landmark (base
+  centre / centre / centroid / floating), unapplied / mirrored / non-uniform
+  node transforms. Findings are versioned rule ids (`topo/open-edges` from
+  `core-geometry@1`, `origin/not-at-base` from `core-scene@1`; SCREAMING
+  codes are aliases) with `certainty: measured | heuristic`, a likely cause
+  carrying its own confidence, and a concrete fix. `front` is always unknown
+  (no honest heuristic on symmetric objects). Severity is the profile's call:
+  `authoring@1` warns on topology, `mobile-hero@1` reports it as info.
 - Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
   not file size), draw calls, welded-space topology (boundary, non-manifold,
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules
@@ -68,7 +79,7 @@ Key facts (accurate as of v0.6.x, 2026):
   at its own output; a failing SSIM returns a reference|result|change-heatmap
   sheet; `compare_glb` scores any two files (SSIM + geometric alignment);
   `capabilities` reports keys/KTX2/versions before planning; written files
-  carry sha256; read-only tools are annotated. Tools: validate, inspect_all,
+  carry sha256; read-only tools are annotated. Tools: inspect, validate, inspect_all,
   inspect_geometry, inspect_animation, inspect_materials, analyze_performance,
   render, render_animation_strip, capabilities,
   analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,

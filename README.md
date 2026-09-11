@@ -8,6 +8,12 @@ CI-able contract.
 
 ## Status
 
+- ✅ `glbforge inspect` — the edit-loop read (sub-second): one shell or floating
+  pieces, watertight or holes/overlaps, size in metres, up axis, origin
+  placement, unapplied/mirrored transforms — each finding a versioned rule id
+  (`topo/open-edges` from `core-geometry@1`) with measured/heuristic certainty,
+  a likely cause with confidence, and a concrete fix. `front` is never guessed.
+  Same thing as the MCP `inspect` tool: call it after every edit.
 - ✅ `glbforge analyze` — budget report card + named lint rules
 - ✅ `glbforge optimize` — weld/simplify/LOD/compress to hit the budget
 - ✅ `glbforge scaffold` — emit a React Three Fiber viewer for the optimized asset
@@ -37,6 +43,14 @@ node packages/cli/dist/index.js optimize fixtures/veiled-guardian-tex4k.glb -o o
 node packages/cli/dist/index.js scaffold out.web.glb -o viewer && cd viewer && pnpm install --ignore-workspace && pnpm dev
 node packages/cli/dist/index.js ui model.glb   # GLBForge Studio on localhost:5177
 ```
+
+`inspect <file>` (glb/gltf/usdz/usda/usdc) answers what an agent editing a
+mesh gets wrong blind, in ~70 ms on 150k triangles. `--profile authoring`
+(default) treats topology problems as warnings because they are most likely
+the last edit's doing; a budget profile (`mobile-hero`) reports them as info.
+`--packs core-geometry@1,core-scene@1` pins rule packs, `--no-topology` skips
+the welded pass (rules are listed as skipped, never silently absent),
+`--strict` exits 1 on warnings, `--json` emits the full report.
 
 `analyze` flags: `--profile mobile-hero|desktop-hero|product-configurator`,
 `--json`, `--no-topology`. Exits non-zero when the asset is over budget — wire

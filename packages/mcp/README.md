@@ -9,6 +9,16 @@ claude mcp add glbforge -- npx -y @glbforge/mcp
 
 Built for agents, not terminals:
 
+- **`inspect`: the after-every-edit read.** Sub-second, semantic, named:
+  one connected shell or floating pieces; watertight or holes / overlapping
+  faces (welded space — UV seams are not holes); size in metres; up axis;
+  origin at the base centre, the centre, or floating off the object;
+  unapplied / mirrored node transforms. Every finding is a versioned rule id
+  (`topo/open-edges` from `core-geometry@1`, `origin/not-at-base` from
+  `core-scene@1`) with `certainty: measured | heuristic`, a `likely_cause`
+  carrying its own confidence, and a concrete fix; `front` is always
+  `unknown` because no honest heuristic exists. Severity is the profile's
+  call: `authoring` (default) warns on topology, `mobile-hero` reports it.
 - **One envelope, stable codes, prim paths.** Every tool answers
   `{ ok, summary, duration_ms, errors[], data }`. `errors[]` lists every
   diagnostic as `{ code, severity, prim_path, property, message, suggested_fix }`
@@ -56,7 +66,7 @@ Built for agents, not terminals:
 - **Read-only tools are annotated** (`readOnlyHint`) so clients can
   auto-approve analyze / inspect / render / audit / compare / list.
 
-Tools: `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
+Tools: `inspect`, `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
 `inspect_materials`, `analyze_performance`, `render`, `render_animation_strip`,
 `capabilities`, `analyze_glb`, `inspect_report`, `render_preview`,
 `compare_glb`, `optimize_glb`, `ship_asset`, `audit_directory`,
