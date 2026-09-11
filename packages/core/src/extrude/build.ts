@@ -20,6 +20,10 @@ export interface ExtrudeMeshOptions {
   /** Mirror the height field onto the back cap too (full 3D object read
    *  from every angle instead of a flat-backed plaque). */
   doubleSided?: boolean;
+  /** Constant z shift baked into every vertex (meters). The build centers
+   *  on its own depth; layered extrusion uses this to keep backs coplanar
+   *  without a node translation. Default 0. */
+  zOffset?: number;
 }
 
 export interface ExtrudeStats {
@@ -58,6 +62,7 @@ export function buildExtrusion(
   const bevelPx = bevel / scale;
   const segments = Math.max(1, Math.round(opts.bevelSegments ?? 3));
   const cx = iw / 2, cy = ih / 2;
+  const zOffset = opts.zOffset ?? 0;
 
   const positions: number[] = [];
   const normals: number[] = [];
@@ -65,7 +70,7 @@ export function buildExtrusion(
   const indices: number[] = [];
 
   const pushVert = (x: number, y: number, z: number, n: [number, number, number]): number => {
-    positions.push((x - cx) * scale, (cy - y) * scale, z);
+    positions.push((x - cx) * scale, (cy - y) * scale, z + zOffset);
     normals.push(...n);
     uvs.push(x / iw, y / ih);
     return positions.length / 3 - 1;

@@ -327,6 +327,25 @@ describe('layered extrusion', () => {
     expect(doc.getRoot().listMaterials()).toHaveLength(2);
     expect(doc.getRoot().listMeshes()).toHaveLength(2);
 
+    // Layer offsets are baked into the vertices: every node is identity and
+    // the backs are coplanar in mesh space, so xform/unapplied cannot fire.
+    const zRange = (n: (typeof nodes)[number]) => {
+      const p = n.getMesh()!.listPrimitives()[0].getAttribute('POSITION')!.getArray() as Float32Array;
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 2; i < p.length; i += 3) { lo = Math.min(lo, p[i]); hi = Math.max(hi, p[i]); }
+      return [lo, hi];
+    };
+    const nodes = doc.getRoot().listNodes();
+    for (const n of nodes) {
+      expect(n.getTranslation()).toEqual([0, 0, 0]);
+      expect(n.getRotation()).toEqual([0, 0, 0, 1]);
+      expect(n.getScale()).toEqual([1, 1, 1]);
+    }
+    const [back0, front0] = zRange(nodes[0]);
+    const [back1, front1] = zRange(nodes[1]);
+    expect(back1).toBeCloseTo(back0, 6);
+    expect(front1 - front0).toBeCloseTo(stats.layerInfo![1].depth - stats.layerInfo![0].depth, 6);
+
     const result = analyze(doc, { profile: getProfile('mobile-hero') });
     expect(result.geometry.drawCallEstimate).toBe(2);
     expect(result.geometry.topology!.boundaryEdges).toBe(0);

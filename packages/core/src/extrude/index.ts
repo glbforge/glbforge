@@ -356,6 +356,10 @@ async function extrudeLayered(
       imageHeight: th,
       frontHeightFn: makeHeightFn(opts, layerMask, tw, th, px),
       doubleSided: opts.doubleSided ?? (opts.pillow ?? 0) > 0,
+      // Backs coplanar: each build centers on its own depth, so bake half
+      // the extra depth this layer has over the base layer into the
+      // vertices. Nodes stay identity (no unapplied transform to lint).
+      zOffset: (depth - baseDepth) / 2,
     });
 
     const [r, g, b] = colors[cluster];
@@ -386,10 +390,7 @@ async function extrudeLayered(
       .setIndices(doc.createAccessor().setType('SCALAR').setArray(geo.indices).setBuffer(buffer))
       .setMaterial(material);
     const mesh = doc.createMesh(`layer-${layerIdx}`).addPrimitive(prim);
-    // Backs coplanar: each build centers on its own depth, so shift by half
-    // the extra depth this layer has over the base layer.
-    const node = doc.createNode(`layer-${layerIdx}`).setMesh(mesh)
-      .setTranslation([0, 0, (depth - baseDepth) / 2]);
+    const node = doc.createNode(`layer-${layerIdx}`).setMesh(mesh);
     scene.addChild(node);
 
     stats.loops += geo.stats.loops;
