@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/export_usdz.output.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/export_usdz.output.json",
   "title": "export_usdz.output",
   "description": "Response envelope of the export_usdz tool.",
   "type": "object",

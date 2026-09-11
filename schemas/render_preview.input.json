@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/render_preview.input.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/render_preview.input.json",
   "title": "render_preview.input",
   "description": "Arguments of the render_preview tool.",
   "type": "object",

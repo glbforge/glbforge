@@ -1,6 +1,91 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
+
+For agents editing assets in a loop. Rule ids and packs: `docs/error-codes.md`
+(the `rule` column). Schemas: `schemas/inspect.*.json`, `schemas/diff.*.json`.
+
+### Added
+
+- **`inspect`** (CLI `glbforge inspect <file>`, MCP `inspect`, read-only):
+  one pass over a GLB / glTF / USDZ / USDA / USDC that returns measured facts
+  and findings, with a one-paragraph summary an agent reads first. Facts:
+  shells and watertightness per mesh and scene, bounds in metres, up axis
+  with its source, front always `unknown`, origin landmark
+  (base-center | center | centroid | elsewhere) with the translation that
+  puts it at the base centre, and hierarchy (unapplied transforms with
+  rotation angle, non-uniform scale, mirrored nodes). Flags:
+  `--profile authoring|<budget>[@N]`, `--packs`, `--no-topology` (rules
+  reported as skipped, never silently absent), `--strict` (exit 1 on
+  warnings), `--json` (report + `duration_ms`). ~100 ms of inspection on
+  the 150k-triangle hero. `inspect_geometry` and `inspect_all` now point
+  the edit loop at `inspect`.
+- **Rule packs**: findings carry versioned slash ids (`topo/open-edges`,
+  pack `core-geometry@1`) as the public API; the SCREAMING codes stay as
+  aliases (`rule` column in `docs/error-codes.md`). Messages state measured
+  counts only; every `likely_cause` carries its own confidence. Severity is
+  the profile's call: pack defaults, overridden by the web budgets (topology
+  is informational there) or the new `authoring@1` rule profile; findings
+  keep `default_severity` visible.
+  - `core-geometry@1`: `topo/open-edges` (with boundary-loop count),
+    `non-manifold`, `floating-fragments`, `shells`, `degenerate`. Causes
+    attribute optimizer provenance (meshopt + quantization signature, stated
+    as a proxy) when present.
+  - `core-scene@1`: `origin/outside-bounds`, `origin/not-at-base` (with the
+    exact fixing translation), `xform/unapplied` (quantized meshes exempt —
+    their node transform is the `KHR_mesh_quantization` encoding),
+    `xform/mirrored`, `xform/non-uniform-scale`, `scale/too-small`,
+    `scale/too-large`. Params: `originTolerance`, `smallScale`, `largeScale`.
+- **`intent@1` / `--expect`**: a free-text or structured expectation
+  ("chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y, watertight,
+  origin base") turns inspect into a contract. Measured checks fail as
+  errors (`intent/shells`, `watertight`, `size`, `origin`, `units`);
+  `intent/category-scale` is a heuristic warning from a size table with a
+  stated confidence; `intent/up-axis` is informational on glTF (Y-up by
+  definition) and a warning on USD; `front` is recorded as declared, never
+  verified; unparsed tokens are reported. CLI `-e/--expect` (violations
+  exit 1); MCP `inspect` takes `expect` as a string or object.
+- **`diff@1`** (CLI `glbforge diff <before> <after>`, MCP `diff`, read-only):
+  what changed since the last edit and what it broke. Regressions at
+  warning, neutral changes at info: `diff/watertight-lost`,
+  `open-edges-introduced`, `non-manifold-introduced`, `shells-changed`,
+  `origin-moved`, `transform-changed` (dequantization excluded),
+  `size-changed` with per-part axis wording, `triangles-changed`,
+  `meshes-removed` / `added`, `topology-improved`, and opt-in
+  `visual-changed` (`--visual`: front / side / top / iso SSIM with cameras
+  fixed to the BEFORE framing). Meshes pair by prim path, then by unique
+  name across renumbered nodes. MCP `diff` returns both sha256s as
+  `lineage`. Flags: `--visual`, `--size`, `--no-topology`, `--strict`,
+  `--json`.
+- **Usage counter** (`glbforge usage`): local, opt-in, never networked.
+  Off until `GLBFORGE_USAGE=1` or `{ "usage": true }` in
+  `$GLBFORGE_CONFIG_DIR` / `~/.config/glbforge/config.json`; JSONL log; a
+  failed write never reaches the tool. Every MCP tool call and the CLI
+  `inspect` / `diff` / `analyze` commands record; invocations are keyed
+  by lineage (same session + path, same path within 2 h, diff edges,
+  explicit `--lineage` / `lineage` on inspect and diff), not by file hash,
+  so a report says how many reads an asset took to finish. `capabilities`
+  reports usage state and file. `--enable` / `--disable` / `--clear` /
+  `--since` / `--threshold` / `--json`.
+
+### Changed
+
+- MCP tool count is 27 (`inspect`, `diff` added; every read-only tool is
+  annotated). `schemas/` gains `inspect.*`, `diff.*`, `RuleFindingSchema`
+  and `ExpectationSchema`; all `$id`s move to 0.8.0.
+- `PIVOT_NOT_AT_BASE`, `SCALE_TOO_SMALL` / `SCALE_TOO_LARGE` now name their
+  rule ids; new alias codes `ORIGIN_OUTSIDE_BOUNDS`, `XFORM_UNAPPLIED`,
+  `XFORM_MIRRORED`, `XFORM_NON_UNIFORM_SCALE`.
+- Layered forge output (`--layers N`) bakes each layer's z offset into its
+  vertices; every layer node is now identity (previously a node translation,
+  which `xform/unapplied` flags). Single-layer output is byte-identical.
+- Welded topology (`inspect/topology.ts`) uses radix-sorted edge pairs and
+  union-find shells: identical numbers, 2M-triangle fixture 1.4 s → 0.36 s.
+- Dogfood policy (`test/packs.test.ts`): the finding set of every
+  `examples/*.glb` under `authoring@1` is frozen; the pipeline is not exempt
+  from the linter and a rule never softens to accommodate it. With the forge
+  winding fix below, no known case remains where the linter and the
+  pipeline's own shipping output disagree on geometry.
 
 ### Fixed
 

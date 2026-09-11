@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/diff.input.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/diff.input.json",
   "title": "diff.input",
   "description": "Arguments of the diff tool.",
   "type": "object",

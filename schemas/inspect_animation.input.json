@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.7.0/inspect_animation.input.json",
+  "$id": "https://glbforge.dev/schemas/0.8.0/inspect_animation.input.json",
   "title": "inspect_animation.input",
   "description": "Arguments of the inspect_animation tool.",
   "type": "object",
