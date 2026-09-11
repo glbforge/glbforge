@@ -42,6 +42,19 @@ export interface Profile {
   minSsim: number;
   /** Methodology summary per cap; the full text lives at glbforge.dev/budgets. */
   rationale: ProfileRationale;
+  /**
+   * What the target thinks of rule-pack findings: pinned packs and per-rule
+   * severities (see packs/). Additive: caps and exit codes are unaffected by
+   * this field, which is why v1 profiles could gain it without a version bump.
+   */
+  rules?: RuleOverrides;
+}
+
+/** Re-declared here to keep types.ts dependency-free; identical to packs/types.ts (diagnostic severities: error | warning | info). */
+export interface RuleOverrides {
+  packs?: string[];
+  severity?: Record<string, 'error' | 'warning' | 'info'>;
+  params?: Record<string, Record<string, number | string | boolean>>;
 }
 
 export interface TopologyStats {

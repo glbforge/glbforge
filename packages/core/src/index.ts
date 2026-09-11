@@ -31,3 +31,4 @@ export {
 } from './harness/perceptual.js';
 export * from './inspect/index.js';
 export * from './usd-read/index.js';
+export * from './packs/index.js';

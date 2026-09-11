@@ -32,6 +32,22 @@ the same registration into another checkout.
 - **Budgets are versioned contracts.** Never edit a published profile in
   `core/src/profiles.ts`; append a new version and a `docs/BUDGETS.md`
   changelog entry (tests freeze v1's caps).
+- **Rule packs are versioned contracts too** (`core/src/packs/`). Slash rule
+  ids (`topo/open-edges`) are the public API; SCREAMING codes in
+  `inspect/diagnostics.ts` are aliases (`rule:` field, rendered into
+  `docs/error-codes.md`). Rules are versioned by their pack
+  (`core-geometry@1`): never edit a published pack in `PACK_VERSIONS`, append
+  a version. Certainty invariant: a finding's `message` states only what was
+  measured (a `heuristic` rule carries `confidence`); every `likely_cause`
+  carries its own confidence because a cause is always an inference. A pack
+  declares DEFAULT severities; the PROFILE decides (`Profile.rules` on
+  budget profiles, `RULE_PROFILE_VERSIONS` for `authoring@1`): web profiles
+  report topology as info, authoring warns, print will error. The linter
+  runs over the pipeline's own outputs: `test/packs.test.ts` freezes the
+  finding set of every `examples/*.glb` under `authoring@1`; a rule or
+  pipeline change that alters it must update the table on purpose. Welded-
+  space topology for packs and `inspectGeometry` is `inspect/topology.ts`
+  (radix-sorted edge pairs; ~70 ms per 150k triangles, ~360 ms per 2M).
 - **Skinned / morphing prims** go through `core/src/skinning.ts`, not the plain
   simplifier; `join()` already skips them.
 - **"No visible loss" is measured**: `optimize()` renders 4 fixed cameras before

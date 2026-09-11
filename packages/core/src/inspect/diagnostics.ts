@@ -31,9 +31,11 @@ interface CodeSpec {
   severity: DiagnosticSeverity;
   meaning: string;
   fix: string;
+  /** Slash-namespaced rule id this code is the alias of (public API; see packs/). */
+  rule?: string;
 }
 
-const spec = (severity: DiagnosticSeverity, meaning: string, fix: string): CodeSpec => ({ severity, meaning, fix });
+const spec = (severity: DiagnosticSeverity, meaning: string, fix: string, rule?: string): CodeSpec => ({ severity, meaning, fix, ...(rule ? { rule } : {}) });
 
 /** Every code the toolset can emit. Grouped by the tool that usually raises it. */
 export const ERROR_CODES = {
@@ -68,6 +70,9 @@ export const ERROR_CODES = {
   MESH_EMPTY: spec('warning', 'A mesh prim has no triangles.', 'Remove the prim or re-export it.'),
   MESH_NON_MANIFOLD: spec('info', 'Edges shared by three or more faces. Harmless for display; breaks 3D printing, booleans and some simplifiers.', 'Repair in a DCC if printing or physics matter; optimize_glb tolerates it.'),
   MESH_DEGENERATE_FACES: spec('info', 'Zero-area or repeated-corner faces.', 'optimize_glb prunes them.'),
+  TOPO_OPEN_EDGES: spec('warning', 'Edges with only one face after welding by position: real holes or an open surface (UV seams do not count). The mesh is not a closed solid.', 'Fill the holes or cap the surface; merge by distance first if pieces were meant to touch.', 'topo/open-edges'),
+  TOPO_SHELLS: spec('info', 'The mesh is several connected pieces of surface rather than one.', 'Join the parts with a boolean union if they should be one solid; fine when they are separate by design.', 'topo/shells'),
+  TOPO_FLOATING_FRAGMENTS: spec('warning', 'Tiny disconnected pieces beside the real parts: debris from booleans, cuts or duplicated faces.', 'Delete loose geometry, or join a fragment that is a real detail to its body.', 'topo/floating-fragments'),
   NORMALS_MISSING: spec('warning', 'No authored normals; viewers compute their own (smooth or flat depending on the viewer), so shading differs between apps.', 'optimize_glb writes smooth normals; export_usdz generates them at export time (reported as NORMALS_GENERATED).'),
   NORMALS_INVERTED: spec('warning', 'Authored vertex normals point against the face winding on many faces — the mesh shades dark or inside-out with back-face culling.', 'Recompute normals or flip the face winding in a DCC; optimize_glb with regenerated normals removes the mismatch.'),
   UV_MISSING: spec('info', 'No texture coordinates; the mesh cannot be textured.', 'Unwrap in a DCC, or run the generator\'s texture stage.'),
@@ -212,13 +217,17 @@ export function renderErrorCodesMarkdown(): string {
     'Every diagnostic the GLBForge MCP tools emit carries one of these codes. Agents should branch on the code, not on message text.',
     'Severity: **error** = fatal / will not load (or the tool could not run); **warning** = loads but is likely wrong, or was changed without being asked; **info** = advisory.',
     '',
+    'Codes are aliases of the slash-namespaced **rule ids** (`topo/open-edges`, `perf/triangle-budget`, …), which are the public, versioned API: a rule is versioned by its pack (`core-geometry@1`) the way a budget is versioned by its profile (`mobile-hero@1`). The rule column is blank for codes that report a tool outcome rather than a rule.',
+    '',
     'Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a test keeps this file in sync.',
     '',
-    '| Code | Severity | Meaning | Typical fix |',
-    '|---|---|---|---|',
+    '| Code | Rule id | Severity | Meaning | Typical fix |',
+    '|---|---|---|---|---|',
   ];
+  const ruleOf = new Map<string, string>(Object.entries(RULE_TO_CODE).map(([rule, code]) => [code, rule]));
   for (const [code, s] of Object.entries(ERROR_CODES)) {
-    lines.push(`| \`${code}\` | ${s.severity} | ${s.meaning.replace(/\|/g, '\\|')} | ${s.fix.replace(/\|/g, '\\|')} |`);
+    const rule = (s as CodeSpec).rule ?? ruleOf.get(code) ?? '';
+    lines.push(`| \`${code}\` | ${rule ? `\`${rule}\`` : ''} | ${s.severity} | ${s.meaning.replace(/\|/g, '\\|')} | ${s.fix.replace(/\|/g, '\\|')} |`);
   }
   lines.push('');
   return lines.join('\n');

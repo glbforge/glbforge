@@ -1,9 +1,24 @@
-import type { Profile, ProfileRationale } from './types.js';
+import type { Profile, ProfileRationale, RuleOverrides } from './types.js';
 
 const MB = 1024 * 1024;
 
 /** Where the methodology behind every cap is published. */
 export const BUDGET_METHODOLOGY_URL = 'https://glbforge.dev/budgets/';
+
+/**
+ * Rule-pack stance shared by the web delivery profiles: a renderer does not
+ * care whether a mesh is a closed solid, so topology findings are reported
+ * as facts (info), never as warnings. An authoring or print profile says
+ * otherwise about the same edges. Additive — caps and exit codes unchanged.
+ */
+const WEB_RULES: RuleOverrides = {
+  packs: ['core-geometry@1'],
+  severity: {
+    'topo/open-edges': 'info',
+    'topo/non-manifold': 'info',
+    'topo/floating-fragments': 'info',
+  },
+};
 
 /**
  * Budget profiles for common web delivery targets. Numbers are deliberately
@@ -36,6 +51,7 @@ const mobileHeroV1: Profile = {
     maxMaterials: 'Materials multiply shader variants and texture sets. A hero is one material, two when a glass or emissive part is unavoidable.',
     minSsim: 'Weakest of four fixed-camera views (256px, 2x supersampled, smooth shading, textured) before vs after optimization. Calibrated on the Meshy 7 fixture: the budget pass measures 0.958, a 40k-triangle version 0.896 with visibly merged hair strands. The floor sits between them.',
   },
+  rules: WEB_RULES,
 };
 
 const desktopHeroV1: Profile = {
@@ -60,6 +76,7 @@ const desktopHeroV1: Profile = {
     maxMaterials: 'Four materials cover a typical product hero (body, glass, metal trim, screen) without turning into a material zoo.',
     minSsim: 'Desktop heroes are viewed larger, so the floor is stricter than mobile: budget-level simplification on our fixtures still clears 0.96.',
   },
+  rules: WEB_RULES,
 };
 
 const productConfiguratorV1: Profile = {
@@ -84,6 +101,7 @@ const productConfiguratorV1: Profile = {
     maxMaterials: 'Materials are the point of a configurator (colorways, finishes); eight covers realistic part counts while keeping shader compilation bounded.',
     minSsim: 'Close-up viewing argues for strict, coexistence argues for lenient; 0.95 is the midpoint and clears budget-level simplification on our fixtures.',
   },
+  rules: WEB_RULES,
 };
 
 /** Every published version of every profile, oldest first. Never edit a published entry. */

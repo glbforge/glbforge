@@ -3,9 +3,9 @@
  * status and inversion, UV range, world bounds; scene-level bounds, pivot,
  * scale warnings. Everything keyed by prim_path.
  */
-import { canonicalByPosition } from '../normals.js';
 import { diag, type Diagnostic } from './diagnostics.js';
 import { transformPoint, worldBounds, type IRMesh, type SceneIR } from './ir.js';
+import { meshTopology } from './topology.js';
 
 export interface GeometryInspectOptions {
   /** Largest dimension (metres) below which SCALE_TOO_SMALL fires. Default 0.01. */
@@ -61,23 +61,10 @@ export interface GeometryReport {
   diagnostics: Diagnostic[];
 }
 
+/** Welded-space edge counts (shared engine with the rule packs); an empty triangle mesh counts as closed. */
 function topology(m: IRMesh): { boundary: number; nonManifold: number; degenerate: number } {
-  const idx = m.indices!;
-  const canonical = canonicalByPosition(m.positions, m.vertexCount);
-  const edges = new Map<number, number>();
-  let degenerate = 0;
-  const n = m.vertexCount;
-  for (let t = 0; t < idx.length; t += 3) {
-    const a = canonical[idx[t]], b = canonical[idx[t + 1]], c = canonical[idx[t + 2]];
-    if (a === b || b === c || a === c) { degenerate++; continue; }
-    for (const [u, v] of [[a, b], [b, c], [c, a]] as const) {
-      const key = u < v ? u * n + v : v * n + u;
-      edges.set(key, (edges.get(key) ?? 0) + 1);
-    }
-  }
-  let boundary = 0, nonManifold = 0;
-  for (const c of edges.values()) { if (c === 1) boundary++; else if (c > 2) nonManifold++; }
-  return { boundary, nonManifold, degenerate };
+  const t = meshTopology(m);
+  return t ? { boundary: t.boundaryEdges, nonManifold: t.nonManifoldEdges, degenerate: t.degenerateTriangles } : { boundary: 0, nonManifold: 0, degenerate: 0 };
 }
 
 function invertedNormals(m: IRMesh, flip: boolean): number {

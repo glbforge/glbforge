@@ -107,6 +107,13 @@ Score = 100 − penalties, floored at 0.
 
 ## Changelog
 
+- **v1 (additive) — 2026-09-11.** All three v1 profiles gained a `rules`
+  field: they pin the `core-geometry@1` rule pack and report its topology
+  findings (`topo/open-edges`, `topo/non-manifold`,
+  `topo/floating-fragments`) as **info** — a renderer does not care whether
+  a mesh is a closed solid. The same rules are warnings under the
+  `authoring@1` rule profile and will be errors under future print profiles.
+  No cap moved and no exit code changed, so the version stays at 1.
 - **v1 — 2026-09-07.** First versioned release. Caps unchanged from the
   unversioned 0.4.x profiles, plus the new `minSsim` perceptual floor
   (calibrated as described above) and a published rationale per cap.

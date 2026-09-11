@@ -12,3 +12,4 @@ export { validateScene, type ValidationReport } from './validate.js';
 export { poseScene, sampleChannel, type PosedMesh, type PoseOptions } from './pose.js';
 export { diffScenes, snapshotScene, type SceneDiff, type PropertyChange, type SceneSnapshot } from './diff.js';
 export { fragmentsFromScene, renderScene, frontRig, turntableRig, customCamera, type RenderSceneOptions, type SceneFragmentsOptions } from './render-ir.js';
+export { meshTopology, type MeshTopology } from './topology.js';
