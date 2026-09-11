@@ -339,8 +339,8 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
    */
   const EXPECTED: Record<string, string> = {
     'boat-shipped.web.glb': 'floating-fragments shells origin/not-at-base',
-    'dede-bevel-mcp.glb': 'open-edges shells origin/not-at-base',
-    'dede-bevel.glb': 'open-edges origin/not-at-base',
+    'dede-bevel-mcp.glb': 'open-edges non-manifold origin/not-at-base',
+    'dede-bevel.glb': 'open-edges non-manifold origin/not-at-base',
     'dede-mcp-test.glb': 'origin/not-at-base',
     'dede-mcp-test.web.glb': 'origin/not-at-base',
     'dede-neon.glb': 'floating-fragments floating-fragments shells shells shells origin/not-at-base',
@@ -354,7 +354,7 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     'lucky-cat.web.glb': 'non-manifold origin/not-at-base',
     'plush-hunyuan.glb': 'origin/not-at-base',
     'plush-hunyuan.web.glb': 'degenerate origin/not-at-base',
-    'plushqlty-bevel.glb': 'origin/not-at-base',
+    'plushqlty-bevel.glb': 'open-edges non-manifold origin/not-at-base',
     'plushqlty-layered.glb': 'floating-fragments floating-fragments floating-fragments shells shells shells shells origin/not-at-base',
     'plushqlty-plush.glb': 'floating-fragments floating-fragments floating-fragments shells shells shells shells origin/not-at-base',
     'plushqlty-plush.web.glb': 'non-manifold non-manifold non-manifold non-manifold floating-fragments floating-fragments floating-fragments shells shells shells shells origin/not-at-base',
