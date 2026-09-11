@@ -14,7 +14,8 @@ Everything below is what remains, most urgent first.
 
 **Verification debt (needs a device or a human)**
 - [x] USDZ on an iPhone (2026-09-08): AR Quick Look opens the flat-material plush (crate 0.8.0), the textured cat (JPEG base color + PNG normal/ORM through channel outputs, `st` primvar), a skinned tube with a sampled clip, and the same tube with a blend shape — crate writer, UsdPreviewSurface, UsdSkel skeleton/clip/blend shapes, and the default-material fix are all verified on a real device
-- [ ] Stripe live-mode flip + Meshy ToS resale check + `support@glbforge.dev` routing (pre-existing; gates real money)
+- [x] Stripe live-mode flip (2026-09-11): live `sk_live` + webhook secret on the worker, live event destination "GLBForge Billing" on the GLBForge Stripe account (`acct_1U6Rg8…`, separate from the CLI's default account), proven with a real $5 starter purchase → `cs_live_…` row in D1 + credits granted; first attempt was an issuer `insufficient_funds` decline via Link, retry with the card succeeded
+- [ ] Meshy ToS resale check + `support@glbforge.dev` routing (pre-existing; gates real money)
 
 **Near-term engineering (follow-through on v0.5.0)**
 - [x] USDZ: binary `usdc` writer (2026-09-08) — crate 0.8.0 in pure TS (literal-only LZ4 + Pixar integer compression for structural sections, raw arrays); verified byte-layout against Pixar's writer and value-for-value against Pixar's reader (test/usd-oracle.py, `GLBFORGE_PXR_PYTHON`). Layer 5.4MB vs 13.4MB ASCII on the Meshy fixture
