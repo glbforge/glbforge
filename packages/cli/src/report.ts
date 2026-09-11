@@ -1,4 +1,4 @@
-import type { InspectReport, PerceptualVerdict } from '@glbforge/core';
+import type { DiffReport, InspectReport, PerceptualVerdict, RuleFinding } from '@glbforge/core';
 import pc from 'picocolors';
 import type { AnalysisResult } from '@glbforge/core';
 
@@ -186,19 +186,70 @@ export function printInspect(r: InspectReport, path: string, durationMs: number)
   if (h.mirrored.length) console.log(pc.dim(`      mirrored: ${h.mirrored.join(', ')}`));
   console.log(line);
 
-  if (r.findings.length === 0) {
-    console.log(pc.green('  No findings.'));
-  } else {
-    console.log(pc.bold(`  Findings (${r.findings.length})`));
-    for (const f of r.findings) {
-      const badge = INSPECT_BADGE[f.severity];
-      const changed = f.severity !== f.default_severity ? pc.dim(` (pack default ${f.default_severity})`) : '';
-      console.log(`  ${badge} ${pc.bold(f.rule)} ${pc.dim(`${f.certainty}${f.confidence !== undefined ? ` ${(f.confidence * 100).toFixed(0)}%` : ''} · ${f.prim_path}`)}${changed}`);
-      console.log(`     ${f.message}`);
-      if (f.likely_cause) console.log(pc.dim(`     cause (${(f.likely_cause.confidence * 100).toFixed(0)}%): ${f.likely_cause.text}`));
-      console.log(pc.dim(`     → ${f.fix}`));
-    }
-  }
+  printFindings(r.findings);
   if (r.skipped.length) console.log(pc.dim(`  Skipped: ${r.skipped.map((s) => `${s.rule} (${s.reason})`).join('; ')}`));
+  console.log();
+}
+
+function printFindings(findings: RuleFinding[]): void {
+  if (findings.length === 0) {
+    console.log(pc.green('  No findings.'));
+    return;
+  }
+  console.log(pc.bold(`  Findings (${findings.length})`));
+  for (const f of findings) {
+    const badge = INSPECT_BADGE[f.severity];
+    const changed = f.severity !== f.default_severity ? pc.dim(` (pack default ${f.default_severity})`) : '';
+    console.log(`  ${badge} ${pc.bold(f.rule)} ${pc.dim(`${f.certainty}${f.confidence !== undefined ? ` ${(f.confidence * 100).toFixed(0)}%` : ''} · ${f.prim_path}`)}${changed}`);
+    console.log(`     ${f.message}`);
+    if (f.likely_cause) console.log(pc.dim(`     cause (${(f.likely_cause.confidence * 100).toFixed(0)}%): ${f.likely_cause.text}`));
+    console.log(pc.dim(`     → ${f.fix}`));
+  }
+}
+
+/** `glbforge diff`: the change note first, then the deltas, per-part rows, the visual scores, and every finding. */
+export function printDiffReport(r: DiffReport, before: string, after: string, durationMs: number): void {
+  const line = pc.dim('─'.repeat(64));
+  const d = (x: { before: number; after: number; delta: number; pct: number | null } | null, unit = '') => x === null ? pc.dim('n/a')
+    : x.delta === 0 ? pc.dim(`${fmt(x.before)}${unit} (unchanged)`)
+      : `${fmt(x.before)}${unit} → ${pc.bold(fmt(x.after) + unit)} ${pc.dim(`(${x.delta > 0 ? '+' : ''}${fmt(x.delta)}${x.pct !== null ? `, ${x.pct > 0 ? '+' : ''}${Math.round(x.pct * 100)}%` : ''})`)}`;
+  const yn = (v: boolean | null) => (v === null ? 'n/a' : v ? 'yes' : 'no');
+  console.log();
+  console.log(pc.bold(`  ${before} → ${after}`) + pc.dim(`   ${r.profile} · diff@1 · ${durationMs} ms`));
+  console.log(line);
+  console.log(`  ${r.summary}`);
+  console.log(line);
+  console.log(pc.bold('  Scene'));
+  console.log(`    triangles      ${d(r.scene.triangles)}`);
+  console.log(`    vertices       ${d(r.scene.vertices)}`);
+  console.log(`    meshes         ${d(r.scene.meshes)}   nodes ${d(r.scene.nodes)}   materials ${d(r.scene.materials)}`);
+  console.log(`    file bytes     ${d(r.scene.file_bytes)}`);
+  console.log(pc.bold('  Topology') + pc.dim('  (welded space)'));
+  console.log(`    shells         ${d(r.topology.shells)}   watertight ${yn(r.topology.watertight.before)} → ${r.topology.watertight.after === r.topology.watertight.before ? yn(r.topology.watertight.after) : (r.topology.watertight.after ? pc.green('yes') : pc.yellow('no'))}`);
+  console.log(`    open loops     ${d(r.topology.boundary_loops)}   non-manifold ${d(r.topology.non_manifold_edges)}   degenerate ${d(r.topology.degenerate_triangles)}`);
+  console.log(pc.bold('  Bounds & origin'));
+  if (r.bounds.size_before_m && r.bounds.size_after_m) {
+    console.log(`    size (m)       ${r.bounds.size_before_m.map((v) => v.toFixed(3)).join(' × ')} → ${r.bounds.size_after_m.map((v) => v.toFixed(3)).join(' × ')}   ${pc.dim(`(${r.bounds.size_pct!.map((p) => `${p > 0 ? '+' : ''}${Math.round(p * 100)}%`).join(', ')})`)}`);
+    console.log(`    origin         ${r.origin.before?.at} → ${r.origin.after?.at}   geometry shifted ${r.origin.shift_m!.toFixed(3)} m${r.origin.moved ? pc.yellow('   moved') : ''}`);
+  }
+  const changedMeshes = r.meshes.filter((m) => m.status !== 'unchanged');
+  if (changedMeshes.length) {
+    console.log(pc.bold(`  Parts (${changedMeshes.length} of ${r.meshes.length} changed)`));
+    for (const m of changedMeshes.slice(0, 20)) {
+      const bits: string[] = [];
+      if (m.triangles && m.triangles.delta) bits.push(`tris ${fmt(m.triangles.before)} → ${fmt(m.triangles.after)}`);
+      if (m.shells && m.shells.delta) bits.push(`shells ${m.shells.before} → ${m.shells.after}`);
+      if (m.watertight.before !== m.watertight.after) bits.push(`watertight ${yn(m.watertight.before)} → ${yn(m.watertight.after)}`);
+      if (m.size_m.pct?.some((p) => Math.abs(p) >= 0.02)) bits.push(`size ${m.size_m.pct.map((p) => `${p > 0 ? '+' : ''}${Math.round(p * 100)}%`).join('/')}`);
+      console.log(pc.dim(`      ${m.name.padEnd(20)} ${m.status.padEnd(9)} ${bits.join(', ')}`));
+    }
+    if (changedMeshes.length > 20) console.log(pc.dim(`      … ${changedMeshes.length - 20} more`));
+  }
+  if (r.visual) {
+    console.log(pc.bold('  Visual') + pc.dim(`  (${r.visual.size}px, cameras fixed to the before framing)`));
+    console.log(`    ${r.visual.views.map((v) => `${v.name} ${v.ssim >= 0.995 ? pc.dim(v.ssim.toFixed(3)) : pc.yellow(v.ssim.toFixed(3))}`).join('   ')}   ${pc.dim(`min ${r.visual.ssim_min} @ ${r.visual.worst_view}`)}`);
+  }
+  console.log(line);
+  printFindings(r.findings);
   console.log();
 }

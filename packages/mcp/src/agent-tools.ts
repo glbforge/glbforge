@@ -11,7 +11,7 @@ import { writeFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
-  analyzePerformance, customCamera, diag, frontRig, inspectAnimation, inspectGeometry, inspectMaterials, inspectScene, loadScene, packFindingsToDiagnostics,
+  analyzePerformance, customCamera, diag, diffAssets, frontRig, inspectAnimation, inspectGeometry, inspectMaterials, inspectScene, loadScene, packFindingsToDiagnostics,
   PACK_VERSIONS, PERFORMANCE_PROFILES, PROFILE_VERSIONS, renderScene, resolvePerformanceProfile, RULE_PROFILE_VERSIONS, sharpTextureDecoder, thumbnailRig, turntableRig, validateScene,
   type Diagnostic, type LoadedScene, type RawView, type RenderCamera, type SceneIR, type PerformanceProfile,
 } from '@glbforge/core';
@@ -100,6 +100,30 @@ export function registerAgentTools(server: McpServer): void {
     const report = inspectScene(loaded.ir, { profile, topology, packs, params, expect: expect as string | undefined });
     const errors = [...loadErrors(loaded.ir), ...packFindingsToDiagnostics(report.findings)];
     return reply({ path, ...report, sha256: sha256(loaded.bytes) }, { summary: report.summary, errors });
+  });
+
+  registerEnvelopeTool(server, 'diff', {
+    annotations: READ_ONLY,
+    description:
+      'What changed between two versions of an asset — including what the edit BROKE by accident. Call it after an edit, with the file you started from and the file you produced, ' +
+      'before deciding whether to keep the change. Reports per-part size deltas ("\'legs\' is 30% narrower along X"), triangle and shell deltas, topology regressions ' +
+      '(was watertight, now has 3 open loops), origin drift relative to the geometry, node transform changes, meshes added or removed, and with visual=true a front / side / top / iso ' +
+      'render delta (SSIM per view, cameras fixed to the before framing so a size change reads as a change). Read `summary` first; it is written as a change note with regressions first. ' +
+      'Findings are diff@1 rules (regressions at warning, neutral changes at info) with causes and fixes, mirrored into errors[]. For a single file, call inspect.',
+    inputSchema: {
+      before: PATH.describe('Absolute path to the earlier version'),
+      after: PATH.describe('Absolute path to the later version'),
+      profile: z.string().default('authoring').describe(`Rule profile for severities: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile`),
+      topology: z.boolean().default(true).describe('Welded topology pass on both files (shells, watertight, open loops, non-manifold deltas)'),
+      visual: z.boolean().default(false).describe('Render four canonical views of both and score SSIM per view (~150 ms per file at 128 px)'),
+      size: z.number().int().min(32).max(512).default(128).describe('Pixels per view for visual=true'),
+    },
+  }, async ({ before, after, profile, topology, visual, size }) => {
+    const [b, a] = await Promise.all([loadScene(before), loadScene(after)]);
+    const report = await diffAssets(b.ir, a.ir, { profile, topology, visual, visualSize: size });
+    const errors = [...loadErrors(b.ir), ...loadErrors(a.ir), ...packFindingsToDiagnostics(report.findings)];
+    const bs = sha256(b.bytes), as = sha256(a.bytes);
+    return reply({ ...report, before: { ...report.before, sha256: bs }, after: { ...report.after, sha256: as }, lineage: { before_sha256: bs, after_sha256: as } }, { summary: report.summary, errors });
   });
 
   registerEnvelopeTool(server, 'validate', {

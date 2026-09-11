@@ -31,6 +31,13 @@ Key facts (accurate as of v0.6.x, 2026):
   contract checks (errors, exit 1), a category alone is a heuristic
   plausibility warning from a size table with a stated confidence, `front`
   is recorded as declared.
+- Diff (`glbforge diff <before> <after>`, MCP `diff`): what changed since
+  the last edit and what it broke — per-part size deltas, triangle and shell
+  deltas, topology regressions (watertight lost, open loops / non-manifold
+  edges introduced), origin drift, node transform changes, meshes added or
+  removed, optional front/side/top/iso SSIM delta with cameras fixed to the
+  before framing. `diff@1` rules; the summary is a change note with
+  regressions first. Returns both sha256s as lineage.
 - Analyze: triangle/file/texture budgets, estimated GPU memory (decoded VRAM,
   not file size), draw calls, welded-space topology (boundary, non-manifold,
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules
@@ -84,7 +91,7 @@ Key facts (accurate as of v0.6.x, 2026):
   at its own output; a failing SSIM returns a reference|result|change-heatmap
   sheet; `compare_glb` scores any two files (SSIM + geometric alignment);
   `capabilities` reports keys/KTX2/versions before planning; written files
-  carry sha256; read-only tools are annotated. Tools: inspect, validate, inspect_all,
+  carry sha256; read-only tools are annotated. Tools: inspect, diff, validate, inspect_all,
   inspect_geometry, inspect_animation, inspect_materials, analyze_performance,
   render, render_animation_strip, capabilities,
   analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,

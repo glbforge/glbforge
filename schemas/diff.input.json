@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.7.0/diff.input.json",
+  "title": "diff.input",
+  "description": "Arguments of the diff tool.",
+  "type": "object",
+  "properties": {
+    "before": {
+      "type": "string",
+      "description": "Absolute path to the earlier version"
+    },
+    "after": {
+      "type": "string",
+      "description": "Absolute path to the later version"
+    },
+    "profile": {
+      "type": "string",
+      "default": "authoring",
+      "description": "Rule profile for severities: authoring or a budget profile"
+    },
+    "topology": {
+      "type": "boolean",
+      "default": true,
+      "description": "Welded topology pass on both files (shells, watertight, open loops, non-manifold deltas)"
+    },
+    "visual": {
+      "type": "boolean",
+      "default": false,
+      "description": "Render four canonical views of both and score SSIM per view (~150 ms per file at 128 px)"
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 32,
+      "maximum": 512,
+      "default": 128,
+      "description": "Pixels per view for visual=true"
+    }
+  },
+  "required": [
+    "before",
+    "after"
+  ],
+  "additionalProperties": false
+}

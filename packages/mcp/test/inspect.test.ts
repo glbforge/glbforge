@@ -60,7 +60,7 @@ describe('inspect', () => {
     expect(byName.inspect.annotations?.readOnlyHint).toBe(true);
     expect(byName.inspect_geometry.description).toMatch(/call `inspect`/);
     expect(byName.inspect_all.description).toMatch(/call `inspect` instead/);
-    expect(tools.length).toBe(26);
+    expect(tools.length).toBe(27);
   });
 
   it('reads a centimetre-scale sheet: measured facts, a scale/too-small finding with cause + fix, mirrored into errors[]', async () => {
@@ -125,6 +125,25 @@ describe('inspect', () => {
     expect(sd.expectation.raw).toBeNull();
     expect(sd.scale.plausibility).toBe('implausible'); // a 5 mm sheet against a coin's 15–40 mm prior
     expect(sd.findings.map((f) => f.rule)).toContain('intent/category-scale');
+  });
+
+  it('diff: the same file is "No change."; a real edit lists regressions with lineage hashes', async () => {
+    const { tools } = await client.listTools();
+    expect(tools.find((t) => t.name === 'diff')!.description).toMatch(/BROKE by accident/);
+    const same = await call('diff', { before: fx['fifty-k.glb'], after: fx['fifty-k.glb'] });
+    expect(same.ok).toBe(true);
+    const sd = same.data as { changed: boolean; summary: string; lineage: { before_sha256: string; after_sha256: string }; pack: string };
+    expect(sd).toMatchObject({ changed: false, summary: 'No change.', pack: 'diff@1' });
+    expect(sd.lineage.before_sha256).toBe(sd.lineage.after_sha256);
+
+    const edit = await call('diff', { before: fx['fifty-k.glb'], after: fx['centimeters.glb'], visual: true, size: 48 });
+    const ed = edit.data as { changed: boolean; findings: Array<{ rule: string; severity: string }>; visual: { views: Array<{ name: string }>; framing: string } | null; summary: string };
+    expect(ed.changed).toBe(true);
+    expect(ed.findings.map((f) => f.rule)).toContain('diff/size-changed');
+    expect(ed.visual!.views.map((v) => v.name)).toEqual(['front', 'side', 'top', 'iso']);
+    expect(ed.visual!.framing).toBe('before');
+    expect(edit.errors.some((e) => e.code === 'DIFF_SIZE_CHANGED')).toBe(true);
+    expect(edit.summary).toBe(ed.summary);
   });
 
   it('fails cleanly on a missing file', async () => {

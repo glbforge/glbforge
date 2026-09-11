@@ -15,3 +15,4 @@ export { fragmentsFromScene, renderScene, frontRig, turntableRig, customCamera, 
 export { meshTopology, type MeshTopology } from './topology.js';
 export { inspectScene, summarize, type InspectReport, type InspectOptions, type InspectMeshFacts, type UnappliedTransform, type OriginLandmark, type Plausibility } from './report.js';
 export { sceneExtent, classifyOrigin, type SceneExtent, type OriginPlacement } from './extent.js';
+export { diffAssets, summarizeDiff, canonicalRig, diffV1, listDiffRules, type DiffOptions, type DiffReport, type Delta, type MeshDelta, type TransformChange, type VisualDelta, type DiffRule, type DiffContext } from './diff-report.js';

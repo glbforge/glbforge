@@ -1,0 +1,1594 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://glbforge.dev/schemas/0.7.0/diff.output.json",
+  "title": "diff.output",
+  "description": "Response envelope of the diff tool.",
+  "type": "object",
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "false only when the tool could not run; an asset with errors in it is still ok:true"
+    },
+    "summary": {
+      "type": "string",
+      "description": "One line, human-readable"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "FILE_NOT_FOUND",
+              "FILE_UNREADABLE",
+              "FORMAT_UNSUPPORTED",
+              "GLTF_VERSION_UNSUPPORTED",
+              "EXTENSION_UNSUPPORTED",
+              "BUFFER_UNRESOLVED",
+              "USDZ_ENTRY_COMPRESSED",
+              "USDZ_ENTRY_MISALIGNED",
+              "USDZ_FILE_TYPE_DISALLOWED",
+              "USDZ_NO_LAYER",
+              "USDZ_LAYER_NOT_FIRST",
+              "USDZ_NESTED_PACKAGE",
+              "USDZ_ARCHIVE_INVALID",
+              "MISSING_DEFAULT_PRIM",
+              "DEFAULT_PRIM_NOT_FOUND",
+              "UP_AXIS_Z",
+              "MISSING_UP_AXIS",
+              "METERS_PER_UNIT_NONSTANDARD",
+              "MISSING_METERS_PER_UNIT",
+              "UNRESOLVED_COMPOSITION_ARC",
+              "USD_SCHEMA_ERROR",
+              "MESH_INDEX_OUT_OF_RANGE",
+              "PRIM_TYPE_UNSUPPORTED_ARKIT",
+              "SHADER_NOT_PREVIEWSURFACE",
+              "SUBDIVISION_UNSUPPORTED",
+              "MESH_EMPTY",
+              "MESH_NON_MANIFOLD",
+              "MESH_DEGENERATE_FACES",
+              "TOPO_OPEN_EDGES",
+              "TOPO_SHELLS",
+              "TOPO_FLOATING_FRAGMENTS",
+              "NORMALS_MISSING",
+              "NORMALS_INVERTED",
+              "UV_MISSING",
+              "UV_OUT_OF_RANGE",
+              "MESH_UNINDEXED",
+              "MESH_UNWELDED",
+              "SCALE_TOO_SMALL",
+              "SCALE_TOO_LARGE",
+              "PIVOT_NOT_AT_BASE",
+              "ORIGIN_OUTSIDE_BOUNDS",
+              "XFORM_UNAPPLIED",
+              "XFORM_MIRRORED",
+              "XFORM_NON_UNIFORM_SCALE",
+              "INTENT_UP_AXIS",
+              "INTENT_UNITS",
+              "INTENT_SHELLS",
+              "INTENT_WATERTIGHT",
+              "INTENT_SIZE",
+              "INTENT_CATEGORY_SCALE",
+              "INTENT_CATEGORY_UNKNOWN",
+              "INTENT_ORIGIN",
+              "DIFF_WATERTIGHT_LOST",
+              "DIFF_OPEN_EDGES_INTRODUCED",
+              "DIFF_NON_MANIFOLD_INTRODUCED",
+              "DIFF_SHELLS_CHANGED",
+              "DIFF_ORIGIN_MOVED",
+              "DIFF_TRANSFORM_CHANGED",
+              "DIFF_SIZE_CHANGED",
+              "DIFF_TRIANGLES_CHANGED",
+              "DIFF_MESHES_REMOVED",
+              "DIFF_MESHES_ADDED",
+              "DIFF_TOPOLOGY_IMPROVED",
+              "DIFF_VISUAL_CHANGED",
+              "ZUP_SUSPECTED",
+              "SKELETON_UNBOUND",
+              "MESH_NOT_DEFORMING",
+              "SKIN_UNBOUND_VERTICES",
+              "SKIN_TOO_MANY_INFLUENCES",
+              "BLENDSHAPE_UNDRIVEN",
+              "ANIMATION_ZERO_LENGTH",
+              "ANIMATION_NO_MOTION",
+              "SKELETON_NO_ANIMATION",
+              "ROOT_MOTION",
+              "NODE_ANIMATION_DROPPED",
+              "CLIPS_DROPPED",
+              "INFLUENCES_TRUNCATED",
+              "TEXTURE_UNRESOLVED",
+              "MATERIAL_UNBOUND",
+              "MESH_NO_MATERIAL",
+              "TEXTURE_OVERSIZED",
+              "TEXTURE_NPOT",
+              "TEXTURE_FORMAT_UNSUPPORTED",
+              "TEXTURE_UNUSED",
+              "MATERIAL_FEATURE_UNSUPPORTED",
+              "MATERIAL_ALPHA_BLEND",
+              "MATERIAL_BLEND_WITHOUT_ALPHA",
+              "MATERIALS_DUPLICATE",
+              "DEFAULT_MATERIAL_BOUND",
+              "TEXTURE_TRANSCODED",
+              "TRIANGLE_BUDGET_EXCEEDED",
+              "VERTEX_BUDGET_EXCEEDED",
+              "DRAW_CALL_BUDGET_EXCEEDED",
+              "FILE_SIZE_BUDGET_EXCEEDED",
+              "GPU_MEMORY_BUDGET_EXCEEDED",
+              "TEXTURE_SIZE_BUDGET_EXCEEDED",
+              "TEXTURE_BYTES_BUDGET_EXCEEDED",
+              "MATERIAL_BUDGET_EXCEEDED",
+              "PRIM_COUNT_BUDGET_EXCEEDED",
+              "SCENE_DEPTH_BUDGET_EXCEEDED",
+              "INSTANCING_CANDIDATE",
+              "FIDELITY_BELOW_FLOOR",
+              "FIDELITY_MEASURED",
+              "LOD_TARGET_MISSED",
+              "NORMALS_GENERATED",
+              "PRIMITIVES_JOINED",
+              "MATERIALS_PALETTED",
+              "HIERARCHY_FLATTENED",
+              "MESH_WELDED",
+              "MESH_SIMPLIFIED",
+              "TEXTURES_REENCODED",
+              "DEGENERATE_PRUNED",
+              "UV_FLIPPED",
+              "AXIS_CONVERTED",
+              "SCALE_CONVERTED",
+              "MORPH_TARGETS_DROPPED",
+              "ANIMATED_ASSET",
+              "GENERATOR_FINGERPRINT",
+              "NO_GEOMETRY_TO_RENDER",
+              "FRAME_OUT_OF_RANGE",
+              "CLIP_FORMAT_UNSUPPORTED",
+              "DRY_RUN",
+              "ROUTED_TO_GENERATION",
+              "TOOL_ERROR"
+            ],
+            "description": "Stable, enumerable code — branch on this, not on message text"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning",
+              "info"
+            ],
+            "description": "error = fatal / will not load; warning = loads but likely wrong (or changed without being asked); info = advisory"
+          },
+          "prim_path": {
+            "type": "string",
+            "description": "USD prim path, or the derived path for glTF objects (/Asset/<Node>_<i>/Prim_<j>, /Asset/Materials/…); \"\" for file-level"
+          },
+          "property": {
+            "type": "string",
+            "description": "Property / attribute the issue concerns"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggested_fix": {
+            "type": "string",
+            "description": "Concrete next step, naming the tool call when one fixes it"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "prim_path",
+          "message"
+        ],
+        "additionalProperties": false,
+        "description": "One diagnostic"
+      },
+      "description": "Every diagnostic (error, warning, info), errors first"
+    },
+    "data": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "before": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "glb",
+                    "gltf",
+                    "usdz",
+                    "usda",
+                    "usdc"
+                  ]
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "format",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            "after": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "glb",
+                    "gltf",
+                    "usdz",
+                    "usda",
+                    "usdc"
+                  ]
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "format",
+                "sha256"
+              ],
+              "additionalProperties": false
+            },
+            "profile": {
+              "type": "string"
+            },
+            "pack": {
+              "type": "string",
+              "const": "diff@1"
+            },
+            "changed": {
+              "type": "boolean"
+            },
+            "summary": {
+              "type": "string",
+              "description": "The change note: regressions first, then neutral changes. Read this first."
+            },
+            "scene": {
+              "type": "object",
+              "properties": {
+                "triangles": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                },
+                "vertices": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                },
+                "meshes": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                },
+                "nodes": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                },
+                "materials": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                },
+                "file_bytes": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": "number"
+                    },
+                    "after": {
+                      "type": "number"
+                    },
+                    "delta": {
+                      "type": "number"
+                    },
+                    "pct": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after",
+                    "delta",
+                    "pct"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "triangles",
+                "vertices",
+                "meshes",
+                "nodes",
+                "materials",
+                "file_bytes"
+              ],
+              "additionalProperties": false
+            },
+            "bounds": {
+              "type": "object",
+              "properties": {
+                "size_before_m": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "size_after_m": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "size_pct": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "center_shift_m": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "largest": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "before": {
+                          "type": "number"
+                        },
+                        "after": {
+                          "type": "number"
+                        },
+                        "delta": {
+                          "type": "number"
+                        },
+                        "pct": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "before",
+                        "after",
+                        "delta",
+                        "pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "size_before_m",
+                "size_after_m",
+                "size_pct",
+                "center_shift_m",
+                "largest"
+              ],
+              "additionalProperties": false
+            },
+            "topology": {
+              "type": "object",
+              "properties": {
+                "shells": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "before": {
+                          "type": "number"
+                        },
+                        "after": {
+                          "type": "number"
+                        },
+                        "delta": {
+                          "type": "number"
+                        },
+                        "pct": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "before",
+                        "after",
+                        "delta",
+                        "pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "watertight": {
+                  "type": "object",
+                  "properties": {
+                    "before": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "after": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "before",
+                    "after"
+                  ],
+                  "additionalProperties": false
+                },
+                "boundary_loops": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "before": {
+                          "type": "number"
+                        },
+                        "after": {
+                          "type": "number"
+                        },
+                        "delta": {
+                          "type": "number"
+                        },
+                        "pct": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "before",
+                        "after",
+                        "delta",
+                        "pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "non_manifold_edges": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "before": {
+                          "type": "number"
+                        },
+                        "after": {
+                          "type": "number"
+                        },
+                        "delta": {
+                          "type": "number"
+                        },
+                        "pct": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "before",
+                        "after",
+                        "delta",
+                        "pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "degenerate_triangles": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "before": {
+                          "type": "number"
+                        },
+                        "after": {
+                          "type": "number"
+                        },
+                        "delta": {
+                          "type": "number"
+                        },
+                        "pct": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "before",
+                        "after",
+                        "delta",
+                        "pct"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "shells",
+                "watertight",
+                "boundary_loops",
+                "non_manifold_edges",
+                "degenerate_triangles"
+              ],
+              "additionalProperties": false,
+              "description": "Welded space; null when topology was disabled"
+            },
+            "origin": {
+              "type": "object",
+              "properties": {
+                "before": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string",
+                          "enum": [
+                            "base-center",
+                            "center",
+                            "centroid",
+                            "elsewhere"
+                          ]
+                        },
+                        "position_in_bounds": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "height_above_base_m": {
+                          "type": "number"
+                        },
+                        "distance_to_centroid_m": {
+                          "type": "number"
+                        },
+                        "inside_bounds": {
+                          "type": "boolean"
+                        },
+                        "offset_to_base_center_m": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "position_in_bounds",
+                        "height_above_base_m",
+                        "distance_to_centroid_m",
+                        "inside_bounds",
+                        "offset_to_base_center_m"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "after": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string",
+                          "enum": [
+                            "base-center",
+                            "center",
+                            "centroid",
+                            "elsewhere"
+                          ]
+                        },
+                        "position_in_bounds": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "height_above_base_m": {
+                          "type": "number"
+                        },
+                        "distance_to_centroid_m": {
+                          "type": "number"
+                        },
+                        "inside_bounds": {
+                          "type": "boolean"
+                        },
+                        "offset_to_base_center_m": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "position_in_bounds",
+                        "height_above_base_m",
+                        "distance_to_centroid_m",
+                        "inside_bounds",
+                        "offset_to_base_center_m"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "shift_m": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "moved": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "before",
+                "after",
+                "shift_m",
+                "moved"
+              ],
+              "additionalProperties": false
+            },
+            "transforms": {
+              "type": "object",
+              "properties": {
+                "changed": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "before": {
+                        "type": "object",
+                        "properties": {
+                          "translation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "rotation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "scale": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "required": [
+                          "translation",
+                          "rotation",
+                          "scale"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "after": {
+                        "type": "object",
+                        "properties": {
+                          "translation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "rotation": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          "scale": {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "required": [
+                          "translation",
+                          "rotation",
+                          "scale"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "prim_path",
+                      "name",
+                      "before",
+                      "after"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "changed"
+              ],
+              "additionalProperties": false
+            },
+            "meshes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "added",
+                      "removed",
+                      "changed",
+                      "unchanged"
+                    ]
+                  },
+                  "triangles": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "before": {
+                            "type": "number"
+                          },
+                          "after": {
+                            "type": "number"
+                          },
+                          "delta": {
+                            "type": "number"
+                          },
+                          "pct": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "before",
+                          "after",
+                          "delta",
+                          "pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "shells": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "before": {
+                            "type": "number"
+                          },
+                          "after": {
+                            "type": "number"
+                          },
+                          "delta": {
+                            "type": "number"
+                          },
+                          "pct": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "before",
+                          "after",
+                          "delta",
+                          "pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "watertight": {
+                    "type": "object",
+                    "properties": {
+                      "before": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      },
+                      "after": {
+                        "type": [
+                          "boolean",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "before",
+                      "after"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "boundary_loops": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "before": {
+                            "type": "number"
+                          },
+                          "after": {
+                            "type": "number"
+                          },
+                          "delta": {
+                            "type": "number"
+                          },
+                          "pct": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "before",
+                          "after",
+                          "delta",
+                          "pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "non_manifold_edges": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "before": {
+                            "type": "number"
+                          },
+                          "after": {
+                            "type": "number"
+                          },
+                          "delta": {
+                            "type": "number"
+                          },
+                          "pct": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "before",
+                          "after",
+                          "delta",
+                          "pct"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "size_m": {
+                    "type": "object",
+                    "properties": {
+                      "before": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "after": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pct": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "number"
+                            }
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "before",
+                      "after",
+                      "pct"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "prim_path",
+                  "name",
+                  "status",
+                  "triangles",
+                  "shells",
+                  "watertight",
+                  "boundary_loops",
+                  "non_manifold_edges",
+                  "size_m"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Paired by prim path, then by unique name when nodes were renumbered"
+            },
+            "structural": {
+              "type": "object",
+              "properties": {
+                "added_prims": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "removed_prims": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "changed_properties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "property": {
+                        "type": "string"
+                      },
+                      "before": {},
+                      "after": {}
+                    },
+                    "required": [
+                      "prim_path",
+                      "property"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "added_prims",
+                "removed_prims",
+                "changed_properties",
+                "summary"
+              ],
+              "additionalProperties": false
+            },
+            "visual": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "size": {
+                      "type": "integer"
+                    },
+                    "views": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          },
+                          "ssim": {
+                            "type": "number"
+                          },
+                          "coverage": {
+                            "type": "number"
+                          },
+                          "camera": {
+                            "type": "object",
+                            "properties": {
+                              "position": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                }
+                              },
+                              "target": {
+                                "type": "array",
+                                "items": {
+                                  "type": "number"
+                                }
+                              },
+                              "fov": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "position",
+                              "target",
+                              "fov"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "ssim",
+                          "coverage",
+                          "camera"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "ssim_min": {
+                      "type": "number"
+                    },
+                    "ssim_mean": {
+                      "type": "number"
+                    },
+                    "worst_view": {
+                      "type": "string"
+                    },
+                    "framing": {
+                      "type": "string",
+                      "const": "before"
+                    }
+                  },
+                  "required": [
+                    "size",
+                    "views",
+                    "ssim_min",
+                    "ssim_mean",
+                    "worst_view",
+                    "framing"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only with visual=true: front / side / top / iso SSIM, cameras fixed to the before framing"
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "rule": {
+                    "type": "string",
+                    "description": "Slash-namespaced rule id — the public API, e.g. topo/open-edges"
+                  },
+                  "pack": {
+                    "type": "string",
+                    "description": "Versioned pack the rule belongs to, e.g. core-geometry@1"
+                  },
+                  "code": {
+                    "type": "string",
+                    "enum": [
+                      "FILE_NOT_FOUND",
+                      "FILE_UNREADABLE",
+                      "FORMAT_UNSUPPORTED",
+                      "GLTF_VERSION_UNSUPPORTED",
+                      "EXTENSION_UNSUPPORTED",
+                      "BUFFER_UNRESOLVED",
+                      "USDZ_ENTRY_COMPRESSED",
+                      "USDZ_ENTRY_MISALIGNED",
+                      "USDZ_FILE_TYPE_DISALLOWED",
+                      "USDZ_NO_LAYER",
+                      "USDZ_LAYER_NOT_FIRST",
+                      "USDZ_NESTED_PACKAGE",
+                      "USDZ_ARCHIVE_INVALID",
+                      "MISSING_DEFAULT_PRIM",
+                      "DEFAULT_PRIM_NOT_FOUND",
+                      "UP_AXIS_Z",
+                      "MISSING_UP_AXIS",
+                      "METERS_PER_UNIT_NONSTANDARD",
+                      "MISSING_METERS_PER_UNIT",
+                      "UNRESOLVED_COMPOSITION_ARC",
+                      "USD_SCHEMA_ERROR",
+                      "MESH_INDEX_OUT_OF_RANGE",
+                      "PRIM_TYPE_UNSUPPORTED_ARKIT",
+                      "SHADER_NOT_PREVIEWSURFACE",
+                      "SUBDIVISION_UNSUPPORTED",
+                      "MESH_EMPTY",
+                      "MESH_NON_MANIFOLD",
+                      "MESH_DEGENERATE_FACES",
+                      "TOPO_OPEN_EDGES",
+                      "TOPO_SHELLS",
+                      "TOPO_FLOATING_FRAGMENTS",
+                      "NORMALS_MISSING",
+                      "NORMALS_INVERTED",
+                      "UV_MISSING",
+                      "UV_OUT_OF_RANGE",
+                      "MESH_UNINDEXED",
+                      "MESH_UNWELDED",
+                      "SCALE_TOO_SMALL",
+                      "SCALE_TOO_LARGE",
+                      "PIVOT_NOT_AT_BASE",
+                      "ORIGIN_OUTSIDE_BOUNDS",
+                      "XFORM_UNAPPLIED",
+                      "XFORM_MIRRORED",
+                      "XFORM_NON_UNIFORM_SCALE",
+                      "INTENT_UP_AXIS",
+                      "INTENT_UNITS",
+                      "INTENT_SHELLS",
+                      "INTENT_WATERTIGHT",
+                      "INTENT_SIZE",
+                      "INTENT_CATEGORY_SCALE",
+                      "INTENT_CATEGORY_UNKNOWN",
+                      "INTENT_ORIGIN",
+                      "DIFF_WATERTIGHT_LOST",
+                      "DIFF_OPEN_EDGES_INTRODUCED",
+                      "DIFF_NON_MANIFOLD_INTRODUCED",
+                      "DIFF_SHELLS_CHANGED",
+                      "DIFF_ORIGIN_MOVED",
+                      "DIFF_TRANSFORM_CHANGED",
+                      "DIFF_SIZE_CHANGED",
+                      "DIFF_TRIANGLES_CHANGED",
+                      "DIFF_MESHES_REMOVED",
+                      "DIFF_MESHES_ADDED",
+                      "DIFF_TOPOLOGY_IMPROVED",
+                      "DIFF_VISUAL_CHANGED",
+                      "ZUP_SUSPECTED",
+                      "SKELETON_UNBOUND",
+                      "MESH_NOT_DEFORMING",
+                      "SKIN_UNBOUND_VERTICES",
+                      "SKIN_TOO_MANY_INFLUENCES",
+                      "BLENDSHAPE_UNDRIVEN",
+                      "ANIMATION_ZERO_LENGTH",
+                      "ANIMATION_NO_MOTION",
+                      "SKELETON_NO_ANIMATION",
+                      "ROOT_MOTION",
+                      "NODE_ANIMATION_DROPPED",
+                      "CLIPS_DROPPED",
+                      "INFLUENCES_TRUNCATED",
+                      "TEXTURE_UNRESOLVED",
+                      "MATERIAL_UNBOUND",
+                      "MESH_NO_MATERIAL",
+                      "TEXTURE_OVERSIZED",
+                      "TEXTURE_NPOT",
+                      "TEXTURE_FORMAT_UNSUPPORTED",
+                      "TEXTURE_UNUSED",
+                      "MATERIAL_FEATURE_UNSUPPORTED",
+                      "MATERIAL_ALPHA_BLEND",
+                      "MATERIAL_BLEND_WITHOUT_ALPHA",
+                      "MATERIALS_DUPLICATE",
+                      "DEFAULT_MATERIAL_BOUND",
+                      "TEXTURE_TRANSCODED",
+                      "TRIANGLE_BUDGET_EXCEEDED",
+                      "VERTEX_BUDGET_EXCEEDED",
+                      "DRAW_CALL_BUDGET_EXCEEDED",
+                      "FILE_SIZE_BUDGET_EXCEEDED",
+                      "GPU_MEMORY_BUDGET_EXCEEDED",
+                      "TEXTURE_SIZE_BUDGET_EXCEEDED",
+                      "TEXTURE_BYTES_BUDGET_EXCEEDED",
+                      "MATERIAL_BUDGET_EXCEEDED",
+                      "PRIM_COUNT_BUDGET_EXCEEDED",
+                      "SCENE_DEPTH_BUDGET_EXCEEDED",
+                      "INSTANCING_CANDIDATE",
+                      "FIDELITY_BELOW_FLOOR",
+                      "FIDELITY_MEASURED",
+                      "LOD_TARGET_MISSED",
+                      "NORMALS_GENERATED",
+                      "PRIMITIVES_JOINED",
+                      "MATERIALS_PALETTED",
+                      "HIERARCHY_FLATTENED",
+                      "MESH_WELDED",
+                      "MESH_SIMPLIFIED",
+                      "TEXTURES_REENCODED",
+                      "DEGENERATE_PRUNED",
+                      "UV_FLIPPED",
+                      "AXIS_CONVERTED",
+                      "SCALE_CONVERTED",
+                      "MORPH_TARGETS_DROPPED",
+                      "ANIMATED_ASSET",
+                      "GENERATOR_FINGERPRINT",
+                      "NO_GEOMETRY_TO_RENDER",
+                      "FRAME_OUT_OF_RANGE",
+                      "CLIP_FORMAT_UNSUPPORTED",
+                      "DRY_RUN",
+                      "ROUTED_TO_GENERATION",
+                      "TOOL_ERROR"
+                    ],
+                    "description": "Alias code, the same one used in errors[]"
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info"
+                    ],
+                    "description": "After the profile's override"
+                  },
+                  "default_severity": {
+                    "type": "string",
+                    "enum": [
+                      "error",
+                      "warning",
+                      "info"
+                    ],
+                    "description": "The pack's default, kept visible when a profile changed it"
+                  },
+                  "certainty": {
+                    "type": "string",
+                    "enum": [
+                      "measured",
+                      "heuristic"
+                    ],
+                    "description": "measured = a deterministic geometric fact; heuristic = carries confidence"
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Only on heuristic findings"
+                  },
+                  "prim_path": {
+                    "type": "string"
+                  },
+                  "property": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "What was found — counts only for measured rules"
+                  },
+                  "likely_cause": {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Authored prior for this pack version, not calibrated"
+                      }
+                    },
+                    "required": [
+                      "text",
+                      "confidence"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "fix": {
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object",
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "rule",
+                  "pack",
+                  "code",
+                  "severity",
+                  "default_severity",
+                  "certainty",
+                  "prim_path",
+                  "message",
+                  "fix"
+                ],
+                "additionalProperties": false
+              },
+              "description": "diff@1 rules: regressions at warning, neutral changes at info; mirrored into errors[]"
+            },
+            "lineage": {
+              "type": "object",
+              "properties": {
+                "before_sha256": {
+                  "type": "string"
+                },
+                "after_sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "before_sha256",
+                "after_sha256"
+              ],
+              "additionalProperties": false,
+              "description": "An explicit statement that these two hashes are the same asset — feeds the usage lineage"
+            }
+          },
+          "required": [
+            "before",
+            "after",
+            "profile",
+            "pack",
+            "changed",
+            "summary",
+            "scene",
+            "bounds",
+            "topology",
+            "origin",
+            "transforms",
+            "meshes",
+            "structural",
+            "visual",
+            "findings",
+            "lineage"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false,
+          "description": "Empty when ok is false"
+        }
+      ]
+    }
+  },
+  "required": [
+    "ok",
+    "summary",
+    "duration_ms",
+    "errors",
+    "data"
+  ],
+  "additionalProperties": false
+}

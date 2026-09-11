@@ -11,6 +11,12 @@
       "output": "inspect.output.json",
       "readOnly": true
     },
+    "diff": {
+      "description": "What changed between two versions of an asset — including what the edit BROKE by accident. Call it after an edit, with the file you started from and the file you produced, before deciding whether to keep the change. Reports per-part size deltas (\"'legs' is 30% narrower along X\"), triangle and shell deltas, topology regressions (was watertight, now has 3 open loops), origin drift relative to the geometry, node transform changes, meshes added or removed, and with visual=true a front / side / top / iso render delta (SSIM per view, cameras fixed to the before framing so a size change reads as a change). Read `summary` first; it is written as a change note with regressions first. Findings are diff@1 rules (regressions at warning, neutral changes at info) with causes and fixes, mirrored into errors[]. For a single file, call inspect.",
+      "input": "diff.input.json",
+      "output": "diff.output.json",
+      "readOnly": true
+    },
     "validate": {
       "description": "Does the asset open, and is it well-formed for its target? Returns format, USDZ packaging compliance (stored entries, 64-byte alignment, allowed file types), layer metadata (default_prim, up_axis, meters_per_unit, layer_stack), schema errors, and AR Quick Look compatibility with arkit_issues — every issue with a stable code and prim_path. mode=quick (default) runs no renders and finishes well under a second; mode=full adds analyze_performance and a front render. Call it first on any file, and after every mutation.",
       "input": "validate.input.json",

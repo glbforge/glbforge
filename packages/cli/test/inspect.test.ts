@@ -54,6 +54,21 @@ describe.skipIf(!ready)('glbforge inspect (built CLI)', () => {
     expect(JSON.parse(ok.stdout).orientation).toMatchObject({ front: '-Z', front_source: 'declared' });
   }, 30_000);
 
+  it('diff: raw Hunyuan vs optimized, JSON shape and exit code', async () => {
+    const raw = join(root, 'examples', 'plush-hunyuan.glb'), web = join(root, 'examples', 'plush-hunyuan.web.glb');
+    if (!existsSync(raw) || !existsSync(web)) return;
+    const run1 = await run('node', [cli, 'diff', raw, web, '--json']).catch((e: { stdout: string; code: number }) => e);
+    const r = JSON.parse(run1.stdout);
+    expect(r.pack).toBe('diff@1');
+    expect(r.changed).toBe(true);
+    expect(r.scene.triangles.before).toBe(232616);
+    expect(r.findings.map((f: { rule: string }) => f.rule)).toContain('diff/triangles-changed');
+    expect(r.summary).toMatch(/^Triangles 232,616 → /);
+    expect(r.duration_ms).toBeLessThan(1500);
+    const same = await run('node', [cli, 'diff', raw, raw]);
+    expect(same.stdout).toMatch(/No change\./);
+  }, 30_000);
+
   it('prints the summary first in human mode and lists skipped rules with --no-topology', async () => {
     const { stdout } = await inspect(hero, '--no-topology');
     expect(stdout).toMatch(/1 mesh, 150,000 triangles/);

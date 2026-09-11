@@ -24,6 +24,13 @@ Built for agents, not terminals:
   contract: shells, watertight, size and origin are measured errors; a bare
   category is a plausibility warning with a confidence; `front` is recorded
   as declared.
+- **`diff`: what the edit changed and broke.** Two versions in, a change
+  note out: per-part size deltas, triangle / shell deltas, topology
+  regressions (was watertight, now is not), origin drift, node transform
+  changes, meshes added or removed, and with `visual=true` a front / side /
+  top / iso SSIM delta with cameras fixed to the before framing. `diff@1`
+  rules: regressions at warning, neutral changes at info. Returns the two
+  sha256s as `lineage` — an explicit statement that they are the same asset.
 - **One envelope, stable codes, prim paths.** Every tool answers
   `{ ok, summary, duration_ms, errors[], data }`. `errors[]` lists every
   diagnostic as `{ code, severity, prim_path, property, message, suggested_fix }`
@@ -71,7 +78,7 @@ Built for agents, not terminals:
 - **Read-only tools are annotated** (`readOnlyHint`) so clients can
   auto-approve analyze / inspect / render / audit / compare / list.
 
-Tools: `inspect`, `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
+Tools: `inspect`, `diff`, `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
 `inspect_materials`, `analyze_performance`, `render`, `render_animation_strip`,
 `capabilities`, `analyze_glb`, `inspect_report`, `render_preview`,
 `compare_glb`, `optimize_glb`, `ship_asset`, `audit_directory`,

@@ -242,6 +242,42 @@ export const InspectDataSchema = z.object({
   sha256: z.string(),
 });
 
+const DeltaSchema = z.object({ before: z.number(), after: z.number(), delta: z.number(), pct: z.number().nullable() });
+const nullableDelta = DeltaSchema.nullable();
+const OriginPlacementSchema = z.object({
+  at: z.enum(['base-center', 'center', 'centroid', 'elsewhere']), position_in_bounds: z.array(z.number()), height_above_base_m: z.number(),
+  distance_to_centroid_m: z.number(), inside_bounds: z.boolean(), offset_to_base_center_m: z.array(z.number()),
+});
+const TRS = z.object({ translation: z.array(z.number()), rotation: z.array(z.number()), scale: z.array(z.number()) });
+
+export const DiffDataSchema = z.object({
+  before: z.object({ path: z.string().nullable(), format: z.enum(['glb', 'gltf', 'usdz', 'usda', 'usdc']), sha256: z.string() }),
+  after: z.object({ path: z.string().nullable(), format: z.enum(['glb', 'gltf', 'usdz', 'usda', 'usdc']), sha256: z.string() }),
+  profile: z.string(),
+  pack: z.literal('diff@1'),
+  changed: z.boolean(),
+  summary: z.string().describe('The change note: regressions first, then neutral changes. Read this first.'),
+  scene: z.object({ triangles: DeltaSchema, vertices: DeltaSchema, meshes: DeltaSchema, nodes: DeltaSchema, materials: DeltaSchema, file_bytes: DeltaSchema }),
+  bounds: z.object({ size_before_m: z.array(z.number()).nullable(), size_after_m: z.array(z.number()).nullable(), size_pct: z.array(z.number()).nullable(), center_shift_m: z.array(z.number()).nullable(), largest: nullableDelta }),
+  topology: z.object({ shells: nullableDelta, watertight: z.object({ before: z.boolean().nullable(), after: z.boolean().nullable() }), boundary_loops: nullableDelta, non_manifold_edges: nullableDelta, degenerate_triangles: nullableDelta }).describe('Welded space; null when topology was disabled'),
+  origin: z.object({ before: OriginPlacementSchema.nullable(), after: OriginPlacementSchema.nullable(), shift_m: z.number().nullable(), moved: z.boolean() }),
+  transforms: z.object({ changed: z.array(z.object({ prim_path: z.string(), name: z.string(), before: TRS, after: TRS })) }),
+  meshes: z.array(z.object({
+    prim_path: z.string(), name: z.string(), status: z.enum(['added', 'removed', 'changed', 'unchanged']),
+    triangles: nullableDelta, shells: nullableDelta, watertight: z.object({ before: z.boolean().nullable(), after: z.boolean().nullable() }),
+    boundary_loops: nullableDelta, non_manifold_edges: nullableDelta,
+    size_m: z.object({ before: z.array(z.number()).nullable(), after: z.array(z.number()).nullable(), pct: z.array(z.number()).nullable() }),
+  })).describe('Paired by prim path, then by unique name when nodes were renumbered'),
+  structural: DiffSchema,
+  visual: z.object({
+    size: z.number().int(),
+    views: z.array(z.object({ name: z.string(), ssim: z.number(), coverage: z.number(), camera: z.object({ position: z.array(z.number()), target: z.array(z.number()), fov: z.number() }) })),
+    ssim_min: z.number(), ssim_mean: z.number(), worst_view: z.string(), framing: z.literal('before'),
+  }).nullable().describe('Only with visual=true: front / side / top / iso SSIM, cameras fixed to the before framing'),
+  findings: z.array(RuleFindingSchema).describe('diff@1 rules: regressions at warning, neutral changes at info; mirrored into errors[]'),
+  lineage: z.object({ before_sha256: z.string(), after_sha256: z.string() }).describe('An explicit statement that these two hashes are the same asset — feeds the usage lineage'),
+});
+
 /** Mutating tools add these fields to their existing payloads. */
 export const MutationShape = {
   dry_run: z.boolean(),
@@ -275,6 +311,7 @@ export const LegacyDataSchemas = {
 
 export const ToolDataSchemas = {
   inspect: InspectDataSchema,
+  diff: DiffDataSchema,
   validate: ValidationDataSchema,
   inspect_geometry: GeometryDataSchema,
   inspect_animation: AnimationDataSchema,

@@ -72,7 +72,7 @@ afterAll(async () => {
 describe('tool descriptions carry the contract', () => {
   it('every tool has an output schema, a description that says what it returns, and a published schema file', async () => {
     const tools = (await client.listTools()).tools;
-    expect(tools.length).toBe(26);
+    expect(tools.length).toBe(27);
     for (const t of tools) {
       expect(t.outputSchema, t.name).toBeDefined();
       expect((t.description ?? '').length, t.name).toBeGreaterThan(60);

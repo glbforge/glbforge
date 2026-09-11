@@ -17,8 +17,8 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, renderViews, RULE_PROFILE_VERSIONS, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
-import { printDiff, printInspect, printReport } from './report.js';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, renderViews, RULE_PROFILE_VERSIONS, sharpTextureDecoder, toStl, toUsdz } from '@glbforge/core';
+import { printDiff, printDiffReport, printInspect, printReport } from './report.js';
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
 import { cliVersion, registerInitCommand } from './init.js';
@@ -160,6 +160,28 @@ program
     const duration_ms = Math.round(performance.now() - t0);
     if (opts.json) console.log(JSON.stringify({ path: file, ...report, duration_ms }, null, 2));
     else printInspect(report, file, duration_ms);
+    const failing = report.findings.some((f) => f.severity === 'error' || (opts.strict && f.severity === 'warning'));
+    process.exitCode = failing ? 1 : 0;
+  });
+
+program
+  .command('diff')
+  .description('What changed between two versions of an asset, including what the edit broke: size / triangle / shell deltas per part, topology regressions (was watertight, now is not), origin drift, node transforms, meshes added or removed, and (--visual) a front/side/top/iso render delta with cameras fixed to the before framing.')
+  .argument('<before>', 'the earlier file (.glb / .gltf / .usdz / .usda / .usdc)')
+  .argument('<after>', 'the later file')
+  .option('-p, --profile <name>', `rule profile deciding severities: ${Object.keys(RULE_PROFILE_VERSIONS).join(' | ')} or a budget profile (${Object.keys(PROFILES).join(' | ')})`, 'authoring')
+  .option('--visual', 'also render four canonical views of both and score SSIM per view (~150 ms per file at 128 px)')
+  .option('--size <px>', 'pixels per view for --visual', (v) => parseInt(v, 10), 128)
+  .option('--no-topology', 'skip the welded topology pass (shell / watertight deltas become null)')
+  .option('--strict', 'exit 1 on warnings (regressions) as well as errors')
+  .option('--json', 'emit the full report as JSON')
+  .action(async (before: string, after: string, opts: { profile: string; visual?: boolean; size: number; topology: boolean; strict?: boolean; json?: boolean }) => {
+    const t0 = performance.now();
+    const [b, a] = await Promise.all([loadScene(before), loadScene(after)]);
+    const report = await diffAssets(b.ir, a.ir, { profile: opts.profile, topology: opts.topology, visual: opts.visual, visualSize: opts.size });
+    const duration_ms = Math.round(performance.now() - t0);
+    if (opts.json) console.log(JSON.stringify({ ...report, duration_ms }, null, 2));
+    else printDiffReport(report, before, after, duration_ms);
     const failing = report.findings.some((f) => f.severity === 'error' || (opts.strict && f.severity === 'warning'));
     process.exitCode = failing ? 1 : 0;
   });

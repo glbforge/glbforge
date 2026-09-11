@@ -61,6 +61,18 @@ Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a tes
 | `INTENT_CATEGORY_SCALE` | `intent/category-scale` | warning | Heuristic: the size is outside the typical range for the declared category (coarse table of priors; carries a confidence). | Pass an explicit size range to make the check exact, or scale the asset. |
 | `INTENT_CATEGORY_UNKNOWN` | `intent/category-unknown` | info | The declared category has no entry in the size table; plausibility stays unknown. | Give an explicit size range. |
 | `INTENT_ORIGIN` | `intent/origin` | error | The origin is not at the expected landmark (base centre / centre / centroid). | Translate the geometry by the offset in the finding. |
+| `DIFF_WATERTIGHT_LOST` | `diff/watertight-lost` | warning | A mesh that was a closed solid before is not any more: open loops or non-manifold edges appeared. | Inspect the after file; fill the holes or clean the overlaps, or undo the edit. |
+| `DIFF_OPEN_EDGES_INTRODUCED` | `diff/open-edges-introduced` | warning | More boundary loops than before on a mesh that was already open. | Fill the new holes, or undo the edit. |
+| `DIFF_NON_MANIFOLD_INTRODUCED` | `diff/non-manifold-introduced` | warning | More non-manifold edges than before on a mesh that was already not watertight. | Merge by distance and delete interior faces, or undo the edit. |
+| `DIFF_SHELLS_CHANGED` | `diff/shells-changed` | warning | The connected-shell count changed: pieces detached (warning) or joined (info). | Union pieces that should be one solid; look for floating fragments. |
+| `DIFF_ORIGIN_MOVED` | `diff/origin-moved` | warning | The geometry moved relative to the origin: the landmark changed or the bounds centre shifted beyond tolerance. | Translate back if unintended, or set the origin deliberately. |
+| `DIFF_TRANSFORM_CHANGED` | `diff/transform-changed` | warning | A mesh-bearing node's local transform changed (dequantization transforms excluded). | Apply the transform if it is intended geometry; otherwise reset it. |
+| `DIFF_SIZE_CHANGED` | `diff/size-changed` | info | The world bounding box changed on some axis; per-mesh deltas name which part got wider, narrower, taller, shorter, deeper or shallower. | Nothing to do if intended. |
+| `DIFF_TRIANGLES_CHANGED` | `diff/triangles-changed` | info | Triangle count changed by at least 1%. | Nothing to do if intended. |
+| `DIFF_MESHES_REMOVED` | `diff/meshes-removed` | info | Mesh primitives present before are gone (deleted, joined, or renumbered on export). | Nothing to do if intended. |
+| `DIFF_MESHES_ADDED` | `diff/meshes-added` | info | New mesh primitives appeared. | Nothing to do if intended. |
+| `DIFF_TOPOLOGY_IMPROVED` | `diff/topology-improved` | info | A mesh became watertight or lost open loops / non-manifold edges. | Nothing to do. |
+| `DIFF_VISUAL_CHANGED` | `diff/visual-changed` | info | Canonical-view SSIM (front / side / top / iso, cameras fixed to the before framing) dropped below 0.995 on some view. | Render both from the worst view to see the change. |
 | `ZUP_SUSPECTED` |  | info | glTF is Y-up by definition, but the bounding box is much taller along Z than Y — the geometry may have been exported Z-up. | Check the render; if it lies on its side, bake a -90° X rotation. |
 | `SKELETON_UNBOUND` |  | warning | A skeleton/skin is not bound to any mesh, so its animation deforms nothing. | Bind the mesh (glTF: node.skin; USD: rel skel:skeleton + SkelBindingAPI) or remove the skeleton. |
 | `MESH_NOT_DEFORMING` |  | warning | A skeleton animates, but its bound mesh has no joint influences (missing JOINTS/WEIGHTS or primvars:skel:jointIndices/jointWeights), so it stays rigid. | Re-export with skin weights, or bind the mesh rigidly to a joint. |

@@ -31,8 +31,15 @@ answers everything in tens of ms).
   size table is a heuristic warning with confidence, `Z-up` on glTF is
   informational (the format is Y-up), `front` is recorded as declared only;
   unparsed tokens are reported. CLI `-e/--expect`, MCP `expect`
-- [ ] `glbforge diff <before> <after>` + MCP `diff`: structural + topology
-  regressions + optional 4-view render delta; diff edges feed lineage
+- [x] `glbforge diff <before> <after>` + MCP `diff` (2026-09-11): `diff@1`
+  rules — watertight-lost, open-edges / non-manifold introduced, shells
+  changed (detach = warning, join = info), origin moved, transform changed,
+  size changed (per-part: "'legs' is 40% narrower along X"), triangles
+  changed, meshes added / removed, topology improved, visual changed
+  (front / side / top / iso SSIM, cameras fixed to the before framing,
+  opt-in); meshes paired by path then by unique name across renumbering;
+  summary is a change note with regressions first; both sha256s returned
+  as lineage
 - [ ] Usage counter (opt-in JSONL under `~/.config/glbforge/`, lineage =
   same path within a session ∪ diff edges ∪ explicit id); `glbforge usage`
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals

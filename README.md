@@ -14,6 +14,12 @@ CI-able contract.
   (`topo/open-edges` from `core-geometry@1`) with measured/heuristic certainty,
   a likely cause with confidence, and a concrete fix. `front` is never guessed.
   Same thing as the MCP `inspect` tool: call it after every edit.
+- ✅ `glbforge diff <before> <after>` — what changed since the last edit,
+  including what it broke: per-part size deltas ("'legs' is 30% narrower
+  along X"), triangle and shell deltas, topology regressions (was
+  watertight, now has 3 open loops), origin drift, node transforms, meshes
+  added or removed, and `--visual` front/side/top/iso SSIM with cameras
+  fixed to the before framing. Same thing as the MCP `diff` tool.
 - ✅ `glbforge analyze` — budget report card + named lint rules
 - ✅ `glbforge optimize` — weld/simplify/LOD/compress to hit the budget
 - ✅ `glbforge scaffold` — emit a React Three Fiber viewer for the optimized asset
