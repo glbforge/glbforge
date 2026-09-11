@@ -181,6 +181,78 @@ describe('extrudeImage', () => {
     expect(bevelResult.geometry.topology!.boundaryEdges).toBe(0);
     expect(bevelResult.geometry.topology!.nonManifoldEdges).toBe(0);
   });
+  it('winds every face to agree with its authored normals on plain, bevelled, pillow, emboss and layered output', async () => {
+    const { extrudeImage, fromGltf, inspectGeometry, readFloat } = await import('../src/index.js');
+    const { NodeIO } = await import('@gltf-transform/core');
+    const sharp = (await import('sharp')).default;
+    const size = 96;
+    const paint = (fill: (x: number, y: number) => [number, number, number, number] | null) => {
+      const rgba = Buffer.alloc(size * size * 4);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const px = fill(x, y);
+        if (px) rgba.set(px, (y * size + x) * 4);
+      }
+      return sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer()
+        .then((b) => new Uint8Array(b));
+    };
+    const ring = await paint((x, y) => {
+      const r = Math.hypot(x - 48, y - 48);
+      return r < 36 && r > 14 ? [255, 255, 255, 255] : null;
+    });
+    const twoTone = await paint((x, y) => {
+      const r = Math.hypot(x - 48, y - 48);
+      return r < 40 ? (r < 20 ? [255, 40, 40, 255] : [30, 90, 220, 255]) : null;
+    });
+
+    // Signed volume of a closed mesh: positive iff the winding faces outward.
+    const signedVolume = (doc: Document): number => {
+      let vol = 0;
+      for (const mesh of doc.getRoot().listMeshes()) for (const prim of mesh.listPrimitives()) {
+        const p = readFloat(prim.getAttribute('POSITION')!);
+        const idx = prim.getIndices()!.getArray()!;
+        for (let t = 0; t < idx.length; t += 3) {
+          const [a, b, c] = [idx[t] * 3, idx[t + 1] * 3, idx[t + 2] * 3];
+          vol += (
+            p[a] * (p[b + 1] * p[c + 2] - p[b + 2] * p[c + 1]) -
+            p[a + 1] * (p[b] * p[c + 2] - p[b + 2] * p[c]) +
+            p[a + 2] * (p[b] * p[c + 1] - p[b + 1] * p[c])
+          ) / 6;
+        }
+      }
+      return vol;
+    };
+
+    const variants: Array<[string, Uint8Array, Parameters<typeof extrudeImage>[1]]> = [
+      ['plain', ring, { texture: false }],
+      ['bevel', ring, { texture: false, bevel: 0.01, bevelSegments: 3 }],
+      ['chamfer', ring, { texture: false, bevel: 0.01, bevelSegments: 1 }],
+      ['pillow', ring, { texture: false, pillow: 0.04 }],
+      ['pillow-flat-back', ring, { texture: false, pillow: 0.04, doubleSided: false }],
+      ['emboss', ring, { texture: false, emboss: 0.012, depth: 0.05 }],
+      ['layers', twoTone, { texture: false, layers: 2 }],
+      ['layers-bevel', twoTone, { texture: false, layers: 3, bevel: 0.01 }],
+    ];
+    const io = new NodeIO();
+    for (const [name, png, opts] of variants) {
+      const { doc } = await extrudeImage(png, opts);
+      // The inspect rule (inspect/geometry.ts invertedNormals): a face is
+      // inverted when its geometric normal points against the summed
+      // authored vertex normals. Forge output must trip it on zero faces —
+      // materials are single-sided, so an inverted wall is culled.
+      const geo = inspectGeometry(fromGltf(doc));
+      for (const m of geo.meshes) expect(m.inverted_normal_face_count, `${name}: ${m.name}`).toBe(0);
+      expect(geo.diagnostics.map((d) => d.code), name).not.toContain('NORMALS_INVERTED');
+      // Still watertight.
+      const result = analyze(doc, { profile: getProfile('mobile-hero') });
+      expect(result.geometry.topology!.boundaryEdges, name).toBe(0);
+      expect(result.geometry.topology!.nonManifoldEdges, name).toBe(0);
+      // Outward: the closed shell encloses positive volume.
+      expect(signedVolume(doc), name).toBeGreaterThan(0);
+      // Deterministic: a second build is byte-identical.
+      const again = await extrudeImage(png, opts);
+      expect(Buffer.from(await io.writeBinary(again.doc)).equals(Buffer.from(await io.writeBinary(doc))), name).toBe(true);
+    }
+  });
 });
 
 describe('multi-material optimize', () => {

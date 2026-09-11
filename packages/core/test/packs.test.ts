@@ -375,6 +375,9 @@ describe('dogfood: the pipeline\'s own outputs under the linter', () => {
     const dir = join(root, 'examples');
     if (!existsSync(dir)) return;
     const files = (await readdir(dir)).filter((f) => f.endsWith('.glb')).sort();
+    // examples/*.glb are gitignored (regenerated via the CLI), so a fresh
+    // clone and CI have none: self-skip like the LFS fixture specs.
+    if (files.length === 0) return;
     const actual: Record<string, string> = {};
     for (const f of files) {
       const ir = await load(`examples/${f}`);

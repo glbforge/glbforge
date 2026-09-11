@@ -46,7 +46,9 @@ type Pt = [number, number];
  * edges stay crisp while the bevel itself shades round.
  *
  * Winding is normalized empirically (caps by normal sign, walls/bevels by an
- * interior-point test per ring) rather than trusting loop orientation.
+ * interior-point test per ring) rather than trusting loop orientation, and
+ * every emitted face winds so its geometric normal agrees with its authored
+ * vertex normals — materials are single-sided, so an inverted face is culled.
  */
 export function buildExtrusion(
   doc: Document,
@@ -103,8 +105,15 @@ export function buildExtrusion(
     for (const { ring, insets } of rings) {
       const pts = ring.points;
       const flipRing = wallsFaceInterior(pts, outer, holes);
+      // Quad (a, b, c, d) in the strip order (i,hi) (i,lo) (j,lo) (j,hi).
+      // With world y = -(image y), the unflipped ring order (a, b, c) winds
+      // the face toward the INTERIOR, so the outward-facing default is the
+      // reversed order; flipRing (naive normal points into the solid) swaps
+      // it back. Every wall/bevel quad is emitted through orientQuad, which
+      // also guards the winding against the authored normals so the two
+      // can never disagree (single-sided materials cull inverted faces).
       const orient = (a: number, b: number, c: number, d: number) =>
-        flipRing ? indices.push(a, c, b, a, d, c) : indices.push(a, b, c, a, c, d);
+        orientQuad(positions, normals, indices, a, b, c, d, !flipRing);
 
       // Straight wall between the two bevel shoulders, flat per-edge normals.
       const wallTop = hz - bevel, wallBot = -hz + bevel;
@@ -263,6 +272,14 @@ export function buildExtrusion(
       }
     }
 
+    // Earcut fans nearly-collinear contour points into tangential slivers.
+    // Subdivision preserves their shape, and a sliver samples the curved
+    // height field so badly that its plane normal is noise — pointing
+    // against its own smooth vertex normals and getting culled. Flip
+    // toward Delaunay (ring edges constrained) before and after every
+    // round so the field is sampled by well-shaped triangles.
+    lawsonFlips(verts, faces);
+
     const ROUNDS = verts.length / 2 < 600 ? 4 : 3;
     const MAX_TRIS = 120_000;
     for (let round = 0; round < ROUNDS && (faces.length / 3) * 4 <= MAX_TRIS; round++) {
@@ -302,6 +319,7 @@ export function buildExtrusion(
         }
       }
       faces = nextFaces;
+      lawsonFlips(verts, faces);
     }
 
     // Emit vertices: rim ring reuses existing ids (sealed to walls); new
@@ -319,6 +337,7 @@ export function buildExtrusion(
     // Faces (winding normalized against the cap's outward z), collected
     // for the smooth-normal pass.
     const capFaces: number[] = [];
+    const capStart = indices.length;
     for (let t = 0; t < faces.length; t += 3) {
       let [a, b, c] = [emitted[faces[t]], emitted[faces[t + 1]], emitted[faces[t + 2]]];
       if (Math.sign(triNormalZ(positions, a, b, c)) !== normalSign) [b, c] = [c, b];
@@ -346,6 +365,20 @@ export function buildExtrusion(
       normals[vId * 3 + 1] = n[1] / len;
       normals[vId * 3 + 2] = n[2] / len;
     }
+
+    // Guarantee: every face winds with its (now final) vertex normals.
+    // After the Delaunay flips this touches only slivers pinned by the
+    // contour at concave cusps and along the ridge crease of thin strokes,
+    // whose plane normal is noise either way; wound to the smooth field
+    // they render instead of being culled.
+    for (let t = 0; t < capFaces.length; t += 3) {
+      const i = capStart + t;
+      if (normalDot(positions, normals, indices[i], indices[i + 1], indices[i + 2]) < 0) {
+        const b = indices[i + 1];
+        indices[i + 1] = indices[i + 2];
+        indices[i + 2] = b;
+      }
+    }
   }
 
   stitchCracks(positions, normals, indices);
@@ -363,6 +396,135 @@ export function buildExtrusion(
       vertices: positions.length / 3,
     },
   };
+}
+
+/**
+ * Emits quad (a, b, c, d) as two triangles wound so every triangle's
+ * geometric normal agrees with its authored vertex normals. `reverse`
+ * selects the analytically outward order for degenerate (zero-area)
+ * triangles, whose dot product carries no sign. Normally both triangles of
+ * the (a, c) diagonal agree; when a clamped bevel inset folds the quad so
+ * one triangle inverts, the (b, d) diagonal is tried, and if the quad is a
+ * true bow-tie each triangle is wound on its own.
+ */
+function orientQuad(
+  pos: number[], nrm: number[], indices: number[],
+  a: number, b: number, c: number, d: number, reverse: boolean,
+): void {
+  const d1 = normalDot(pos, nrm, a, b, c), d2 = normalDot(pos, nrm, a, c, d);
+  if (!(d1 * d2 < 0)) {
+    const sign = d1 !== 0 ? d1 : d2;
+    pushWound(indices, a, b, c, sign, reverse);
+    pushWound(indices, a, c, d, sign, reverse);
+    return;
+  }
+  const d3 = normalDot(pos, nrm, a, b, d), d4 = normalDot(pos, nrm, b, c, d);
+  if (d3 * d4 > 0) {
+    pushWound(indices, a, b, d, d3, reverse);
+    pushWound(indices, b, c, d, d4, reverse);
+    return;
+  }
+  pushWound(indices, a, b, c, d1, reverse);
+  pushWound(indices, a, c, d, d2, reverse);
+}
+
+/** Dot of the (a, b, c) face normal with the summed vertex normals. */
+function normalDot(pos: number[], nrm: number[], a: number, b: number, c: number): number {
+  const ax = pos[a * 3], ay = pos[a * 3 + 1], az = pos[a * 3 + 2];
+  const ux = pos[b * 3] - ax, uy = pos[b * 3 + 1] - ay, uz = pos[b * 3 + 2] - az;
+  const vx = pos[c * 3] - ax, vy = pos[c * 3 + 1] - ay, vz = pos[c * 3 + 2] - az;
+  const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+  const nx = nrm[a * 3] + nrm[b * 3] + nrm[c * 3];
+  const ny = nrm[a * 3 + 1] + nrm[b * 3 + 1] + nrm[c * 3 + 1];
+  const nz = nrm[a * 3 + 2] + nrm[b * 3 + 2] + nrm[c * 3 + 2];
+  return fx * nx + fy * ny + fz * nz;
+}
+
+/** Pushes (a, b, c) as given when `sign` > 0, reversed when < 0, and by
+ *  the analytic default (`reverse`) when the triangle is degenerate. */
+function pushWound(indices: number[], a: number, b: number, c: number, sign: number, reverse: boolean): void {
+  const keep = sign !== 0 ? sign > 0 : !reverse;
+  if (keep) indices.push(a, b, c);
+  else indices.push(a, c, b);
+}
+
+/**
+ * Lawson edge flips toward the constrained Delaunay triangulation of a
+ * 2D mesh (`verts` = [x, y] pairs, `faces` = index triples, mutated in
+ * place). Contour edges are boundary edges of the cap triangulation, so
+ * they have no opposite and never flip. Deterministic: fixed slot order,
+ * strict convexity, tolerance-guarded incircle test so cocircular points
+ * do not oscillate.
+ */
+function lawsonFlips(verts: number[], faces: number[]): void {
+  const slots = faces.length;
+  // Half-edge opposites: slot f*3+e is the edge (faces[f,e], faces[f,e+1]).
+  const opp = new Int32Array(slots).fill(-1);
+  const pending = new Map<number, number>();
+  for (let s = 0; s < slots; s++) {
+    const f = (s / 3) | 0, e = s % 3;
+    const a = faces[f * 3 + e], b = faces[f * 3 + ((e + 1) % 3)];
+    const k = a < b ? a * 1e7 + b : b * 1e7 + a;
+    const o = pending.get(k);
+    if (o === undefined) pending.set(k, s);
+    else { opp[s] = o; opp[o] = s; pending.delete(k); }
+  }
+  const x = (v: number) => verts[v * 2], y = (v: number) => verts[v * 2 + 1];
+  const cross = (ox: number, oy: number, px: number, py: number, qx: number, qy: number) =>
+    (px - ox) * (qy - oy) - (py - oy) * (qx - ox);
+
+  /** Flip edge ab (opposite vertices c, d) iff the quad is strictly convex
+   *  and the angles at c and d sum to more than pi (non-Delaunay). */
+  const shouldFlip = (a: number, b: number, c: number, d: number): boolean => {
+    const s1 = cross(x(a), y(a), x(b), y(b), x(c), y(c));
+    const s2 = cross(x(a), y(a), x(b), y(b), x(d), y(d));
+    if (!(s1 * s2 < 0)) return false;
+    const s3 = cross(x(c), y(c), x(d), y(d), x(a), y(a));
+    const s4 = cross(x(c), y(c), x(d), y(d), x(b), y(b));
+    if (!(s3 * s4 < 0)) return false;
+    const cax = x(a) - x(c), cay = y(a) - y(c), cbx = x(b) - x(c), cby = y(b) - y(c);
+    const dax = x(a) - x(d), day = y(a) - y(d), dbx = x(b) - x(d), dby = y(b) - y(d);
+    const dotC = cax * cbx + cay * cby, sinC = Math.abs(cax * cby - cay * cbx);
+    const dotD = dax * dbx + day * dby, sinD = Math.abs(dax * dby - day * dbx);
+    // sin(alpha + beta) < 0  <=>  alpha + beta > pi.
+    const s = sinC * dotD + dotC * sinD;
+    const tol = 1e-9 * (sinC * Math.abs(dotD) + Math.abs(dotC) * sinD);
+    return s < -tol;
+  };
+  const link = (s: number, o: number) => { opp[s] = o; if (o >= 0) opp[o] = s; };
+
+  for (let pass = 0; pass < 64; pass++) {
+    let flips = 0;
+    for (let s = 0; s < slots; s++) {
+      const o = opp[s];
+      if (o < 0) continue;
+      const f = (s / 3) | 0, e = s % 3;
+      const a = faces[f * 3 + e], b = faces[f * 3 + ((e + 1) % 3)], c = faces[f * 3 + ((e + 2) % 3)];
+      const g = (o / 3) | 0;
+      const g0 = faces[g * 3], g1 = faces[g * 3 + 1], g2 = faces[g * 3 + 2];
+      const d = g0 !== a && g0 !== b ? g0 : g1 !== a && g1 !== b ? g1 : g2;
+      if (!shouldFlip(a, b, c, d)) continue;
+      // Outer opposites of the four quad edges before rewriting.
+      const oBC = opp[f * 3 + ((e + 1) % 3)], oCA = opp[f * 3 + ((e + 2) % 3)];
+      let oAD = -1, oDB = -1;
+      for (let k = 0; k < 3; k++) {
+        const u = faces[g * 3 + k], v = faces[g * 3 + ((k + 1) % 3)];
+        if ((u === a && v === d) || (u === d && v === a)) oAD = opp[g * 3 + k];
+        else if ((u === d && v === b) || (u === b && v === d)) oDB = opp[g * 3 + k];
+      }
+      // (a, b, c) + (a, b, d)  ->  f = (a, d, c), g = (d, b, c); winding is
+      // normalized later, only the adjacency must stay exact.
+      faces[f * 3] = a; faces[f * 3 + 1] = d; faces[f * 3 + 2] = c;
+      faces[g * 3] = d; faces[g * 3 + 1] = b; faces[g * 3 + 2] = c;
+      link(f * 3, oAD);
+      link(f * 3 + 1, g * 3 + 2);
+      link(f * 3 + 2, oCA);
+      link(g * 3, oDB);
+      link(g * 3 + 1, oBC);
+      flips++;
+    }
+    if (flips === 0) break;
+  }
 }
 
 function triNormalZ(pos: number[], a: number, b: number, c: number): number {
