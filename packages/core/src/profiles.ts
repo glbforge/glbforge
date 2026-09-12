@@ -109,11 +109,55 @@ const productConfiguratorV1: Profile = {
   rules: WEB_RULES,
 };
 
+/**
+ * v2 — identical caps, recalibrated numbers.
+ *
+ * The verification renderer used to sample base-color texels as if they were
+ * linear while `baseColorFactor` is linear, and shaded and wrote pixels in
+ * that same muddle. Fixing it (linear-light shading, sRGB in and out) moved
+ * every SSIM the tool reports, so the rationales below no longer described
+ * the measurement they were calibrated against — even though not one cap
+ * changed. Rather than edit published text, v2 restates it against the
+ * corrected renderer; `@1` still reads as what CI recorded before 0.9.0.
+ *
+ * The floors themselves were re-derived, not assumed: every profile's budget
+ * pass still clears its floor with margin, and mobile-hero's counter-example
+ * (the 40k version with visibly merged hair) still fails it. See the 0.9.0
+ * entry in docs/BUDGETS.md for the full before/after table.
+ */
+const mobileHeroV2: Profile = {
+  ...mobileHeroV1,
+  version: 2,
+  rationale: {
+    ...mobileHeroV1.rationale,
+    maxTriangles: 'A mid-range phone GPU (2019+ Adreno 6xx / Mali-G7x / Apple A12 class) rasterizes 150k triangles in well under a millisecond; the binding constraint is payload. 150k welded, quantized, meshopt-compressed triangles land around 1–2MB, which is what leaves room for textures inside the file cap. It is also where our fixtures stop losing visible detail (the Meshy 7 hero measures SSIM 0.964 at 150k).',
+    minSsim: 'Weakest of four fixed-camera views (256px, 2x supersampled, smooth shading, textured) before vs after optimization. Calibrated on the Meshy 7 fixture: the budget pass measures 0.964 with 4K source textures (0.979 with 2K), a 40k-triangle version 0.913 with visibly merged hair strands. The floor sits between them.',
+  },
+};
+
+const desktopHeroV2: Profile = {
+  ...desktopHeroV1,
+  version: 2,
+  rationale: {
+    ...desktopHeroV1.rationale,
+    minSsim: 'Desktop heroes are viewed larger, so the floor is stricter than mobile: the budget pass to 500k measures 0.986–0.993 on our fixtures, clearing it either way.',
+  },
+};
+
+const productConfiguratorV2: Profile = {
+  ...productConfiguratorV1,
+  version: 2,
+  rationale: {
+    ...productConfiguratorV1.rationale,
+    minSsim: 'Close-up viewing argues for strict, coexistence argues for lenient; 0.95 is the midpoint, and the budget pass to 250k measures 0.977–0.987 on our fixtures.',
+  },
+};
+
 /** Every published version of every profile, oldest first. Never edit a published entry. */
 export const PROFILE_VERSIONS: Record<string, Profile[]> = {
-  'mobile-hero': [mobileHeroV1],
-  'desktop-hero': [desktopHeroV1],
-  'product-configurator': [productConfiguratorV1],
+  'mobile-hero': [mobileHeroV1, mobileHeroV2],
+  'desktop-hero': [desktopHeroV1, desktopHeroV2],
+  'product-configurator': [productConfiguratorV1, productConfiguratorV2],
 };
 
 /** Latest version of each profile. */

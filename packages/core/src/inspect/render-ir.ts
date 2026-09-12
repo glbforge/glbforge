@@ -5,10 +5,9 @@
  */
 import { renderRawFragments, frameOfFragments, type Fragment, type RawView, type RenderCamera, type RenderFrame, type TextureDecoder, type DecodedTexture } from '../harness/render.js';
 import { computeSmoothNormals } from '../normals.js';
+import { srgbToLinear } from '../color.js';
 import type { IRMesh, SceneIR } from './ir.js';
 import { poseScene, type PoseOptions } from './pose.js';
-
-const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
 /** Smooth normals for a posed mesh with no authored normals (what a viewer computes on load). */
 function smoothNormals(positions: Float32Array, indices: Uint32Array | null, count: number): Float32Array {

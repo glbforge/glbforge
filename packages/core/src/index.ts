@@ -13,6 +13,7 @@ export { buildLod, clusterDecimate, smoothPositions, type LodResult } from './lo
 export { readFloat } from './accessors.js';
 export { auditDirectory, listGlbs, OUTPUT_PATTERN, type AuditOptions, type AuditResult, type AuditRow } from './audit.js';
 export { computeSmoothNormals } from './normals.js';
+export { srgbToLinear, linearToSrgb, linearToSrgb8, SRGB8_TO_LINEAR } from './color.js';
 export { isDeforming, dominantJoints, simplifyDeformingPrimitive, type DeformingSimplifyOptions, type DeformingSimplifyResult } from './skinning.js';
 export { toUsdz, buildUsdLayer, type UsdzOptions, type UsdzResult, type UsdzTextureEncoder } from './usdz.js';
 export { writeUsda, type UsdLayer, type UsdPrim, type UsdProperty, type UsdAttribute, type UsdRelationship, type UsdValue } from './usd-ir.js';

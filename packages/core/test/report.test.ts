@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document } from '@gltf-transform/core';
-import { createNodeIO, fromGltf, inspectScene, runPacks } from '../src/index.js';
+import { createNodeIO, fromGltf, getProfile, inspectScene, profileLabel, runPacks } from '../src/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -132,7 +132,7 @@ describe('inspectScene facts', () => {
     const c = cube();
     const ir = fromGltf(sceneDoc([{ name: 'lid', mesh: { positions: c.positions, indices: c.indices.slice(6) } }]), { format: 'glb' });
     const r = inspectScene(ir, { profile: 'mobile-hero' });
-    expect(r.profile).toBe('mobile-hero@1');
+    expect(r.profile).toBe(profileLabel(getProfile('mobile-hero'))); // resolves + labels the latest version
     expect(r.findings[0].severity).toBe('info');
     expect(r.summary).toMatch(/INFO topo\/open-edges/);
     expect(JSON.stringify(r.findings)).toBe(JSON.stringify(runPacks(ir, { profile: 'mobile-hero' }).findings));
