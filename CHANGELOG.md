@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **`ship` no longer overwrites `<input>.glb`.** The forge route wrote its
+  intermediate to the input's name with a `.glb` extension, so
+  `glbforge ship logo.png` silently replaced a `logo.glb` the user had
+  authored. Intermediates now use GLBForge's own namespace — `*.forge.glb`
+  for the forge route, `*.gen.glb` for the generative ones (both skipped by
+  `audit` and `watch`, like `*.web.glb`) — and the final output is named for
+  the input on every route.
+- **`ship` stops slicing gradients into stacked slabs.** It forged every image
+  with a hardcoded `layers: 4`, and k-means returns four clusters whether or
+  not the artwork has four colours: a gradient logo became four layers with
+  noisy contours (190k triangles from a five-point star, 5.3 MB, simplified
+  back to the budget and then failing the SSIM gate at 82.5%). `layers: 'auto'`
+  (new; also `glbforge extrude --layers auto`) measures the artwork first —
+  coarse colour histogram of the solid pixels, layered only when a few flat
+  colours cover ≥85% of it — and reports the decision. That star now forges
+  as one shell at 2,760 triangles; a genuinely flat three-colour emblem still
+  layers.
+- **Relief subdivision has a ceiling** (`maxReliefTriangles`, asset-wide across
+  layers and caps). Pillow/emboss caps subdivide uniformly 4:1, which cost a
+  three-colour emblem 247,376 triangles through `ship`; it forges at 22,144 now
+  with the same measured fidelity (SSIM 96.8%, weakest view 94.5% vs 94.6%).
+  `extrude`'s own defaults are unchanged.
+- **`optimize` no longer reports a fidelity failure as "still over budget".**
+  The perceptual floor is not a budget row: when every cap passes and only
+  `fidelity/perceptual` fails, the verdict now reads "within <profile> budget,
+  but visibly lossy" (`analyze` on the same file said `100/100 ✓ ship it`).
+- **`diff/origin-moved` stopped calling a relabel a regression.** An origin
+  landmark is a classification, and adding vertices can move the vertex
+  centroid onto the origin with nothing moving at all — the rule then warned
+  "The geometry moved 0.00 mm". A landmark change with no displacement is now
+  reported at info, stating what was measured; a real shift beyond
+  `originTolerance` still warns. `origin.moved` in the report is displacement,
+  not "the rule fired".
+
 ## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
 
 For agents editing assets in a loop. Rule ids and packs: `docs/error-codes.md`

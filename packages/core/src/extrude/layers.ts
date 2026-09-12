@@ -117,3 +117,51 @@ export function srgbToLinear(value: number): number {
   const c = value / 255;
   return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
 }
+
+/**
+ * Is this artwork made of flat colour regions, or is it a gradient/photo?
+ * Layered extrusion quantizes into k clusters whatever it is given, so a
+ * smooth gradient becomes k stacked slabs with noisy contours — hundreds of
+ * thousands of triangles and a shape nobody drew. Measured on a coarse
+ * colour histogram of the solid pixels (deterministic, one pass).
+ */
+export interface Flatness {
+  /** Share of the artwork sitting in the dominant flat colours. */
+  coverage: number;
+  /** Colour buckets holding at least MIN_SHARE of the artwork each. */
+  distinct: number;
+  /** Layers `layers: 'auto'` extrudes: 0 when the artwork is not flat-coloured. */
+  layers: number;
+}
+
+/** Bits kept per channel: 16 levels, so JPEG noise and antialiasing collapse. */
+const BUCKET_BITS = 4;
+/** A colour has to own this much of the artwork to be a layer of its own. */
+const MIN_SHARE = 0.08;
+/** Below this, the dominant colours do not describe the artwork — it is a gradient or a photo. */
+const FLAT_COVERAGE = 0.85;
+
+export function measureFlatness(
+  px: Uint8Array | Buffer,
+  mask: Uint8Array,
+  width: number,
+  height: number,
+  maxLayers = 4,
+): Flatness {
+  const shift = 8 - BUCKET_BITS;
+  const bins = new Map<number, number>();
+  let solid = 0;
+  for (let i = 0; i < width * height; i++) {
+    if (!mask[i]) continue;
+    solid++;
+    const key = ((px[i * 4] >> shift) << (2 * BUCKET_BITS)) | ((px[i * 4 + 1] >> shift) << BUCKET_BITS) | (px[i * 4 + 2] >> shift);
+    bins.set(key, (bins.get(key) ?? 0) + 1);
+  }
+  if (solid === 0) return { coverage: 0, distinct: 0, layers: 0 };
+
+  // Key as tiebreak: same counts must order the same way on every run.
+  const counts = [...bins.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([, n]) => n);
+  const distinct = Math.min(maxLayers, counts.filter((n) => n / solid >= MIN_SHARE).length);
+  const coverage = counts.slice(0, Math.max(1, distinct)).reduce((s, n) => s + n, 0) / solid;
+  return { coverage, distinct, layers: distinct >= 2 && coverage >= FLAT_COVERAGE ? distinct : 0 };
+}

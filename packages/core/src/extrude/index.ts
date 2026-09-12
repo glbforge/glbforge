@@ -1,7 +1,7 @@
 import { Document } from '@gltf-transform/core';
 import { pointInLoop, traceMask, type Loop } from './trace.js';
 import { buildExtrusion, type ExtrudeStats } from './build.js';
-import { quantizeColors, srgbToLinear } from './layers.js';
+import { measureFlatness, quantizeColors, srgbToLinear, type Flatness } from './layers.js';
 import { distanceTransform, sampleDistance } from './relief.js';
 import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import type { Material, Texture } from '@gltf-transform/core';
@@ -26,8 +26,11 @@ export interface ExtrudeOptions {
   bevelSegments?: number;
   /** Layered color extrusion: quantize into this many color layers (2-6).
    *  Each layer extrudes at a stepped depth with a flat material in its
-   *  cluster color — the "layered acrylic" look. Omit/0 = single layer. */
-  layers?: number;
+   *  cluster color — the "layered acrylic" look. Omit/0 = single layer.
+   *  'auto' layers only artwork measured to be flat-colored (see
+   *  `measureFlatness`): a gradient or a photo would otherwise be sliced
+   *  into stacked slabs with noisy contours. */
+  layers?: number | 'auto';
   /** Extra depth per layer (meters). Default depth * 0.5. */
   layerStep?: number;
   /** Pillow relief: puffy-sticker dome height (meters) on the front face.
@@ -40,6 +43,11 @@ export interface ExtrudeOptions {
   /** Mirror pillow/emboss onto the back face — a full object from every
    *  angle instead of a flat-backed plaque. Default true when pillow set. */
   doubleSided?: boolean;
+  /** Ceiling on relief (pillow/emboss) subdivision: the displaced caps of the
+   *  whole asset together stay under this (walls and bevel are on top of it).
+   *  Divided across the layers and across front/back caps. Default 120,000
+   *  per cap, which is detail for its own sake on anything with a budget. */
+  maxReliefTriangles?: number;
   /** Material preset applied to all forge materials. */
   preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
   /** Project the source image onto the mesh as baseColor. Default true. */
@@ -66,6 +74,8 @@ export interface ExtrudeResult {
     traceWidth: number;
     traceHeight: number;
     layerInfo?: LayerInfo[];
+    /** Why 'auto' layered or did not. Only set when layers: 'auto'. */
+    flatness?: Flatness;
   };
 }
 
@@ -175,8 +185,12 @@ export async function extrudeFromRgba(
     );
   }
 
-  if (opts.layers && opts.layers >= 2) {
-    return extrudeLayered(px, mask, tw, th, mode, opts);
+  // 'auto' only layers artwork that is actually made of flat colors; an
+  // explicit count is the caller's call and is honored as given.
+  const flatness = opts.layers === 'auto' ? measureFlatness(px, mask, tw, th) : undefined;
+  const layers = opts.layers === 'auto' ? flatness!.layers : (opts.layers ?? 0);
+  if (layers >= 2) {
+    return extrudeLayered(px, mask, tw, th, mode, { ...opts, layers }, flatness);
   }
 
   const doc = new Document();
@@ -190,6 +204,7 @@ export async function extrudeFromRgba(
     imageHeight: th,
     frontHeightFn: makeHeightFn(opts, mask, tw, th, px),
     doubleSided: opts.doubleSided ?? (opts.pillow ?? 0) > 0,
+    maxReliefTriangles: capBudget(opts, 1),
   });
 
   const material = doc
@@ -228,7 +243,7 @@ export async function extrudeFromRgba(
   doc.createScene('scene').addChild(node);
   doc.getRoot().getAsset().generator = 'glbforge extrude';
 
-  return { doc, stats: { ...geo.stats, mode, traceWidth: tw, traceHeight: th } };
+  return { doc, stats: { ...geo.stats, mode, traceWidth: tw, traceHeight: th, ...(flatness ? { flatness } : {}) } };
 }
 
 /** Cheap SVG sniff: XML/SVG tag near the start of the buffer. */
@@ -305,9 +320,10 @@ async function extrudeLayered(
   tw: number,
   th: number,
   mode: 'alpha' | 'luma',
-  opts: ExtrudeOptions,
+  opts: ExtrudeOptions & { layers: number },
+  flatness?: Flatness,
 ): Promise<ExtrudeResult> {
-  const k = Math.min(6, Math.max(2, opts.layers!));
+  const k = Math.min(6, Math.max(2, opts.layers));
   const { labels, colors, counts } = quantizeColors(px, mask, tw, th, k);
 
   const width = opts.width ?? 1;
@@ -327,6 +343,7 @@ async function extrudeLayered(
     loops: 0, outerLoops: 0, holes: 0, triangles: 0, vertices: 0,
     mode, traceWidth: tw, traceHeight: th,
     layerInfo: [] as LayerInfo[],
+    ...(flatness ? { flatness } : {}),
   };
 
   let totalContours = 0;
@@ -356,6 +373,10 @@ async function extrudeLayered(
       imageHeight: th,
       frontHeightFn: makeHeightFn(opts, layerMask, tw, th, px),
       doubleSided: opts.doubleSided ?? (opts.pillow ?? 0) > 0,
+      // The ceiling is for the asset, not per cap: every layer carries a
+      // displaced cap (two when double-sided), so N layers would otherwise
+      // cost N times as much.
+      maxReliefTriangles: capBudget(opts, order.length),
       // Backs coplanar: each build centers on its own depth, so bake half
       // the extra depth this layer has over the base layer into the
       // vertices. Nodes stay identity (no unapplied transform to lint).
@@ -406,6 +427,13 @@ async function extrudeLayered(
   }
   doc.getRoot().getAsset().generator = 'glbforge extrude';
   return { doc, stats };
+}
+
+/** Share the asset-wide relief ceiling across every displaced cap this build emits. */
+function capBudget(opts: ExtrudeOptions, layers: number): number | undefined {
+  if (opts.maxReliefTriangles === undefined) return undefined;
+  const caps = layers * ((opts.doubleSided ?? (opts.pillow ?? 0) > 0) ? 2 : 1);
+  return Math.max(1_000, Math.floor(opts.maxReliefTriangles / caps));
 }
 
 /**

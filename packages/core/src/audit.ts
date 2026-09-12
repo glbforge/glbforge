@@ -37,7 +37,7 @@ export interface AuditOptions {
 }
 
 /** GLB outputs GLBForge itself writes; never audited as inputs. */
-export const OUTPUT_PATTERN = /\.web(\.lod\d+)?\.glb$/i;
+export const OUTPUT_PATTERN = /\.(web(\.lod\d+)?|forge|gen)\.glb$/i;
 
 export async function listGlbs(dir: string, opts: { recursive?: boolean; maxDepth?: number } = {}): Promise<string[]> {
   const { readdir } = await import('node:fs/promises');

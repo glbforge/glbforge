@@ -84,6 +84,26 @@ describe('diff@1', () => {
     expect(r.summary).toBe(`${f.message}`);
   });
 
+  it('a landmark reclassified with the geometry in place is info, not a regression', async () => {
+    // Bounds identical; the after file only adds vertices low in the mesh, which
+    // drags the VERTEX CENTROID onto the origin and relabels the landmark.
+    // Nothing moved, so this must not read as an origin regression.
+    const big = box([-0.5, -0.446, -0.5], [1, 1, 1]);
+    const before = scene([{ name: 'part', mesh: big }]);
+    const after = scene([{ name: 'part', mesh: concat(big, box([-0.1, -0.104, -0.1], [0.2, 0.1, 0.2])) }]);
+    const r = await diffAssets(before, after);
+    expect(r.origin.before?.at).toBe('elsewhere');
+    expect(r.origin.after?.at).toBe('centroid');
+    expect(r.origin.shift_m).toBe(0);
+    expect(r.origin.moved).toBe(false);
+    const om = r.findings.find((f) => f.rule === 'diff/origin-moved')!;
+    expect(om.severity).toBe('info');
+    expect(om.message).toMatch(/^The origin landmark changed from no landmark to the vertex centroid; the geometry did not move/);
+    expect(om.data).toMatchObject({ moved: false, distance_m: 0 });
+    // The added piece is a real regression (a new shell); the origin is not.
+    expect(r.findings.filter((f) => f.severity !== 'info').map((f) => f.rule)).toEqual(['diff/shells-changed']);
+  });
+
   it('moved origin + broke watertightness: the summary reads like the brief', async () => {
     const before = chair();
     const seat = box([-0.25, 0.45, -0.25], [0.5, 0.05, 0.5]);

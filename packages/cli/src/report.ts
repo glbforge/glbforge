@@ -109,10 +109,17 @@ export function printDiff(
     console.log(pc.dim(`  geometric deviation ≤ ${pct(fidelityBound)} of extent (perceptual check skipped)`));
   }
   const savings = 1 - after.file.bytes / Math.max(1, before.file.bytes);
-  console.log(
-    `  ${after.passed ? pc.green(`✓ within ${after.profile.name}@${after.profile.version} budget`) : pc.red('✗ still over budget')}` +
-    pc.dim(`   (${(savings * 100).toFixed(1)}% smaller)`),
-  );
+  // The fidelity floor is not a budget row: an asset can sit inside every cap
+  // and still be rejected for being visibly lossy. Say which one failed.
+  const errors = after.findings.filter((x) => x.severity === 'error');
+  const budget = `${after.profile.name}@${after.profile.version}`;
+  const fidelityOnly = errors.length > 0 && errors.every((x) => x.ruleId.startsWith('fidelity/'));
+  const verdict = after.passed
+    ? pc.green(`✓ within ${budget} budget`)
+    : fidelityOnly
+      ? pc.red(`✗ within ${budget} budget, but visibly lossy`)
+      : pc.red('✗ still over budget');
+  console.log(`  ${verdict}` + pc.dim(`   (${(savings * 100).toFixed(1)}% smaller)`));
   if (!after.passed) {
     for (const f of after.findings.filter((x) => x.severity === 'error')) {
       console.log(pc.red(`    ${f.ruleId}: `) + f.message);

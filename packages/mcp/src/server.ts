@@ -484,7 +484,9 @@ export function createServer(): McpServer {
     }
     try {
       const raw = new Uint8Array(await readFile(input));
-      const { doc } = await extrudeImage(raw, { layers: 4, pillow: 0.02 });
+      // layers: 'auto' — flat-colour artwork layers, a gradient or a painting
+      // stays one shell instead of stacked slabs with noisy contours.
+      const { doc } = await extrudeImage(raw, { layers: 'auto', pillow: 0.02, maxReliefTriangles: 24_000 });
       return finish(doc, raw.byteLength, null);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

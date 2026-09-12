@@ -303,21 +303,36 @@ const shellsChanged = rule(
 );
 
 const originMoved = rule(
-  { id: 'diff/origin-moved', summary: 'The geometry moved relative to the origin (landmark changed, or the bounds centre shifted beyond originTolerance).', severity: 'warning', certainty: 'measured', code: 'DIFF_ORIGIN_MOVED' },
+  { id: 'diff/origin-moved', summary: 'The geometry moved relative to the origin (warning), or the origin landmark was reclassified without the geometry moving (info).', severity: 'warning', certainty: 'measured', code: 'DIFF_ORIGIN_MOVED' },
   (ctx) => {
     const b = ctx.before, a = ctx.after;
     if (!b.extent || !a.extent || !b.placement || !a.placement) return null;
     const shift = [0, 1, 2].map((i) => (a.extent!.min[i] + a.extent!.max[i]) / 2 - (b.extent!.min[i] + b.extent!.max[i]) / 2);
     const dist = Math.hypot(...shift);
-    const moved = b.placement.at !== a.placement.at || dist > ctx.opts.originTolerance * b.extent.largest;
-    if (!moved) return null;
+    const moved = dist > ctx.opts.originTolerance * b.extent.largest;
+    const relabelled = b.placement.at !== a.placement.at;
+    if (!moved && !relabelled) return null;
     const name = (l: OriginPlacement['at']) => (l === 'base-center' ? 'the base centre' : l === 'center' ? 'the bounding-box centre' : l === 'centroid' ? 'the vertex centroid' : 'no landmark');
+    const data = { shift_m: shift, distance_m: dist, moved, before: b.placement.at, after: a.placement.at };
+    // A landmark is a classification of where the origin sits, and adding or
+    // removing vertices can reclassify it (the centroid especially) with
+    // nothing moving at all. Report that as what it is, not as a regression.
+    if (!moved) {
+      return {
+        prim_path: '/Asset',
+        severity: 'info' as const,
+        message: `The origin landmark changed from ${name(b.placement.at)} to ${name(a.placement.at)}; the geometry did not move (bounds centre shifted by ${metres(dist)}).`,
+        likely_cause: cause('Vertices were added or removed, which moves the vertex centroid and can change which landmark the origin is nearest, without moving the geometry.', 0.7),
+        fix: 'Nothing to do if intended. The origin is unchanged relative to the geometry.',
+        data,
+      };
+    }
     return {
       prim_path: '/Asset',
       message: `The geometry moved ${metres(dist)} relative to the origin (bounds centre shifted by (${shift.map((v) => +v.toFixed(3)).join(', ')}) m); the origin was at ${name(b.placement.at)}, now at ${name(a.placement.at)}.`,
       likely_cause: cause('The object was translated in the scene, its origin was reset, or a transform was applied that included a translation.', 0.6),
       fix: `If unintended, translate the geometry back by (${shift.map((v) => +(-v).toFixed(3)).join(', ')}) m. To put the origin at the base centre now, translate by (${a.placement.offset_to_base_center_m.map((v) => +v.toFixed(3)).join(', ')}) m.`,
-      data: { shift_m: shift, distance_m: dist, before: b.placement.at, after: a.placement.at },
+      data,
     };
   },
 );
@@ -505,7 +520,9 @@ export async function diffAssets(before: SceneIR, after: SceneIR, opts: DiffOpti
       non_manifold_edges: b.totals.nonManifold !== null && a.totals.nonManifold !== null ? delta(b.totals.nonManifold, a.totals.nonManifold) : null,
       degenerate_triangles: b.totals.degenerate !== null && a.totals.degenerate !== null ? delta(b.totals.degenerate, a.totals.degenerate) : null,
     },
-    origin: { before: b.placement, after: a.placement, shift_m: shift ? r4(Math.hypot(...shift)) : null, moved: ordered.some((f) => f.rule === 'diff/origin-moved') },
+    // `moved` is displacement, not "the rule fired": a landmark reclassification
+    // alone reports at info and leaves the geometry exactly where it was.
+    origin: { before: b.placement, after: a.placement, shift_m: shift ? r4(Math.hypot(...shift)) : null, moved: !!(shift && b.extent && Math.hypot(...shift) > o.originTolerance * b.extent.largest) },
     transforms: { changed: transforms },
     meshes: meshDeltas,
     structural,

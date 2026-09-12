@@ -181,6 +181,53 @@ describe('extrudeImage', () => {
     expect(bevelResult.geometry.topology!.boundaryEdges).toBe(0);
     expect(bevelResult.geometry.topology!.nonManifoldEdges).toBe(0);
   });
+  it("layers: 'auto' layers flat-coloured artwork and leaves a gradient as one shell", async () => {
+    const { extrudeImage } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 128;
+    // Same silhouette twice: flat colour bands vs a smooth radial ramp. k-means
+    // returns k clusters for either one, so only a measurement can tell them apart.
+    const disc = (color: (r: number) => [number, number, number]) => {
+      const rgba = Buffer.alloc(size * size * 4);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const r = Math.hypot(x - size / 2 + 0.5, y - size / 2 + 0.5);
+        if (r > size / 2 - 4) continue;
+        const i = (y * size + x) * 4;
+        [rgba[i], rgba[i + 1], rgba[i + 2]] = color(r / (size / 2));
+        rgba[i + 3] = 255;
+      }
+      return sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+    };
+    const flat = await disc((r) => (r < 0.4 ? [200, 40, 40] : [30, 70, 140]));
+    const gradient = await disc((r) => [Math.round(40 + r * 200), Math.round(30 + r * 120), 60]);
+
+    const layered = await extrudeImage(new Uint8Array(flat), { layers: 'auto', texture: false });
+    expect(layered.stats.flatness).toMatchObject({ layers: 2, distinct: 2 });
+    expect(layered.stats.flatness!.coverage).toBeGreaterThan(0.9);
+    expect(layered.stats.layerInfo).toHaveLength(2);
+
+    const single = await extrudeImage(new Uint8Array(gradient), { layers: 'auto', texture: false });
+    expect(single.stats.flatness!.layers).toBe(0);
+    expect(single.stats.flatness!.coverage).toBeLessThan(0.85);
+    expect(single.stats.layerInfo).toBeUndefined();
+
+    // An explicit count stays the caller's call, measurement or not.
+    const forced = await extrudeImage(new Uint8Array(gradient), { layers: 3, texture: false });
+    expect(forced.stats.layerInfo).toHaveLength(3);
+
+    // Relief detail is uniform subdivision, so it needs a ceiling: `ship` forges
+    // inside the budget instead of simplifying back down to it afterwards.
+    const lavish = await extrudeImage(new Uint8Array(flat), { layers: 'auto', pillow: 0.02, texture: false });
+    const budgeted = await extrudeImage(new Uint8Array(flat), { layers: 'auto', pillow: 0.02, texture: false, maxReliefTriangles: 24_000 });
+    expect(budgeted.stats.triangles).toBeLessThan(lavish.stats.triangles / 2);
+    expect(budgeted.stats.triangles).toBeLessThan(24_000);
+    for (const r of [lavish, budgeted]) {
+      const topo = analyze(r.doc, { profile: getProfile('mobile-hero') }).geometry.topology!;
+      expect(topo.boundaryEdges).toBe(0);
+      expect(topo.nonManifoldEdges).toBe(0);
+    }
+  });
+
   it('winds every face to agree with its authored normals on plain, bevelled, pillow, emboss and layered output', async () => {
     const { extrudeImage, fromGltf, inspectGeometry, readFloat } = await import('../src/index.js');
     const { NodeIO } = await import('@gltf-transform/core');

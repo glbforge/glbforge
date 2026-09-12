@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
 import { resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
@@ -258,7 +258,12 @@ program
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))
   .option('--depth <m>', 'extrusion depth in meters', parseFloat)
   .option('--bevel <m>', 'bevel radius on both rims (signage look)', parseFloat, 0)
-  .option('--layers <n>', 'layered color extrusion: quantize into N color layers (2-6)', (v) => parseInt(v, 10))
+  .option('--layers <n>', 'layered color extrusion: quantize into N color layers (2-6), or "auto" to layer only artwork measured to be flat-coloured', (v) => {
+    if (v === 'auto') return 'auto' as const;
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) throw new Error(`--layers takes 2-6 or "auto", got "${v}"`);
+    return n;
+  })
   .option('--layer-step <m>', 'extra depth per layer in meters', parseFloat)
   .option('--pillow <m>', 'puffy-sticker dome height in meters (supersedes bevel)', parseFloat)
   .option('--emboss <m>', 'luminance micro-relief in meters (bright rises; try depth*0.15)', parseFloat)
@@ -273,7 +278,7 @@ program
   .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
     out?: string; mode?: 'alpha' | 'luma'; threshold?: number; depth?: number;
-    bevel: number; bevelSegments: number; layers?: number; layerStep?: number;
+    bevel: number; bevelSegments: number; layers?: number | 'auto'; layerStep?: number;
     pillow?: number; emboss?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
     width: number; simplify: number; texture: boolean; color?: string;
     metallic: number; roughness: number; json?: boolean;
@@ -300,7 +305,9 @@ program
     if (opts.json) {
       console.log(JSON.stringify({ outPath, bytes: outBytes.byteLength, ...stats }, null, 2));
     } else {
-      const layerNote = stats.layerInfo ? `, ${stats.layerInfo.length} layers` : '';
+      const layerNote = stats.layerInfo
+        ? `, ${stats.layerInfo.length} layers`
+        : stats.flatness ? ', 1 layer (artwork is not flat-coloured)' : '';
       console.log(
         `  ${outPath} (${(outBytes.byteLength / 1048576).toFixed(1)}MB)  ` +
         `${stats.outerLoops} shape(s), ${stats.holes} hole(s)${layerNote}, ` +
@@ -325,7 +332,9 @@ program
     model: string; ktx2?: boolean; lods?: string; verify: boolean;
   }) => {
     const finish = async (glbPath: string) => {
-      const outPath = opts.out ?? glbPath.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
+      // Always named for the INPUT, never for the intermediate, so the
+      // routes agree: photo.png → photo.web.glb whether it was forged or generated.
+      const outPath = opts.out ?? input.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
       const passed = await optimizeFile(glbPath, outPath, opts.profile, {
         textureFormat: opts.ktx2 ? 'ktx2' : 'webp', lods: opts.lods, verify: opts.verify,
       });
@@ -340,13 +349,25 @@ program
     // Image: forge first (instant, free, exact) unless the tracer says the
     // input is photographic — then route to a generative model.
     const raw = new Uint8Array(await readFile(input));
-    const forged = input.replace(/\.[a-z0-9]+$/i, '') + '.glb';
+    // Our own namespace (`*.forge.glb`, like `*.web.glb`) — never `<input>.glb`,
+    // which is a file the user may well have authored themselves.
+    const forged = input.replace(/\.[a-z0-9]+$/i, '') + '.forge.glb';
+    const generated = input.replace(/\.[a-z0-9]+$/i, '') + '.gen.glb';
     if (opts.prefer !== 'gen') {
       try {
-        const { doc, stats } = await extrudeImage(raw, { layers: 4, pillow: 0.02 });
+        // layers: 'auto' — flat-colour artwork gets the layered look, a
+        // gradient or a painting stays one shell instead of becoming stacked
+        // slabs with noisy contours (hundreds of thousands of triangles).
+        // maxReliefTriangles: a sticker that has to be simplified back down to
+        // the budget loses at the SSIM gate what the subdivision bought.
+        const { doc, stats } = await extrudeImage(raw, { layers: 'auto', pillow: 0.02, maxReliefTriangles: 24_000 });
         const io = await createIO();
         await writeFile(forged, await io.writeBinary(doc));
-        console.log(`  routed to forge (flat artwork): ${stats.triangles.toLocaleString()} tris`);
+        const cover = stats.flatness ? `${(stats.flatness.coverage * 100).toFixed(0)}%` : '';
+        const shape = stats.layerInfo
+          ? `${stats.layerInfo.length} colour layers${cover ? ` (${cover} of the artwork)` : ''}`
+          : `one shell${stats.flatness ? ` (no flat colour regions: the ${stats.flatness.distinct || 1} largest colours cover ${cover})` : ''}`;
+        console.log(`  routed to forge → ${forged}: ${stats.triangles.toLocaleString()} tris, ${shape}`);
         const { collectSample } = await import('./collect.js');
         await collectSample({
           provenance: 'forge', glbPath: forged, sourceImagePath: input,
@@ -374,13 +395,13 @@ program
         onProgress: (t) => process.stdout.write(`\r  ${t.status.toLowerCase()} ${t.progress}%   `),
       });
       process.stdout.write('\n');
-      await writeFile(forged, await client.downloadModel(task, 'glb'));
+      await writeFile(generated, await client.downloadModel(task, 'glb'));
       const { collectSample } = await import('./collect.js');
       await collectSample({
-        provenance: 'meshy-eval-only', glbPath: forged, sourceImagePath: input,
+        provenance: 'meshy-eval-only', glbPath: generated, sourceImagePath: input,
         meta: { generator: 'meshy-image-to-3d', via: 'ship' },
       });
-      return finish(forged);
+      return finish(generated);
     }
 
     const { FAL_MODELS, FalClient } = await import('@glbforge/meshy');
@@ -398,14 +419,14 @@ program
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
     process.stdout.write('\n');
-    await writeFile(forged, await fal.downloadGlb(await fal.resultGlbUrl(model, requestId)));
+    await writeFile(generated, await fal.downloadGlb(await fal.resultGlbUrl(model, requestId)));
     const { collectSample } = await import('./collect.js');
     await collectSample({
-      provenance: 'open-models', glbPath: forged, sourceImagePath: input,
+      provenance: 'open-models', glbPath: generated, sourceImagePath: input,
       meta: { generator: model, requestId, via: 'ship',
               licenseNote: opts.model === 'hunyuan' ? 'VERIFY Tencent community license before training' : 'MIT model output' },
     });
-    return finish(forged);
+    return finish(generated);
   });
 
 program
@@ -483,7 +504,7 @@ program
 
     watch(dir, (_event, filename) => {
       if (!filename || !/\.glb$/i.test(filename)) return;
-      if (/\.web(\.lod\d+)?\.glb$/i.test(filename)) return; // our own outputs
+      if (OUTPUT_PATTERN.test(filename)) return; // our own outputs
       const full = joinPath(dir, filename);
       clearTimeout(timers.get(full));
       timers.set(full, setTimeout(async () => {
@@ -507,7 +528,7 @@ program
 
 program
   .command('audit')
-  .description('Analyze every GLB in a directory against a budget (skips GLBForge outputs *.web.glb). Exits non-zero when any asset fails — the `glb:check` script.')
+  .description('Analyze every GLB in a directory against a budget (skips GLBForge outputs: *.web.glb, *.forge.glb, *.gen.glb). Exits non-zero when any asset fails — the `glb:check` script.')
   .argument('<dir>', 'directory containing GLBs')
   .option('-p, --profile <name>', `budget profile: ${Object.keys(PROFILES).join(' | ')} (pin a version: mobile-hero@1)`, 'mobile-hero')
   .option('-r, --recursive', 'descend into subdirectories (max depth 4)')

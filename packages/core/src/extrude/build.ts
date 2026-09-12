@@ -24,6 +24,11 @@ export interface ExtrudeMeshOptions {
    *  on its own depth; layered extrusion uses this to keep backs coplanar
    *  without a node translation. Default 0. */
   zOffset?: number;
+  /** Ceiling on the displaced (pillow/emboss) cap's subdivision, in triangles
+   *  per cap round. Relief detail is uniform 4:1 subdivision, so this is what
+   *  keeps a puffy sticker from costing more than the asset is worth.
+   *  Default 120,000. */
+  maxReliefTriangles?: number;
 }
 
 export interface ExtrudeStats {
@@ -281,7 +286,7 @@ export function buildExtrusion(
     lawsonFlips(verts, faces);
 
     const ROUNDS = verts.length / 2 < 600 ? 4 : 3;
-    const MAX_TRIS = 120_000;
+    const MAX_TRIS = opts.maxReliefTriangles ?? 120_000;
     for (let round = 0; round < ROUNDS && (faces.length / 3) * 4 <= MAX_TRIS; round++) {
       const mid = new Map<number, number>();
       const nextFaces: number[] = [];
