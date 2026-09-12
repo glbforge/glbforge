@@ -10,3 +10,6 @@ examples/*.glb
 examples/viewer/public/*.glb
 .claude/
 training/
+
+# macOS metadata — never ship these as site assets
+.DS_Store
