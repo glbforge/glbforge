@@ -33,6 +33,9 @@ export function AssetRail(props: {
   const acceptTypes = touch ? undefined : '.glb,model/gltf-binary,.png,.jpg,.jpeg,.webp,.svg';
   const [over, setOver] = useState(false);
   const [pending, setPending] = useState<PendingImage | null>(null);
+  const [photoHint, setPhotoHint] = useState(false);
+  const canGenerate = props.meshyAvailable
+    || Object.values(props.generators ?? {}).some(Boolean);
   const [pbr, setPbr] = useState(true);
   const [genModel, setGenModel] = useState('meshy');
   const [layered, setLayered] = useState(true);
@@ -40,21 +43,44 @@ export function AssetRail(props: {
   const [sculpt, setSculpt] = useState(false);
   const [preset, setPreset] = useState('');
 
+  // The forge traces a silhouette, so it refuses a photograph — core says so in
+  // CLI terms ("pass --mode/--threshold"), which is no help inside a browser.
+  // `ship` answers the same refusal by routing to a generator; here that would
+  // spend the user's credits without asking, so offer it instead: put the
+  // choice back up, say why, and let them pick.
+  const PHOTOGRAPHIC = /photograph|noisy mask|fills the whole canvas/i;
+
   const extrude = (image: PendingImage) =>
-    props.onRun(`forging ${image.name}`, () =>
-      api.extrude(image.name, image.bytes, {
-        bevel: pillow || sculpt ? 0 : 0.015, profile: 'mobile-hero',
-        layers: layered ? 4 : undefined,
-        pillow: pillow ? 0.035 : undefined,
-        emboss: sculpt ? 0.012 : undefined,
-        preset: preset || undefined,
-      }));
+    props.onRun(`forging ${image.name}`, async () => {
+      try {
+        return await api.extrude(image.name, image.bytes, {
+          bevel: pillow || sculpt ? 0 : 0.015, profile: 'mobile-hero',
+          layers: layered ? 4 : undefined,
+          pillow: pillow ? 0.035 : undefined,
+          emboss: sculpt ? 0.012 : undefined,
+          preset: preset || undefined,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!PHOTOGRAPHIC.test(message)) throw err;
+        setPending(image);
+        setPhotoHint(true);
+        throw new Error(
+          'That looks like a photo, not flat artwork — the forge traces a silhouette and a '
+          + 'photo fills the frame. '
+          + (canGenerate
+            ? 'Generate true 3D instead (offered below), or use artwork with a clear background.'
+            : 'Use artwork with a clear background, or a generative model for a photograph.'),
+        );
+      }
+    });
 
   const ingest = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       const bytes = await file.arrayBuffer();
       if (looksLikeImage(file)) {
         const image = await normalizeImage(file, bytes);
+        setPhotoHint(false);
         // SVGs are flat by definition; Meshy wants raster input anyway.
         if (props.meshyAvailable && !image.name.toLowerCase().endsWith('.svg')) {
           setPending(image);
@@ -104,7 +130,16 @@ export function AssetRail(props: {
       {pending && (
         <div className="choice">
           <div className="choice-name">{pending.name}</div>
-          <button onClick={() => { void extrude(pending); setPending(null); }}>
+          {photoHint && (
+            <div className="choice-hint">
+              The forge could not trace this one — it fills the frame, the way a photo does.
+              The forge is for logos, wordmarks and flat artwork with a clear background;
+              {canGenerate
+                ? ' for a photograph, Generate true 3D is the path.'
+                : ' a photograph needs a generative model — sign in here, or run npx glbforge gen locally.'}
+            </div>
+          )}
+          <button className={photoHint ? 'ghost' : undefined} onClick={() => { void extrude(pending); setPending(null); }}>
             ⚒ Forge logo → 3D <span className="choice-sub">instant · free · exact silhouette</span>
           </button>
           <label className="check">
@@ -127,7 +162,7 @@ export function AssetRail(props: {
             <option value="acrylic">acrylic</option>
             <option value="rubber">rubber</option>
           </select>
-          {Object.keys(props.generators ?? {}).length > 1 && (
+          {canGenerate && Object.keys(props.generators ?? {}).length > 1 && (
             <select value={genModel} onChange={(e) => setGenModel(e.target.value)}>
               {props.generators?.meshy && <option value="meshy">Meshy 7 — richest textures</option>}
               {props.generators?.hunyuan && <option value="hunyuan">Hunyuan3D-2 — open, high quality</option>}
@@ -135,14 +170,16 @@ export function AssetRail(props: {
               {props.generators?.triposr && <option value="triposr">TripoSR — fastest</option>}
             </select>
           )}
-          <button className="ghost" onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr, genModel); setPending(null); }}>
+          {canGenerate && (
+          <button className={photoHint ? undefined : 'ghost'} onClick={() => { void props.onGenerate(pending.name, pending.bytes, pending.mime, pbr, genModel); setPending(null); }}>
             ✨ Generate true 3D <span className="choice-sub">
               {genModel === 'meshy'
                 ? `~5–10 min · ${pbr ? (props.genCosts?.pbr ?? 3) + ' credits (PBR)' : (props.genCosts?.textured ?? 2) + ' credits'}`
                 : `~1–3 min · ${props.genCosts?.[genModel] ?? 1} credit${(props.genCosts?.[genModel] ?? 1) > 1 ? 's' : ''}`}
             </span>
           </button>
-          {genModel === 'meshy' && (
+          )}
+          {canGenerate && genModel === 'meshy' && (
             <label className="check">
               <input type="checkbox" checked={pbr} onChange={(e) => setPbr(e.target.checked)} />
               PBR maps (Meshy)

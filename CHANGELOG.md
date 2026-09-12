@@ -36,6 +36,17 @@
   browsers start immediately and never saw it. Object URLs are now retained
   for ten minutes, and the anchor is attached to the document before the
   click, which some iOS versions require.
+- **A photo that filled the frame dead-ended in the Studio.** The forge
+  traces a silhouette, so core refuses a full-bleed image — correctly, and
+  in CLI terms: "pass an explicit --mode/--threshold". Inside a browser that
+  is no help, and the phone case makes it common, since most of what a camera
+  roll holds is photographs. The CLI's `ship` answers the same refusal by
+  routing to a generator; the Studio cannot do that silently because
+  generation spends credits, so it now offers instead: the choice panel comes
+  back with the reason, Generate true 3D becomes the primary button, and the
+  message is written for the UI. Where no generator is configured (pure local
+  mode) neither the button nor the advice appears — it says to use artwork
+  with a clear background instead.
 - **…and then could not forge a photo from one.** Removing `accept` fixed the
   picker but changed what iOS hands over: with no filter to transcode for, a
   camera-roll pick arrives as the original `IMG_1234.HEIC`. The rail routed
