@@ -11,6 +11,7 @@ import {
   applyPerceptualVerdict,
   composeSheet,
   extrudeFromRgba,
+  flattenProjection,
   getProfile,
   optimize,
   PROFILES,
@@ -154,7 +155,14 @@ async function decodeImage(bytes: ArrayBuffer, name: string): Promise<{
     canvas.width = width; canvas.height = height;
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(image, 0, 0, width, height);
-    const px = new Uint8Array(ctx.getImageData(0, 0, width, height).data.buffer);
+    const data = ctx.getImageData(0, 0, width, height);
+    const px = new Uint8Array(data.data.buffer.slice(0));
+    // The projection texture is an opaque plate padded past the silhouette
+    // (see core's bleed.ts) — the rim samples the boundary texels and the
+    // optimizer's WebP pass would otherwise wreck them. The trace keeps the
+    // untouched pixels.
+    flattenProjection(new Uint8Array(data.data.buffer), width, height);
+    ctx.putImageData(data, 0, 0);
     const pngBlob: Blob = await new Promise((resolve, reject) =>
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('png encode failed'))), 'image/png'));
     return { px, width, height, pngBytes: new Uint8Array(await pngBlob.arrayBuffer()) };

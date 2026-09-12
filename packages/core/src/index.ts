@@ -5,6 +5,7 @@ export { runRules, RULE_IDS } from './rules.js';
 export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncoder } from './optimize.js';
 export { createNodeIO } from './io.js';
 export { extrudeImage, extrudeFromRgba, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
+export { flattenProjection } from './extrude/bleed.js';
 export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
 export { stripMaterials, prepareLod } from './optimize.js';
 export { buildLod, clusterDecimate, smoothPositions, type LodResult } from './lod.js';

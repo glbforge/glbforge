@@ -478,6 +478,88 @@ describe('pillow relief + presets', () => {
   });
 });
 
+describe('projected artwork survives the texture re-encode', () => {
+  /** 128x128 two-tone badge on a transparent background: gold disc with a
+   *  dark red centre. Two colours so the texture cannot be folded into a
+   *  base-color factor — the re-encode has to actually run. */
+  async function badge(): Promise<Uint8Array> {
+    const sharp = (await import('sharp')).default;
+    const size = 128;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const r = Math.hypot(x - 64 + 0.5, y - 64 + 0.5);
+      if (r >= 56) continue;
+      rgba.set(r < 20 ? [122, 18, 32, 255] : [217, 165, 33, 255], (y * size + x) * 4);
+    }
+    return new Uint8Array(await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+  }
+
+  it('flattenProjection pads the void with interior colour and leaves nothing transparent', async () => {
+    const { flattenProjection } = await import('../src/index.js');
+    // 4x1 strip: opaque red, half-alpha green, empty, empty.
+    const px = new Uint8Array([
+      200, 0, 0, 255,
+      0, 200, 0, 128,
+      9, 9, 9, 0,
+      9, 9, 9, 0,
+    ]);
+    const out = flattenProjection(px, 4, 1);
+    expect(out).toBe(px); // in place
+    expect([...px.slice(0, 4)]).toEqual([200, 0, 0, 255]);   // opaque: untouched
+    expect([...px.slice(4, 8)]).toEqual([0, 200, 0, 255]);   // antialiased: colour kept, opaque now
+    // Voids take the nearest *fully opaque* texel — the half-alpha texel is
+    // authored antialiasing, not a colour to spread.
+    expect([...px.slice(8, 12)]).toEqual([200, 0, 0, 255]);
+    expect([...px.slice(12, 16)]).toEqual([200, 0, 0, 255]);
+  });
+
+  it('flattenProjection is a no-op on opaque artwork and deterministic', async () => {
+    const { flattenProjection } = await import('../src/index.js');
+    const opaque = new Uint8Array([1, 2, 3, 255, 4, 5, 6, 255]);
+    expect([...flattenProjection(Uint8Array.from(opaque), 2, 1)]).toEqual([...opaque]);
+
+    const src = await badge();
+    const sharp = (await import('sharp')).default;
+    const decode = async () => {
+      const raw = await sharp(Buffer.from(src)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return flattenProjection(new Uint8Array(raw.data), raw.info.width, raw.info.height);
+    };
+    expect([...(await decode())]).toEqual([...(await decode())]);
+  });
+
+  it('forged textures carry no transparent texels, so the rim keeps its colour through optimize', async () => {
+    const { extrudeImage } = await import('../src/index.js');
+    const png = await badge();
+    const { doc } = await extrudeImage(png, { width: 0.07, depth: 0.011, bevel: 0.005 });
+
+    // The embedded projection is an opaque plate: alpha is gone entirely,
+    // so the WebP pass has no transparent region whose RGB it may discard.
+    const sharp = (await import('sharp')).default;
+    const texture = doc.getRoot().listTextures()[0];
+    const meta = await sharp(Buffer.from(texture.getImage()!)).metadata();
+    expect(meta.channels).toBe(3);
+    expect(meta.hasAlpha).toBe(false);
+
+    // The texels the walls and bevel sample sit on the silhouette; the
+    // void beyond it must read as artwork, not as the (0,0,0) it decoded as.
+    const raw = await sharp(Buffer.from(texture.getImage()!)).raw().toBuffer({ resolveWithObject: true });
+    const { width, height } = raw.info;
+    const corner = (raw.data[0] + raw.data[1] + raw.data[2]) / 3;
+    expect(corner).toBeGreaterThan(32);
+    const edge = ((y: number, x: number) => raw.data[(y * width + x) * 3]);
+    expect(edge(Math.floor(height / 2), 1)).toBeGreaterThan(32);
+
+    // And the whole point: the re-encode is no longer visible loss. At the
+    // profile floor of 94%, an unpadded transparent-background projection
+    // measured 92.3% here (86.6% with a pillow) — the rim sampled a 1-2 px
+    // ring that WebP had rung across.
+    const profile = getProfile('mobile-hero');
+    const summary = await optimize(doc, { profile });
+    expect(summary.perceptual).not.toBeNull();
+    expect(summary.perceptual!.ssimMin).toBeGreaterThanOrEqual(profile.minSsim);
+  }, 60_000);
+});
+
 describe('alignment harness', () => {
   it('scores identity as near-perfect and decimation as high-fidelity', async () => {
     const { alignmentScore, extrudeImage, optimize: opt } = await import('../src/index.js');

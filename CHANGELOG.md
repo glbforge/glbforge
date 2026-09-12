@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Forged assets no longer fail the perceptual gate on a texture artifact.**
+  `extrude` projects the source artwork as an OPAQUE base-color texture, but
+  artwork with a transparent background carries no colour outside its
+  silhouette — those texels decode to `(0,0,0,0)`. The wall and bevel UVs
+  sample exactly that 1-2 px antialiased boundary, and `optimize`'s WebP
+  pass both rings across the hard art/void discontinuity and discards the
+  RGB of fully transparent texels (libwebp cleans them to compress the alpha
+  plane). A 1 px texture error became a stippled band along the whole rim:
+  a 70 mm beveled enamel badge measured 92.3% min SSIM against the 94%
+  floor, 86.6% flat and 86.7% with a pillow, while the same asset scored
+  99.7% with `--no-textures`.
+  The forge now pads the artwork's colour out past the silhouette (nearest
+  fully opaque texel, exact EDT) and flattens the projection to opaque
+  before embedding it — `flattenProjection` in `core/src/extrude/bleed.ts`,
+  shared by the CLI/MCP path and the Studio. The same badge now measures
+  99.8-99.9% min SSIM, and the optimized asset is *smaller*, because a
+  padded exterior costs the encoder almost nothing where the discontinuity
+  cost it a lot (18.3 KB → 9.3 KB beveled, 16.1 KB → 7.1 KB flat).
+  Forge geometry is byte-identical — positions, normals, UVs and indices all
+  hash the same before and after, so the frozen dogfood table does not move.
+
 ## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
 
 For agents editing assets in a loop. Rule ids and packs: `docs/error-codes.md`

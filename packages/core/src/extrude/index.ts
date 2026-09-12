@@ -3,6 +3,7 @@ import { pointInLoop, traceMask, type Loop } from './trace.js';
 import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { quantizeColors, srgbToLinear } from './layers.js';
 import { distanceTransform, sampleDistance } from './relief.js';
+import { flattenProjection } from './bleed.js';
 import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import type { Material, Texture } from '@gltf-transform/core';
 
@@ -99,10 +100,19 @@ export async function extrudeImage(
 
   let textureBytes = opts.textureBytes;
   if (opts.texture !== false && !textureBytes) {
-    const png = await sharp(imageBytes)
+    const art = await sharp(imageBytes)
       .resize(2048, 2048, { fit: 'inside', withoutEnlargement: true })
-      .png()
-      .toBuffer();
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    // Pad the artwork's colour out past its silhouette and flatten it to
+    // opaque before embedding — the rim samples those boundary texels, and
+    // a lossy re-encode wrecks them otherwise. See bleed.ts. The alpha
+    // channel is constant afterwards, so drop it and keep the bytes.
+    flattenProjection(art.data, art.info.width, art.info.height);
+    const png = await sharp(art.data, {
+      raw: { width: art.info.width, height: art.info.height, channels: 4 },
+    }).removeAlpha().png().toBuffer();
     textureBytes = { bytes: new Uint8Array(png), mimeType: 'image/png' };
   }
 
