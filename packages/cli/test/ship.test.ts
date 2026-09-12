@@ -17,6 +17,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const cli = join(root, 'packages', 'cli', 'dist', 'index.js');
 /** A gradient star: the artwork shape that must NOT be sliced into layers. */
 const badge = join(root, 'assets', 'ci-badge.png');
+/** Everything here is committed, so nothing in this file self-skips on CI. */
 const ready = existsSync(cli) && existsSync(badge);
 
 describe.skipIf(!ready)('glbforge ship (built CLI)', () => {
@@ -50,8 +51,9 @@ describe.skipIf(!ready)('glbforge ship (built CLI)', () => {
   }, 60_000);
 
   it('a closed stdout neither crashes nor launders a failing exit code', async () => {
-    const glb = join(root, 'examples', 'veiled-guardian.web.glb');
-    if (!existsSync(glb)) return;
+    // assets/, not examples/: examples/*.glb is gitignored, so a test anchored
+    // there would quietly skip itself on CI — which is where this matters.
+    const glb = join(root, 'assets', 'sample-ring.glb');
     // A pipeline's status is `head`'s, so ask bash for the CLI's own.
     const piped = async (args: string[]) => {
       try {
