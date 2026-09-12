@@ -172,6 +172,8 @@ let localUrls: ((id: string) => string) | null = null;
 export function registerLocalUrls(fn: (id: string) => string): void { localUrls = fn; }
 function localFileUrl(id: string): string { return localUrls ? localUrls(id) : ''; }
 
+import type { FileKind } from '@glbforge/core';
+
 /**
  * Name a file derived from an asset. `.web` / `.forge` / `.gen` / `.lodN` are
  * GLBForge's markers on a *GLB*; they are meaningless on an STL and they put a
@@ -190,6 +192,7 @@ export function derivedName(name: string, ext: string): string {
 
 /** Formats every browser can decode *and* every generator accepts as input. */
 const PORTABLE_IMAGE = /^image\/(png|jpeg|webp|svg\+xml)$/;
+const PORTABLE_KINDS = new Set<FileKind>(['png', 'jpeg', 'webp', 'svg']);
 
 /**
  * Normalize a picked image. A photo chosen on an iPhone arrives as HEIC —
@@ -199,11 +202,16 @@ const PORTABLE_IMAGE = /^image\/(png|jpeg|webp|svg\+xml)$/;
  * portable set is re-encoded to PNG here, once, at the door. Returns the
  * bytes to use and the name to use with them.
  */
-export async function normalizeImage(file: File, bytes: ArrayBuffer): Promise<{
+export async function normalizeImage(file: File, bytes: ArrayBuffer, kind?: FileKind): Promise<{
   name: string; bytes: ArrayBuffer; mime: string;
 }> {
   const mime = file.type || '';
-  if (PORTABLE_IMAGE.test(mime)) return { name: file.name, bytes, mime };
+  // The sniffed kind outranks the declared type: a PNG typed
+  // `application/octet-stream` needs no re-encoding, and a HEIC typed
+  // `image/jpeg` very much does.
+  if (kind ? PORTABLE_KINDS.has(kind) : PORTABLE_IMAGE.test(mime)) {
+    return { name: file.name, bytes, mime: mime || `image/${kind === 'svg' ? 'svg+xml' : kind}` };
+  }
   const url = URL.createObjectURL(new Blob([bytes], mime ? { type: mime } : undefined));
   try {
     const image = new Image();

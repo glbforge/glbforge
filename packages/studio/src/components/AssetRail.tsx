@@ -1,12 +1,16 @@
 import { useRef, useState } from 'react';
 import { api, isTouch, normalizeImage, type AssetDetail, type AssetSummary } from '../api';
+import { sniffFileKind, isImageKind, describeBytes, type FileKind } from '@glbforge/core';
 import type { GenTask } from '../App';
 
-// Extensions are the fallback, not the test: a photo picked on a phone can
-// arrive as HEIC, and files handed over by some providers carry no extension
-// at all. `file.type` is what the OS actually says it is.
+// Neither the name nor the MIME type is the authority: a phone picker can hand
+// over `image` with no extension and an empty `type`, and a Files provider can
+// type a photo `application/octet-stream`. The bytes decide (`sniffFileKind`),
+// and these two are only the fallback for a format the sniffer does not know.
 const IMAGE_RE = /\.(png|jpe?g|webp|svg|heic|heif|avif|gif|bmp|tiff?)$/i;
-const looksLikeImage = (file: File) => file.type.startsWith('image/') || IMAGE_RE.test(file.name);
+const looksLikeImage = (file: File, kind: FileKind) =>
+  isImageKind(kind)
+  || (kind === 'unknown' && (file.type.startsWith('image/') || IMAGE_RE.test(file.name)));
 
 interface PendingImage { name: string; bytes: ArrayBuffer; mime: string }
 
@@ -79,8 +83,9 @@ export function AssetRail(props: {
   const ingest = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       const bytes = await file.arrayBuffer();
-      if (looksLikeImage(file)) {
-        const image = await normalizeImage(file, bytes);
+      const kind = sniffFileKind(new Uint8Array(bytes));
+      if (looksLikeImage(file, kind)) {
+        const image = await normalizeImage(file, bytes, kind);
         setPhotoHint(false);
         // SVGs are flat by definition; Meshy wants raster input anyway.
         if (props.meshyAvailable && !image.name.toLowerCase().endsWith('.svg')) {
@@ -88,9 +93,19 @@ export function AssetRail(props: {
         } else {
           await extrude(image);
         }
-      } else {
+      } else if (kind === 'glb' || kind === 'gltf' || (kind === 'unknown' && /\.(glb|gltf)$/i.test(file.name))) {
         await props.onRun(`analyzing ${file.name}`, () =>
           api.upload(file.name, bytes, 'mobile-hero'));
+      } else {
+        // Say what it is instead of letting the GLB parser say "Invalid glTF
+        // 2.0 binary" — a true statement about the wrong question.
+        await props.onRun(`reading ${file.name}`, () => Promise.reject(new Error(
+          kind === 'unknown'
+            ? `${file.name} is not a GLB or an image this browser can read (${describeBytes(new Uint8Array(bytes))}). `
+              + 'Drop a .glb, or a PNG / JPEG / WebP / SVG / HEIC.'
+            : `${file.name} is a ${kind.toUpperCase()} file. The Studio takes GLB and glTF models, `
+              + 'and PNG / JPEG / WebP / SVG / HEIC images.',
+        )));
       }
     }
   };

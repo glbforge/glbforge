@@ -50,6 +50,22 @@
 
 ### Fixed
 
+- **"Invalid glTF 2.0 binary" on an image the picker mislabelled.** Ingest
+  routed on the filename and the MIME type, and on a phone both are routinely
+  wrong or absent — a picker can hand over `image` with no extension and an
+  empty `type`. Anything the name and type failed to identify fell through to
+  the GLB branch and died in the glTF parser, which was answering the wrong
+  question truthfully. The bytes are now the authority (`sniffFileKind` in
+  `@glbforge/core`: glTF, PNG, JPEG, WebP, GIF, BMP, TIFF, HEIC/HEIF, AVIF,
+  SVG, USDZ/USDC/USDA by magic number, including the ISO-BMFF `ftyp` brand an
+  iPhone photo carries), with name and type kept only as the fallback for a
+  format the sniffer does not know. A file that is neither is now named for
+  what it is — or, when nothing matches, reported with its leading bytes
+  instead of a parser error. Re-encoding decisions follow the sniffed kind
+  too, so a PNG typed `application/octet-stream` is no longer needlessly
+  transcoded.
+
+
 - **USDZ export on an iPhone landed in Downloads instead of opening in AR.**
   The iOS button said "open in AR Quick Look" but ran the same
   `<a download>` as every other export, so the file went to the downloads

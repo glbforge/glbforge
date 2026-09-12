@@ -8,6 +8,7 @@ export { extrudeImage, extrudeFromRgba, type ExtrudeOptions, type ExtrudeResult,
 export { measureFlatness, type Flatness } from './extrude/layers.js';
 export { flattenProjection } from './extrude/bleed.js';
 export { liftSubject, MATTE_VERSION, type Matte, type MatteOptions } from './extrude/matte.js';
+export { sniffFileKind, isImageKind, describeBytes, type FileKind } from './sniff.js';
 export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
 export { stripMaterials, prepareLod } from './optimize.js';
 export { buildLod, clusterDecimate, smoothPositions, type LodResult } from './lod.js';
