@@ -124,9 +124,12 @@
 - **pnpm 12 and `pnpm/setup@v2`.** `pnpm/action-setup` is superseded by
   `pnpm/setup`, which installs pnpm and the runtime in one step, caches the
   store keyed on the lockfile, and runs the install itself: three workflow
-  steps become one in `ci.yml` and `action-selftest.yml`. `release.yml` keeps
+  steps become two in `ci.yml` and one in `action-selftest.yml`. `release.yml` keeps
   `actions/setup-node` — npm OIDC trusted publishing needs the `.npmrc` its
-  `registry-url` writes, which `pnpm/setup` does not produce.
+  `registry-url` writes, which `pnpm/setup` does not produce. The install stays an explicit
+    `pnpm install --frozen-lockfile` step: the released `v2` tag has no
+    `require-lockfile` input (that one is on the action's default branch), and
+    a plain install resolves from the registry when no lockfile is present.
   - `pnpm/setup@v2` installs pnpm 11+ only, so `packageManager` moves from
     `pnpm@10.15.1` to `pnpm@12.4.1`. `pnpm-lock.yaml` stays at
     `lockfileVersion: '9.0'` and the diff is purely additive (+158 lines of
