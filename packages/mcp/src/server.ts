@@ -603,6 +603,8 @@ export function createServer(): McpServer {
       out: z.string().describe('Absolute output path for the .glb'),
       mode: z.enum(['alpha', 'luma']).optional()
         .describe('Solid-pixel test: alpha (transparent bg) | luma (white bg). Auto-detected.'),
+      matte: z.enum(['auto', 'off']).optional()
+        .describe('Lift the subject off its background when the image carries no alpha of its own — a photo of an object on a plain ground becomes a sticker instead of being refused. Returns the mask\'s confidence and what drove it; refuses rather than forging a blob when the subject does not separate. Default off.'),
       threshold: z.number().int().min(0).max(255).optional(),
       width: z.number().positive().default(1).describe('World width in meters'),
       depth: z.number().positive().optional().describe('Extrusion depth in meters (default width*0.08)'),
@@ -625,7 +627,7 @@ export function createServer(): McpServer {
       render: RENDER_FLAG,
       dry_run: DRY_RUN,
     },
-  }, async ({ path, out, mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness, preview, render, dry_run }) => {
+  }, async ({ path, out, mode, matte, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness, preview, render, dry_run }) => {
     let bytes: Buffer;
     try { bytes = await readFile(path); } catch (err) { throw Object.assign(new Error(`Cannot read ${path}: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_NOT_FOUND' }); }
     const rgba = color
@@ -633,7 +635,7 @@ export function createServer(): McpServer {
           .concat(1) as [number, number, number, number])
       : undefined;
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
-      mode, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify,
+      mode, matte, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify,
       texture, color: rgba, metallic, roughness,
     });
     const io = await createNodeIO();
@@ -644,6 +646,17 @@ export function createServer(): McpServer {
     const post = postValidation(afterIr);
     const errors = [...post.diagnostics];
     if (dry_run) errors.push(diag('DRY_RUN', '/Asset', `dry_run: ${out} was not written.`));
+    const lifted = (stats as { matte?: { confidence: number; coverage: number; components: number; holes: number; notes: string[]; version: string } }).matte;
+    if (lifted) {
+      // The silhouette was inferred, not read off the image. An agent chaining
+      // on this needs to know that, and how sure the inference was.
+      errors.push(diag(
+        'SUBJECT_LIFTED', '/Asset',
+        `Silhouette inferred by ${lifted.version}: ${(lifted.coverage * 100).toFixed(0)}% of the frame, `
+        + `${lifted.components} piece(s), ${lifted.holes} hole(s), confidence ${(lifted.confidence * 100).toFixed(0)}%.`
+        + (lifted.notes.length ? ` ${lifted.notes.join('; ')}.` : ''),
+      ));
+    }
     return reply({
       out, bytes: outBytes.byteLength, sha256: sha256(outBytes), ...stats,
       nextActions: [{ tool: 'analyze_glb', args: { path: out }, note: 'verify watertightness + budget' }],

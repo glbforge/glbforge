@@ -46,8 +46,31 @@ routes photographs to generators, and exports GLB / STL / USDZ.
   signage-style rounded rim (miter-limited, clamp-probed insets + a crack
   stitching pass keep it watertight even on thin graffiti strokes; verified
   0 boundary / 0 non-manifold edges on real logo fixtures). Photographic
-  inputs are detected and routed to Meshy instead. Also exposed as the
+  inputs are detected and routed to Meshy instead — or, with `--matte auto`,
+  lifted off their background first (see below). Also exposed as the
   `extrude_image` MCP tool.
+
+### `--matte auto` — lift the subject, forge the sticker
+
+A photograph has no alpha and no white ground, so the forge refuses it. The
+matte (`matte/border@1`, `core/src/extrude/matte.ts`) is the third answer:
+it takes the frame edge as the background, grows it inward through pixels of
+that colour, and calls what survives the subject — the idea behind a phone's
+"lift subject", done with plain connectivity, so it adds no model download,
+runs identically in Node and the browser, and is byte-for-byte deterministic.
+Colour decides each pixel's class and connectivity decides what happens to
+it, which is what keeps a mug's handle open: an enclosed region of
+background colour is a hole, not subject. Small enclosed regions (highlights,
+JPEG speckle) are filled, small disconnected pieces are dropped as debris.
+
+A mask is an **inference**, so it reports like one — coverage, pieces, holes,
+and a confidence built from how uniform the edge was, how much contrast the
+cut ran through, and whether the result is a sensible size. Below 0.4 the
+forge refuses with those numbers rather than handing back a blob; the MCP
+surfaces the accepted case as a `SUBJECT_LIFTED` diagnostic so an agent knows
+the silhouette was inferred, not read. `--matte auto` on the CLI, `matte` on
+`extrude_image`, and **✂ Lift subject and forge** in the Studio, offered
+exactly where the refusal used to be a dead end.
 
 ## Usage
 

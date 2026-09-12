@@ -267,6 +267,10 @@ program
   .argument('<image>', 'PNG/JPEG/WebP/SVG with transparent or white background')
   .option('-o, --out <file>', 'output GLB path (default: <name>.glb)')
   .option('--mode <mode>', 'solid-pixel test: alpha | luma (auto-detected)')
+  .option('--matte <mode>', 'lift the subject off its background when the image has no alpha of its own — the sticker path (auto | off, default off). Refuses a mask it is not confident in rather than forging a blob', (v) => {
+    if (v !== 'auto' && v !== 'off') throw new Error(`--matte takes "auto" or "off", got "${v}"`);
+    return v;
+  })
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))
   .option('--depth <m>', 'extrusion depth in meters', parseFloat)
   .option('--bevel <m>', 'bevel radius on both rims (signage look)', parseFloat, 0)
@@ -289,7 +293,7 @@ program
   .option('--roughness <n>', 'roughness factor 0-1', parseFloat, 0.6)
   .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
-    out?: string; mode?: 'alpha' | 'luma'; threshold?: number; depth?: number;
+    out?: string; mode?: 'alpha' | 'luma'; matte?: 'auto' | 'off'; threshold?: number; depth?: number;
     bevel: number; bevelSegments: number; layers?: number | 'auto'; layerStep?: number;
     pillow?: number; emboss?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
     width: number; simplify: number; texture: boolean; color?: string;
@@ -303,7 +307,7 @@ program
       : undefined;
 
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
-      mode: opts.mode, threshold: opts.threshold, depth: opts.depth,
+      mode: opts.mode, matte: opts.matte, threshold: opts.threshold, depth: opts.depth,
       bevel: opts.bevel, bevelSegments: opts.bevelSegments,
       layers: opts.layers, layerStep: opts.layerStep,
       pillow: opts.pillow, emboss: opts.emboss, preset: opts.preset,
@@ -325,6 +329,16 @@ program
         `${stats.outerLoops} shape(s), ${stats.holes} hole(s)${layerNote}, ` +
         `${stats.triangles.toLocaleString()} tris  [mode=${stats.mode}]`,
       );
+      // A lifted mask is an inference, so it reports like one: the number, and
+      // what made it that number.
+      if (stats.matte) {
+        const m = stats.matte;
+        console.log(
+          `  subject lifted (${m.version}): ${(m.coverage * 100).toFixed(0)}% of the frame, ` +
+          `${m.components} piece(s), ${m.holes} hole(s), confidence ${(m.confidence * 100).toFixed(0)}%`,
+        );
+        for (const note of m.notes) console.log(`    · ${note}`);
+      }
     }
   });
 

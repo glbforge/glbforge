@@ -1,0 +1,285 @@
+/**
+ * Subject lifting: synthesize an alpha channel for artwork that has none.
+ *
+ * The forge traces a silhouette, so it needs to know which pixels are the
+ * subject. Artwork with transparency says so directly and white-background
+ * artwork is separated by luma; a photograph answers neither and is refused
+ * (`extrudeFromRgba`'s full-bleed guard). This module is the third answer: it
+ * grows the background inward from the frame edge and calls what survives the
+ * subject — the same idea as a phone's "lift subject", done with plain
+ * connectivity instead of a segmentation model, so it costs no download, runs
+ * identically in Node and a browser, and produces the same bytes every time.
+ *
+ * What it cannot do is pretend. A mask is an *inference*, and a photograph of
+ * a cluttered room has no separable subject at all, so every matte carries a
+ * confidence and the numbers behind it. Callers are expected to refuse a weak
+ * one rather than forge a blob.
+ *
+ * Versioned like the rule packs: `matte/border@1` is a contract, and the
+ * pixels it produces are part of the deterministic output. Tune it in a new
+ * version, never in place.
+ */
+
+export const MATTE_VERSION = 'matte/border@1';
+
+export interface MatteOptions {
+  /**
+   * How far a pixel's colour may sit from a background reference and still
+   * count as background, as a distance in RGB space (0-441). Default 34:
+   * tolerant of JPEG mush and gentle vignetting, tight enough that a subject
+   * rarely dissolves into the wall behind it.
+   */
+  tolerance?: number;
+  /**
+   * Enclosed background regions this small (as a share of the subject) are
+   * filled in rather than kept as holes — specular highlights, light gaps in
+   * fur, compression speckle. Anything larger is a real hole and stays
+   * transparent, so a mug handle keeps its opening. Default 0.02.
+   */
+  holeShare?: number;
+  /**
+   * Subject components smaller than this share of the largest are dropped as
+   * debris (a shadow blob, a crumb, a bit of the next object). Default 0.05.
+   */
+  minComponentShare?: number;
+}
+
+export interface Matte {
+  /** 0 or 255 per pixel, row-major — the synthesized alpha channel. */
+  alpha: Uint8Array;
+  /** Share of the canvas the subject covers (0-1). */
+  coverage: number;
+  /** Share of the frame edge that agreed on a background colour (0-1). */
+  backgroundUniformity: number;
+  /** Mean colour distance across the subject's boundary, normalized (0-1). */
+  edgeContrast: number;
+  /**
+   * How much to trust this mask (0-1). An inference, never a measurement:
+   * it says how separable the subject looked, not whether the cut is right.
+   */
+  confidence: number;
+  /** Subject pieces kept, and how many were dropped as debris. */
+  components: number;
+  droppedComponents: number;
+  /** Holes kept open, and how many were filled as speckle. */
+  holes: number;
+  filledHoles: number;
+  /** Which algorithm produced this, for the report. */
+  version: string;
+  /** Why the confidence is what it is, worst first. */
+  notes: string[];
+}
+
+/** Quantization for the border histogram: 16 levels per channel. */
+const BUCKET_BITS = 4;
+const BUCKET_SHIFT = 8 - BUCKET_BITS;
+/** Background references are taken until they cover this much of the edge. */
+const REFERENCE_COVERAGE = 0.75;
+/** …and never more than this many, so a busy edge does not swallow everything. */
+const MAX_REFERENCES = 4;
+/** A subject smaller/larger than these is not a subject worth cutting out. */
+const MIN_SENSIBLE_COVERAGE = 0.005;
+const MAX_SENSIBLE_COVERAGE = 0.92;
+
+const distance = (px: Uint8Array | Buffer, i: number, r: number, g: number, b: number): number =>
+  Math.sqrt((px[i] - r) ** 2 + (px[i + 1] - g) ** 2 + (px[i + 2] - b) ** 2);
+
+/**
+ * Lift the subject out of an opaque image.
+ *
+ * Background is what the frame edge agrees on and what connects to it; the
+ * subject is what is left. Connectivity is what makes this work on a subject
+ * that happens to share a colour with the wall — it is only background if it
+ * *reaches* the edge through pixels of that colour.
+ */
+export function liftSubject(
+  px: Uint8Array | Buffer,
+  width: number,
+  height: number,
+  opts: MatteOptions = {},
+): Matte {
+  const tolerance = opts.tolerance ?? 34;
+  const holeShare = opts.holeShare ?? 0.02;
+  const minComponentShare = opts.minComponentShare ?? 0.05;
+  const n = width * height;
+  const notes: string[] = [];
+
+  // --- 1. What does the frame edge think the background is? ----------------
+  // A histogram of the edge ring, quantized, dominant buckets first. Taking
+  // several buckets (not one mean) is what lets a photo shot against a wall
+  // *and* a table surface still separate: both are on the edge, neither is
+  // the subject.
+  const bins = new Map<number, { count: number; r: number; g: number; b: number }>();
+  let edgePixels = 0;
+  const noteEdge = (x: number, y: number) => {
+    const i = (y * width + x) * 4;
+    const key = ((px[i] >> BUCKET_SHIFT) << (2 * BUCKET_BITS))
+      | ((px[i + 1] >> BUCKET_SHIFT) << BUCKET_BITS)
+      | (px[i + 2] >> BUCKET_SHIFT);
+    const bin = bins.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
+    bin.count++; bin.r += px[i]; bin.g += px[i + 1]; bin.b += px[i + 2];
+    bins.set(key, bin);
+    edgePixels++;
+  };
+  for (let x = 0; x < width; x++) { noteEdge(x, 0); noteEdge(x, height - 1); }
+  for (let y = 1; y < height - 1; y++) { noteEdge(0, y); noteEdge(width - 1, y); }
+
+  // Key as the tiebreak: equal counts must order identically on every run.
+  const ranked = [...bins.entries()].sort((a, b) => b[1].count - a[1].count || a[0] - b[0]);
+  const references: Array<{ r: number; g: number; b: number }> = [];
+  let referenced = 0;
+  for (const [, bin] of ranked) {
+    if (references.length >= MAX_REFERENCES || referenced / edgePixels >= REFERENCE_COVERAGE) break;
+    references.push({ r: bin.r / bin.count, g: bin.g / bin.count, b: bin.b / bin.count });
+    referenced += bin.count;
+  }
+  const backgroundUniformity = referenced / edgePixels;
+
+  const isBackgroundColour = (i: number): boolean =>
+    references.some((ref) => distance(px, i, ref.r, ref.g, ref.b) <= tolerance);
+
+  // --- 2. Classify every pixel, then grow the background inward ------------
+  // Colour decides the class and connectivity decides what to do about it —
+  // that split is what keeps a ring's eye open. Deciding by connectivity
+  // alone would weld the hole shut, because the eye is "not background the
+  // flood could reach" and so is the ring itself.
+  const backgroundLike = new Uint8Array(n);
+  for (let p = 0; p < n; p++) backgroundLike[p] = isBackgroundColour(p * 4) ? 1 : 0;
+
+  // Seeded only from edge pixels that match a reference, so a subject running
+  // off the frame (a cropped object, a hand at the bottom) is not itself a
+  // seed and does not get eaten from the outside in.
+  const background = new Uint8Array(n);
+  const queue = new Int32Array(n);
+  let head = 0, tail = 0;
+  const push = (p: number) => {
+    if (background[p] || !backgroundLike[p]) return;
+    background[p] = 1;
+    queue[tail++] = p;
+  };
+  for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
+  for (let y = 1; y < height - 1; y++) { push(y * width); push(y * width + width - 1); }
+  while (head < tail) {
+    const p = queue[head++];
+    const x = p % width, y = (p / width) | 0;
+    if (x > 0) push(p - 1);
+    if (x < width - 1) push(p + 1);
+    if (y > 0) push(p - width);
+    if (y < height - 1) push(p + width);
+  }
+
+  /** Connected components within one class, in scan order (so labels are stable). */
+  const componentsOf = (member: (p: number) => boolean): { labels: Int32Array; sizes: number[] } => {
+    const labels = new Int32Array(n).fill(-1);
+    const sizes: number[] = [];
+    for (let seed = 0; seed < n; seed++) {
+      if (labels[seed] !== -1 || !member(seed)) continue;
+      const label = sizes.length;
+      let size = 0;
+      head = tail = 0;
+      labels[seed] = label; queue[tail++] = seed;
+      while (head < tail) {
+        const p = queue[head++];
+        size++;
+        const x = p % width, y = (p / width) | 0;
+        const visit = (q: number) => {
+          if (labels[q] !== -1 || !member(q)) return;
+          labels[q] = label; queue[tail++] = q;
+        };
+        if (x > 0) visit(p - 1);
+        if (x < width - 1) visit(p + 1);
+        if (y > 0) visit(p - width);
+        if (y < height - 1) visit(p + width);
+      }
+      sizes.push(size);
+    }
+    return { labels, sizes };
+  };
+
+  // --- 3. Keep the real pieces, keep the real holes -------------------------
+  const subjectParts = componentsOf((p) => !backgroundLike[p]);
+  const largest = subjectParts.sizes.length ? Math.max(...subjectParts.sizes) : 0;
+  const kept = subjectParts.sizes.map((size) => size >= largest * minComponentShare);
+  const components = kept.filter(Boolean).length;
+  const droppedComponents = kept.length - components;
+
+  const alpha = new Uint8Array(n);
+  let subject = 0;
+  for (let p = 0; p < n; p++) {
+    const label = subjectParts.labels[p];
+    if (label !== -1 && kept[label]) { alpha[p] = 255; subject++; }
+  }
+
+  // Background-coloured pixels the flood could not reach are enclosed. Small
+  // ones are noise inside the subject — a highlight, a JPEG artifact, a gap in
+  // fur — and get filled; large ones are real openings and stay transparent,
+  // so a mug keeps its handle. Debris dropped above is never refilled: it was
+  // excluded on purpose, not by enclosure.
+  const enclosed = componentsOf((p) => backgroundLike[p] === 1 && !background[p]);
+  const fill = enclosed.sizes.map((size) => subject > 0 && size < subject * holeShare);
+  for (let p = 0; p < n; p++) {
+    const label = enclosed.labels[p];
+    if (label !== -1 && fill[label]) { alpha[p] = 255; subject++; }
+  }
+  const holes = fill.filter((f) => !f).length;
+  const filledHoles = fill.filter(Boolean).length;
+
+  // --- 4. How separable was it, really? ------------------------------------
+  // Edge contrast across the cut: a crisp subject on a clean ground reads far
+  // apart, a subject the flood invented out of texture reads close.
+  let boundarySamples = 0, boundaryDistance = 0;
+  for (let p = 0; p < n; p++) {
+    if (!alpha[p]) continue;
+    const x = p % width, y = (p / width) | 0;
+    const neighbours = [
+      x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1,
+      y > 0 ? p - width : -1, y < height - 1 ? p + width : -1,
+    ];
+    for (const q of neighbours) {
+      if (q === -1 || alpha[q]) continue;
+      boundaryDistance += distance(px, p * 4, px[q * 4], px[q * 4 + 1], px[q * 4 + 2]);
+      boundarySamples++;
+    }
+  }
+  const edgeContrast = boundarySamples ? Math.min(1, boundaryDistance / boundarySamples / 120) : 0;
+  const coverage = subject / n;
+
+  // Confidence is the product of three independent doubts, so any one of them
+  // being bad is enough to disqualify the mask — which is the behaviour we
+  // want: a beautiful edge around 99% of the canvas is still not a subject.
+  let sanity = 1;
+  if (coverage < MIN_SENSIBLE_COVERAGE) {
+    sanity = 0;
+    notes.push(`the subject is only ${(coverage * 100).toFixed(1)}% of the image — nothing separable was found`);
+  } else if (coverage > MAX_SENSIBLE_COVERAGE) {
+    sanity = 0;
+    notes.push(`the subject fills ${(coverage * 100).toFixed(0)}% of the image — the background never separated`);
+  } else if (coverage > 0.85) {
+    sanity = 0.5;
+    notes.push(`the subject fills ${(coverage * 100).toFixed(0)}% of the image, leaving little background to judge by`);
+  }
+  if (backgroundUniformity < 0.6) {
+    notes.push(`the frame edge is busy — only ${(backgroundUniformity * 100).toFixed(0)}% of it agreed on a background colour`);
+  }
+  if (edgeContrast < 0.35) {
+    notes.push(`the cut runs through low contrast (${(edgeContrast * 100).toFixed(0)}%), so the outline may wander`);
+  }
+  if (droppedComponents > 0) {
+    notes.push(`dropped ${droppedComponents} small piece${droppedComponents === 1 ? '' : 's'} as debris`);
+  }
+  const confidence = Math.max(0, Math.min(1, backgroundUniformity * edgeContrast * sanity));
+
+  return {
+    alpha,
+    coverage,
+    backgroundUniformity,
+    edgeContrast,
+    confidence,
+    components,
+    droppedComponents,
+    holes,
+    filledHoles,
+    version: MATTE_VERSION,
+    notes,
+  };
+}

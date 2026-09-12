@@ -21,6 +21,14 @@
       ],
       "description": "Solid-pixel test: alpha (transparent bg) | luma (white bg). Auto-detected."
     },
+    "matte": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "off"
+      ],
+      "description": "Lift the subject off its background when the image carries no alpha of its own — a photo of an object on a plain ground becomes a sticker instead of being refused. Returns the mask's confidence and what drove it; refuses rather than forging a blob when the subject does not separate. Default off."
+    },
     "threshold": {
       "type": "integer",
       "minimum": 0,

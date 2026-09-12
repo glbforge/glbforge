@@ -4,12 +4,24 @@ import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { measureFlatness, quantizeColors, srgbToLinear, type Flatness } from './layers.js';
 import { distanceTransform, sampleDistance } from './relief.js';
 import { flattenProjection } from './bleed.js';
+import { liftSubject, type Matte, type MatteOptions } from './matte.js';
 import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import type { Material, Texture } from '@gltf-transform/core';
 
 export interface ExtrudeOptions {
   /** Solid-pixel test: 'alpha' (transparent bg) or 'luma' (white bg). Auto-detected by default. */
   mode?: 'alpha' | 'luma';
+  /**
+   * Lift the subject off its background when the image carries no alpha of
+   * its own, instead of refusing it as a photograph — the sticker path
+   * (`matte/border@1`, see matte.ts). 'auto' only engages on opaque artwork
+   * and only accepts a mask it is confident in; a weak one throws with the
+   * numbers. 'off' (default) keeps the old behaviour. An explicit `mode`
+   * wins: the caller has said how to read the pixels.
+   */
+  matte?: 'auto' | 'off';
+  /** Tuning for `matte: 'auto'` (tolerance, hole and debris thresholds). */
+  matteOptions?: MatteOptions;
   /** Threshold 0-255. Default: alpha 128, luma 245 (pixels darker than this are solid). */
   threshold?: number;
   /** Douglas-Peucker tolerance in trace pixels. Default 1.2. */
@@ -71,16 +83,26 @@ export interface LayerInfo {
 export interface ExtrudeResult {
   doc: Document;
   stats: ExtrudeStats & {
-    mode: 'alpha' | 'luma';
+    mode: 'alpha' | 'luma' | 'matte';
     traceWidth: number;
     traceHeight: number;
     layerInfo?: LayerInfo[];
     /** Why 'auto' layered or did not. Only set when layers: 'auto'. */
     flatness?: Flatness;
+    /** The lifted mask and how separable the subject was. Only when a matte ran. */
+    matte?: Matte;
   };
 }
 
 const TRACE_MAX = 1024; // tracing resolution cap; texture keeps up to 2048
+
+/**
+ * A lifted mask below this is refused rather than forged. Calibrated on the
+ * synthetic cases in test/matte.test.ts: a subject on a plain ground scores
+ * far above it, a textured scene far below, and the band between is exactly
+ * where a silhouette would wander — better to say so than to ship a blob.
+ */
+const MIN_MATTE_CONFIDENCE = 0.4;
 
 /**
  * Turn a logo/graphic image into an extruded 3D GLB document (Node entry).
@@ -148,6 +170,26 @@ export async function extrudeFromRgba(
   for (let i = 3; i < px.length; i += 4) {
     if (px[i] < 250) { hasAlpha = true; break; }
   }
+
+  // Subject lifting runs before the mode decision, because it *is* the mode:
+  // it manufactures the alpha channel the image never had. Only for opaque
+  // input — artwork that already carries transparency has said what it means,
+  // and an explicit `mode` is the caller overruling all of this.
+  let matte: Matte | undefined;
+  if (opts.matte === 'auto' && !hasAlpha && !opts.mode) {
+    matte = liftSubject(px, tw, th, opts.matteOptions);
+    if (matte.confidence < MIN_MATTE_CONFIDENCE) {
+      throw new Error(
+        `Could not lift a subject from this image (confidence ${(matte.confidence * 100).toFixed(0)}%, `
+        + `needs ${(MIN_MATTE_CONFIDENCE * 100).toFixed(0)}%): ${matte.notes[0] ?? 'the background did not separate'}. `
+        + 'A photograph with a clear, plain background lifts well; a busy scene does not. '
+        + 'Use a generative model for a scene, or supply artwork with its own transparency.',
+      );
+    }
+    for (let i = 0; i < matte.alpha.length; i++) px[i * 4 + 3] = matte.alpha[i];
+    hasAlpha = true;
+  }
+
   const mode = opts.mode ?? (hasAlpha ? 'alpha' : 'luma');
 
   const mask = new Uint8Array(tw * th);
@@ -200,7 +242,7 @@ export async function extrudeFromRgba(
   const flatness = opts.layers === 'auto' ? measureFlatness(px, mask, tw, th) : undefined;
   const layers = opts.layers === 'auto' ? flatness!.layers : (opts.layers ?? 0);
   if (layers >= 2) {
-    return extrudeLayered(px, mask, tw, th, mode, { ...opts, layers }, flatness);
+    return extrudeLayered(px, mask, tw, th, mode, { ...opts, layers }, flatness, matte);
   }
 
   const doc = new Document();
@@ -253,7 +295,18 @@ export async function extrudeFromRgba(
   doc.createScene('scene').addChild(node);
   doc.getRoot().getAsset().generator = 'glbforge extrude';
 
-  return { doc, stats: { ...geo.stats, mode, traceWidth: tw, traceHeight: th, ...(flatness ? { flatness } : {}) } };
+  return {
+    doc,
+    stats: {
+      ...geo.stats,
+      // The mask came from the matte, so say so — 'alpha' would credit the
+      // image for a channel this pipeline invented.
+      mode: matte ? 'matte' : mode,
+      traceWidth: tw, traceHeight: th,
+      ...(flatness ? { flatness } : {}),
+      ...(matte ? { matte } : {}),
+    },
+  };
 }
 
 /** Cheap SVG sniff: XML/SVG tag near the start of the buffer. */
@@ -332,6 +385,7 @@ async function extrudeLayered(
   mode: 'alpha' | 'luma',
   opts: ExtrudeOptions & { layers: number },
   flatness?: Flatness,
+  matte?: Matte,
 ): Promise<ExtrudeResult> {
   const k = Math.min(6, Math.max(2, opts.layers));
   const { labels, colors, counts } = quantizeColors(px, mask, tw, th, k);
@@ -351,9 +405,11 @@ async function extrudeLayered(
   const scene = doc.createScene('scene');
   const stats = {
     loops: 0, outerLoops: 0, holes: 0, triangles: 0, vertices: 0,
-    mode, traceWidth: tw, traceHeight: th,
+    mode: (matte ? 'matte' : mode) as 'alpha' | 'luma' | 'matte',
+    traceWidth: tw, traceHeight: th,
     layerInfo: [] as LayerInfo[],
     ...(flatness ? { flatness } : {}),
+    ...(matte ? { matte } : {}),
   };
 
   let totalContours = 0;

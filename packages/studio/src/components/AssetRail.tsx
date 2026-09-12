@@ -50,8 +50,8 @@ export function AssetRail(props: {
   // choice back up, say why, and let them pick.
   const PHOTOGRAPHIC = /photograph|noisy mask|fills the whole canvas/i;
 
-  const extrude = (image: PendingImage) =>
-    props.onRun(`forging ${image.name}`, async () => {
+  const extrude = (image: PendingImage, matte?: 'auto') =>
+    props.onRun(matte ? `lifting the subject from ${image.name}` : `forging ${image.name}`, async () => {
       try {
         return await api.extrude(image.name, image.bytes, {
           bevel: pillow || sculpt ? 0 : 0.015, profile: 'mobile-hero',
@@ -59,18 +59,19 @@ export function AssetRail(props: {
           pillow: pillow ? 0.035 : undefined,
           emboss: sculpt ? 0.012 : undefined,
           preset: preset || undefined,
+          matte,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (!PHOTOGRAPHIC.test(message)) throw err;
+        // A matte run that fails says so in its own words ("Could not lift a
+        // subject…") and must not loop back into another lift offer.
+        if (!PHOTOGRAPHIC.test(message) || matte) throw err;
         setPending(image);
         setPhotoHint(true);
         throw new Error(
           'That looks like a photo, not flat artwork — the forge traces a silhouette and a '
-          + 'photo fills the frame. '
-          + (canGenerate
-            ? 'Generate true 3D instead (offered below), or use artwork with a clear background.'
-            : 'Use artwork with a clear background, or a generative model for a photograph.'),
+          + 'photo fills the frame. Try lifting the subject off its background (offered below)'
+          + (canGenerate ? ', or generate true 3D.' : ', or use artwork with a clear background.'),
         );
       }
     });
@@ -131,13 +132,17 @@ export function AssetRail(props: {
         <div className="choice">
           <div className="choice-name">{pending.name}</div>
           {photoHint && (
-            <div className="choice-hint">
-              The forge could not trace this one — it fills the frame, the way a photo does.
-              The forge is for logos, wordmarks and flat artwork with a clear background;
-              {canGenerate
-                ? ' for a photograph, Generate true 3D is the path.'
-                : ' a photograph needs a generative model — sign in here, or run npx glbforge gen locally.'}
-            </div>
+            <>
+              <div className="choice-hint">
+                The forge could not trace this one — it fills the frame, the way a photo does.
+                Lifting the subject cuts it off its background first, which works when the
+                background is plain; it refuses rather than guessing when it is not.
+                {canGenerate ? ' For a scene rather than an object, generate true 3D instead.' : ''}
+              </div>
+              <button onClick={() => { void extrude(pending, 'auto'); setPending(null); }}>
+                ✂ Lift subject and forge <span className="choice-sub">instant · free · a sticker of the object</span>
+              </button>
+            </>
           )}
           <button className={photoHint ? 'ghost' : undefined} onClick={() => { void extrude(pending); setPending(null); }}>
             ⚒ Forge logo → 3D <span className="choice-sub">instant · free · exact silhouette</span>

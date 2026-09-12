@@ -125,10 +125,10 @@ export const api = {
           method: 'POST', body: bytes, headers: OCTET,
         }).then((r) => check<AssetDetail>(r)),
 
-  extrude: async (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number; pillow?: number; emboss?: number; preset?: string }) =>
+  extrude: async (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number; pillow?: number; emboss?: number; preset?: string; matte?: 'auto' | 'off' }) =>
     backend === 'local'
       ? (await local()).extrude(name, bytes, opts)
-      : fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.emboss ? `&emboss=${opts.emboss}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}`, {
+      : fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.emboss ? `&emboss=${opts.emboss}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}${opts.matte ? `&matte=${opts.matte}` : ''}`, {
           method: 'POST', body: bytes, headers: OCTET,
         }).then((r) => check<AssetDetail>(r)),
 

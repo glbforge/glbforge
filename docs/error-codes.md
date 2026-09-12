@@ -132,4 +132,5 @@ Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a tes
 | `CLIP_FORMAT_UNSUPPORTED` |  | info | include_clip could not produce the requested clip format with this stack (no mp4 encoder); a GIF was written instead when possible. | Use the GIF, or assemble the frames with ffmpeg. |
 | `DRY_RUN` |  | info | dry_run=true: nothing was written; `diff` shows what would change. | Re-run with dry_run=false to apply. |
 | `ROUTED_TO_GENERATION` |  | info | The input looks photographic; deterministic extrusion was skipped in favor of a generation route. | Call generate_image_to_3d as listed in nextActions. |
+| `SUBJECT_LIFTED` |  | info | The silhouette was not read from the image: it was inferred by lifting the subject off its background (matte/border@1). The entry carries the mask's coverage, piece and hole counts, and a confidence. | Check the confidence and the thumbnail before building on the result; a low-confidence cut is refused outright, not returned. |
 | `TOOL_ERROR` |  | error | The tool failed before producing a result; the message carries the underlying error. | Fix the input (path, arguments) and retry. |

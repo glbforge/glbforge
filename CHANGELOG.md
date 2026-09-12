@@ -4,6 +4,42 @@
 
 ### Added
 
+- **Subject lifting: `--matte auto`, the forge's third mask mode.** A
+  photograph carries no alpha and no white ground, so the forge refuses it —
+  correct, and a dead end for the most common thing anyone points a camera at.
+  `matte/border@1` (`core/src/extrude/matte.ts`) takes the frame edge as the
+  background, grows it inward through pixels of that colour, and calls what
+  survives the subject: the idea behind a phone's "lift subject", done with
+  plain connectivity rather than a segmentation model, so it adds no download,
+  runs identically in Node and the browser, and stays byte-for-byte
+  deterministic.
+
+  Colour classifies each pixel and connectivity decides what to do about it,
+  which is the part that matters: an enclosed region of *background colour*
+  is a hole, so a mug keeps its handle, while an enclosed region of subject
+  colour is subject. Small enclosed regions (a highlight, JPEG speckle) are
+  filled so the tracer is not handed hundreds of contours; small disconnected
+  pieces are dropped as debris and never refilled. Seeds are taken only from
+  edge pixels that match the background, so an object running off the frame is
+  not eaten from the outside in.
+
+  A mask is an **inference**, and reports like one — coverage, pieces, holes,
+  and a confidence built from edge uniformity x cut contrast x size sanity,
+  with the reasons in plain language. Under 0.4 the forge refuses and says
+  which of the three failed, instead of returning a blob. The MCP marks an
+  accepted lift with a new `SUBJECT_LIFTED` diagnostic, so an agent chaining
+  on the result knows the silhouette was inferred rather than read.
+
+  Surfaces: `glbforge extrude --matte auto`, `matte` on the MCP
+  `extrude_image`, and **✂ Lift subject and forge** in the Studio — offered
+  exactly where the photographic refusal used to leave you stuck. Measured on
+  a synthetic mug-on-a-desk: refused outright before, now one watertight shell
+  of 3,584 triangles with the handle's hole intact, confidence 85%. Eleven
+  tests freeze the behaviour (`core/test/matte.test.ts`), including hole vs
+  speckle, debris vs a second real piece, a cropped subject, a shaded ground
+  scoring lower than a flat one, and a textured scene being refused.
+
+
 - **`ship --json`**: one document, not two — the route taken (`forge` /
   `generation` / `glb`), what the forge decided (intermediate path, triangles,
   layers, and the measured flatness that chose them), the output path,

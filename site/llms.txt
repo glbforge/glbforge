@@ -72,6 +72,14 @@ updated with the code: anything not listed here is not shipped):
   (colour padded past the silhouette) so a lossy re-encode cannot ring along
   the art/void edge. Output is watertight (verified 0 boundary / 0
   non-manifold edges) and therefore 3D-printable via STL export.
+  `--matte auto` (CLI) / `matte` (MCP `extrude_image`) / "Lift subject and
+  forge" (Studio) lifts a subject off its background first, so a photo of an
+  object on a plain ground becomes a sticker instead of being refused:
+  deterministic connectivity (`matte/border@1`), no model download, holes kept
+  open, debris dropped. The mask is an inference and says so — coverage,
+  pieces, holes and a confidence; under 0.4 it refuses with the numbers rather
+  than forging a blob, and the MCP reports an accepted lift as
+  `SUBJECT_LIFTED`.
 - Animated assets: skinned meshes and morph targets are simplified bone-aware
   (attribute-aware meshopt simplification with joint-boundary vertex locks;
   skins, inverse bind matrices, targets, and clips preserved).
@@ -151,6 +159,7 @@ updated with the code: anything not listed here is not shipped):
 - npx glbforge analyze model.glb --profile mobile-hero
 - npx glbforge optimize model.glb --ktx2 --lods 40000,10000
 - npx glbforge extrude logo.png --layers auto --pillow 0.03 --preset enamel   (auto layers only artwork measured to be flat-coloured)
+- npx glbforge extrude photo.jpg --matte auto   (lift the subject off a plain background, then forge it as a sticker)
 - npx glbforge gen photo.png --model hunyuan --optimize   (FAL_KEY)
 - npx glbforge meshy image art.png --pbr --optimize       (MESHY_API_KEY)
 - npx glbforge init   (agent-ready project: CLAUDE.md section, glb:* npm scripts, MCP server in .mcp.json; idempotent)

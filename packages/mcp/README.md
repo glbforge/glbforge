@@ -98,8 +98,11 @@ Schemas: `schemas/` (input + output per tool, `envelope.json`, `diagnostic.json`
 Codes: `docs/error-codes.md`. Performance profiles: `docs/performance-profiles.md`.
 
 Tool descriptions teach the routing that matters: flat artwork → deterministic
-extrusion (free, instant, exact); photographic/dimensional subjects →
-generation (fal.ai open models or Meshy); everything → budget-checked,
-perceptually verified optimization.
+extrusion (free, instant, exact); a photographed *object* on a plain ground →
+`extrude_image` with `matte: 'auto'`, which lifts the subject off its
+background and forges the sticker (and reports `SUBJECT_LIFTED` with the
+mask's confidence, because that silhouette was inferred rather than read);
+photographic/dimensional *scenes* → generation (fal.ai open models or Meshy);
+everything → budget-checked, perceptually verified optimization.
 
 Docs: **https://github.com/glbforge/glbforge**

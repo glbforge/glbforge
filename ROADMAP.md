@@ -49,6 +49,16 @@ answers everything in tens of ms).
   12 h, same path within 2 h, diff edges, explicit id) and reports median /
   p90 invocations per lineage and the in-the-loop share; `capabilities`
   shows the state. Baseline to collect: today ≈ 1 per asset
+- [x] Subject lifting (2026-09-12, `matte/border@1`): the forge's third mask
+  mode after alpha and luma — background grown inward from the frame edge,
+  classified per pixel by colour so enclosed holes survive, debris dropped,
+  small enclosed speckle filled. Deterministic, no model download, isomorphic.
+  Carries a confidence (edge uniformity x cut contrast x size sanity) and
+  refuses under 0.4 with the numbers; `SUBJECT_LIFTED` on the MCP marks the
+  silhouette as inferred. `--matte auto`, `extrude_image(matte)`, and the
+  Studio's "Lift subject and forge" where the photo refusal used to dead-end.
+  Next: an opt-in neural matte (U^2-Net / IS-Net class, Apache-2.0) in the
+  browser only, for the scenes connectivity cannot separate
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
   disagree on 100% of wall faces; ~~layered forge stacks by node translation~~
   (baked into vertices 2026-09-11, layer nodes are identity);
