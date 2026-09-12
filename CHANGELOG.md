@@ -121,6 +121,27 @@
 - `srgbToLinear` / `linearToSrgb` are published from `@glbforge/core`
   (`packages/core/src/color.ts`), replacing three private copies of the
   transfer function.
+- **Every GitHub Action dependency moves to its Node 24 major.** The Node 20
+  runtime is deprecated and the runner was already force-migrating these, so
+  the versions now say what actually runs. Workflows: `actions/checkout@v7`,
+  `actions/setup-node@v7`, `pnpm/action-setup@v6`. The **published action**
+  (`action.yml`), which runs on consumers' runners: `actions/cache@v6`,
+  `actions/upload-artifact@v7`, `actions/github-script@v9`,
+  `peter-evans/create-pull-request@v8`.
+  - **Self-hosted runners need Actions Runner 2.327.1 or later** to use the
+    GLBForge action from this version on; GitHub-hosted runners already
+    qualify. This is the only consumer-visible change — no input, output or
+    behaviour moves.
+  - Checked rather than assumed: `github-script@v9` breaks
+    `require('@actions/github')` and scripts that redeclare `getOctokit`; our
+    comment script uses neither (only `require('fs')`, `github.rest.*` and
+    `context`). `setup-node@v5+` caches automatically when `packageManager`
+    is set — ours already passes `cache: pnpm` explicitly and installs pnpm
+    first. `checkout@v7` blocks fork checkout for `pull_request_target` /
+    `workflow_run`, neither of which this repo uses.
+  - `pnpm/action-setup` now points users at a successor action
+    (`pnpm/setup`); staying on `action-setup` for now, that migration is its
+    own change.
 
 ## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
 
