@@ -117,10 +117,10 @@ Key facts (accurate as of v0.6.x, 2026):
 
 ## Commands
 
-- npx glbforge ship anything.{glb,png,svg} --profile mobile-hero   (one-call: route → forge/generate → optimize → gate)
+- npx glbforge ship anything.{glb,png,svg} --profile mobile-hero [--json]   (one-call: route → forge/generate → optimize → gate; --json is one document: route taken, forge decision, optimization report, passed)
 - npx glbforge analyze model.glb --profile mobile-hero
 - npx glbforge optimize model.glb --ktx2 --lods 40000,10000
-- npx glbforge extrude logo.png --layers 4 --pillow 0.03 --preset enamel
+- npx glbforge extrude logo.png --layers auto --pillow 0.03 --preset enamel   (auto layers only artwork measured to be flat-coloured)
 - npx glbforge gen photo.png --model hunyuan --optimize   (FAL_KEY)
 - npx glbforge meshy image art.png --pbr --optimize       (MESHY_API_KEY)
 - npx glbforge init   (agent-ready project: CLAUDE.md section, glb:* npm scripts, MCP server in .mcp.json; idempotent)

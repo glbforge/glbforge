@@ -43,8 +43,10 @@ async function optimizeFile(
   extra: {
     target?: number; textures?: boolean; compress?: boolean; lods?: string;
     json?: boolean; textureFormat?: 'webp' | 'ktx2'; verify?: boolean;
+    /** Print nothing; the caller owns the output (ship --json embeds the report). */
+    silent?: boolean;
   } = {},
-): Promise<boolean> {
+): Promise<{ passed: boolean; report: Record<string, unknown> }> {
   const profile = getProfile(profileName);
   const bytes = await readFile(input);
   const io = await createIO();
@@ -60,7 +62,7 @@ async function optimizeFile(
     compress: extra.compress,
     textureFormat: extra.textureFormat,
     verify: extra.verify,
-    log: extra.json ? undefined : (msg) => console.log('  ' + msg),
+    log: extra.json || extra.silent ? undefined : (msg) => console.log('  ' + msg),
   });
 
   const outBytes = await io.writeBinary(doc);
@@ -73,7 +75,7 @@ async function optimizeFile(
   // The measured visual verdict is part of the report card: a failing SSIM
   // fails the budget like any perf/* rule.
   if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
-  if (!extra.json) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
+  if (!extra.json && !extra.silent) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
 
   // Optional LOD chain: simplify further from the already-optimized doc.
   const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number; method: string }> = [];
@@ -87,25 +89,35 @@ async function optimizeFile(
       const lodBytes = await io.writeBinary(lodDoc);
       await writeFile(lodPath, lodBytes);
       lodFiles.push({ path: lodPath, bytes: lodBytes.byteLength, triangles: lod.triangles, target: targets[i], method: lod.method });
-      if (!extra.json) {
+      if (!extra.json && !extra.silent) {
         console.log(`  lod${i + 1}: ${lodPath} (${(lodBytes.byteLength / 1048576).toFixed(1)}MB, ${lod.triangles.toLocaleString()} tris, target ${targets[i].toLocaleString()}${lod.method === 'cluster' ? ', grid-clustered' : ''})`);
       }
     }
   }
-  if (extra.json) {
-    console.log(JSON.stringify({
-      outPath: output,
-      sha256: createHash('sha256').update(outBytes).digest('hex'),
-      steps: summary.steps,
-      fidelityBound: summary.fidelityBound,
-      perceptual: summary.perceptual,
-      before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
-      after,
-      savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
-      lods: lodFiles,
-    }, null, 2));
-  }
-  return after.passed;
+  const report = {
+    outPath: output,
+    sha256: createHash('sha256').update(outBytes).digest('hex'),
+    steps: summary.steps,
+    fidelityBound: summary.fidelityBound,
+    perceptual: summary.perceptual,
+    before: { triangles: before.geometry.triangles, bytes: bytes.byteLength, score: before.score },
+    after,
+    savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
+    lods: lodFiles,
+  };
+  if (extra.json && !extra.silent) console.log(JSON.stringify(report, null, 2));
+  return { passed: after.passed, report };
+}
+
+// `glbforge analyze x.glb | head -1` closes our stdout mid-write. Node turns
+// that into an unhandled EPIPE and a stack trace, which is a crash report for
+// something the user asked for. Swallow it and carry on: the process still
+// exits with the code it earned, because that exit code is this CLI's contract
+// (a budget failure piped into `head` must not silently become success).
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EPIPE' && err.code !== 'ERR_STREAM_DESTROYED') throw err;
+  });
 }
 
 const program = new Command()
@@ -241,7 +253,7 @@ program
     textures: boolean; compress: boolean; json?: boolean; ktx2?: boolean; verify: boolean;
   }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.web.glb';
-    const passed = await optimizeFile(file, outPath, opts.profile, {
+    const { passed } = await optimizeFile(file, outPath, opts.profile, {
       target: opts.target, textures: opts.textures,
       compress: opts.compress, lods: opts.lods, json: opts.json,
       textureFormat: opts.ktx2 ? 'ktx2' : 'webp', verify: opts.verify,
@@ -327,17 +339,29 @@ program
   .option('--ktx2', 'KTX2 textures (GPU-resident)')
   .option('--lods <targets>', 'LOD chain triangle targets, e.g. 40000,10000')
   .option('--no-verify', 'skip perceptual verification of the optimization')
+  .option('--json', 'emit one JSON document: the route taken, the intermediate, and the optimization report')
   .action(async (input: string, opts: {
     profile: string; out?: string; prefer?: 'forge' | 'gen';
-    model: string; ktx2?: boolean; lods?: string; verify: boolean;
+    model: string; ktx2?: boolean; lods?: string; verify: boolean; json?: boolean;
   }) => {
+    // What ship DECIDED, which is the half an agent cannot recover from the
+    // optimize report: which route, and what the forge made of the artwork.
+    let routing: Record<string, unknown> = { routed: 'glb' };
+    const say = (line: string) => { if (!opts.json) console.log(line); };
+
     const finish = async (glbPath: string) => {
       // Always named for the INPUT, never for the intermediate, so the
       // routes agree: photo.png → photo.web.glb whether it was forged or generated.
       const outPath = opts.out ?? input.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
-      const passed = await optimizeFile(glbPath, outPath, opts.profile, {
+      const { passed, report } = await optimizeFile(glbPath, outPath, opts.profile, {
         textureFormat: opts.ktx2 ? 'ktx2' : 'webp', lods: opts.lods, verify: opts.verify,
+        silent: opts.json,
       });
+      if (opts.json) {
+        console.log(JSON.stringify({
+          input, ...routing, source: glbPath, outPath, passed, optimize: report,
+        }, null, 2));
+      }
       process.exitCode = passed ? 0 : 1;
     };
 
@@ -370,7 +394,14 @@ program
         const shape = stats.layerInfo
           ? `${stats.layerInfo.length} colour layers${f ? ` (${(f.coverage * 100).toFixed(0)}% of the artwork)` : ''}`
           : `one shell${why}`;
-        console.log(`  routed to forge → ${forged}: ${stats.triangles.toLocaleString()} tris, ${shape}`);
+        routing = {
+          routed: 'forge',
+          forge: {
+            path: forged, triangles: stats.triangles, vertices: stats.vertices,
+            layers: stats.layerInfo?.length ?? 1, flatness: f ?? null,
+          },
+        };
+        say(`  routed to forge → ${forged}: ${stats.triangles.toLocaleString()} tris, ${shape}`);
         const { collectSample } = await import('./collect.js');
         await collectSample({
           provenance: 'forge', glbPath: forged, sourceImagePath: input,
@@ -380,7 +411,8 @@ program
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (opts.prefer === 'forge' || !/photograph|noisy mask/i.test(message)) throw err;
-        console.log('  routed to generation (photographic input)');
+        routing = { routed: 'generation', reason: 'photographic input' };
+        say('  routed to generation (photographic input)');
       }
     }
 
@@ -393,11 +425,12 @@ program
         image_url: `data:${mime};base64,${Buffer.from(raw).toString('base64')}`,
         should_texture: true,
       });
-      console.log(`  meshy task ${taskId}`);
+      say(`  meshy task ${taskId}`);
+      routing = { routed: 'generation', generator: { model: 'meshy-image-to-3d', taskId, path: generated } };
       const task = await client.waitForTask('image-to-3d', taskId, {
-        onProgress: (t) => process.stdout.write(`\r  ${t.status.toLowerCase()} ${t.progress}%   `),
+        onProgress: (t) => { if (!opts.json) process.stdout.write(`\r  ${t.status.toLowerCase()} ${t.progress}%   `); },
       });
-      process.stdout.write('\n');
+      if (!opts.json) process.stdout.write('\n');
       await writeFile(generated, await client.downloadModel(task, 'glb'));
       const { collectSample } = await import('./collect.js');
       await collectSample({
@@ -414,14 +447,15 @@ program
     const mime = ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[ext];
     const fal = new FalClient();
     const requestId = await fal.submit(model, `data:${mime};base64,${Buffer.from(raw).toString('base64')}`);
-    console.log(`  ${model} request ${requestId}`);
+    say(`  ${model} request ${requestId}`);
+    routing = { routed: 'generation', generator: { model, requestId, path: generated } };
     for (;;) {
       const st = await fal.status(model, requestId);
-      process.stdout.write(`\r  ${st.status.toLowerCase().padEnd(12)}   `);
+      if (!opts.json) process.stdout.write(`\r  ${st.status.toLowerCase().padEnd(12)}   `);
       if (st.status === 'COMPLETED') break;
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
-    process.stdout.write('\n');
+    if (!opts.json) process.stdout.write('\n');
     await writeFile(generated, await fal.downloadGlb(await fal.resultGlbUrl(model, requestId)));
     const { collectSample } = await import('./collect.js');
     await collectSample({
@@ -471,7 +505,7 @@ program
               licenseNote: opts.model === 'hunyuan' ? 'VERIFY Tencent community license before training' : 'MIT model output' },
     });
     if (opts.optimize) {
-      const passed = await optimizeFile(opts.out, opts.out.replace(/\.glb$/i, '') + '.web.glb', opts.profile);
+      const { passed } = await optimizeFile(opts.out, opts.out.replace(/\.glb$/i, '') + '.web.glb', opts.profile);
       process.exitCode = passed ? 0 : 1;
     }
   });
@@ -709,8 +743,8 @@ program
   });
 
 registerInitCommand(program);
-registerMeshyCommands(program, (input, output, profileName) =>
-  optimizeFile(input, output, profileName));
+registerMeshyCommands(program, async (input, output, profileName) =>
+  (await optimizeFile(input, output, profileName)).passed);
 
 program.parseAsync().catch((err) => {
   const e = err as NodeJS.ErrnoException;

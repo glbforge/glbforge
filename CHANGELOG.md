@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- **`ship --json`**: one document, not two — the route taken (`forge` /
+  `generation` / `glb`), what the forge decided (intermediate path, triangles,
+  layers, and the measured flatness that chose them), the output path,
+  `passed`, and the full optimization report nested under `optimize`. The
+  decision half is not recoverable from the optimize report, and parsing it
+  out of prose was the only way to read it before. Progress lines on the
+  generative routes go quiet under `--json` so stdout stays parseable.
+
 ### Fixed
 
 - **Forged assets no longer fail the perceptual gate on a texture artifact.**
@@ -64,6 +74,12 @@
   The perceptual floor is not a budget row: when every cap passes and only
   `fidelity/perceptual` fails, the verdict now reads "within <profile> budget,
   but visibly lossy" (`analyze` on the same file said `100/100 ✓ ship it`).
+- **A closed stdout no longer crashes the CLI.** `glbforge ship x.png | head -1`
+  died with an unhandled `EPIPE` and a stack trace — a crash report for
+  something the user asked for. Both output streams now swallow `EPIPE`, and
+  deliberately do *not* call `process.exit(0)` the way the common idiom does:
+  this CLI's exit code is its contract, so a budget or expectation failure
+  piped into `head` still exits 1 rather than being laundered into success.
 - **`diff/origin-moved` stopped calling a relabel a regression.** An origin
   landmark is a classification, and adding vertices can move the vertex
   centroid onto the origin with nothing moving at all — the rule then warned
