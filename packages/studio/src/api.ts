@@ -230,16 +230,34 @@ function openInQuickLook(blob: Blob): void {
   a.rel = 'ar';
   a.href = url;
   a.appendChild(document.createElement('img'));
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 20_000);
+  a.remove();
+  keepAlive(url);
+}
+
+/**
+ * A click is not the download. iOS Safari answers one with a confirmation
+ * sheet — "Do you want to download …?" — and only fetches the href when the
+ * user taps Download, which is easily a minute later. Revoking the object URL
+ * on a short timer (it was 5s) pulls the file out from under that tap, and the
+ * download fails with nothing to explain it. Desktop browsers start
+ * immediately and never noticed. Ten minutes of a retained blob is the cost of
+ * the save working; the page drops it on unload regardless.
+ */
+function keepAlive(url: string): void {
+  setTimeout(() => URL.revokeObjectURL(url), 10 * 60_000);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
+  // Some iOS versions ignore a click on a detached anchor.
+  document.body.appendChild(a);
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  a.remove();
+  keepAlive(url);
 }
 
 // ---------------------------------------------------------------------------

@@ -28,6 +28,14 @@
   iOS, a plain download elsewhere), and one cached build serves both, since
   exporting a textured USDZ in the browser takes seconds and tapping both is
   the expected sequence.
+- **…and the save then failed on iOS, because a click is not the download.**
+  Safari answers a download click with a confirmation sheet and fetches the
+  href only when the user taps Download — easily a minute later. The helper
+  revoked its object URL 5 seconds after the click, so the file was gone
+  before the tap and the download died with nothing to explain it. Desktop
+  browsers start immediately and never saw it. Object URLs are now retained
+  for ten minutes, and the anchor is attached to the document before the
+  click, which some iOS versions require.
 - **The Studio could not take a GLB from a phone.** The drop zone's file input
   carried `accept=".glb,.png,…"`, and iOS and Android filter the picker by the
   UTI/MIME each extension maps to — `.glb` maps to nothing, so every GLB in

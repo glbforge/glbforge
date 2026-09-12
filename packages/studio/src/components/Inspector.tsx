@@ -160,7 +160,8 @@ export function Inspector(props: {
             <div style={{ color: 'var(--dim)', fontSize: 11 }}>
               iPhone/iPad cannot open .glb natively, so AR gets a USDZ. Quick Look's share button
               re-shares the link it was opened with, which is an in-memory blob — use Save to keep
-              the file. Save the GLB for desktop or web viewers.
+              the file: confirm Safari's prompt and it lands in Files › Downloads. Save the GLB for
+              desktop or web viewers.
             </div>
           </>
         ) : (
