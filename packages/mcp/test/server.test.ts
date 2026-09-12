@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { createNodeIO, extrudeImage } from '@glbforge/core';
+import { createNodeIO, extrudeImage, getProfile, profileLabel } from '@glbforge/core';
 import { createServer } from '../src/server.js';
 
 type Block = { type: string; text?: string; data?: string; mimeType?: string };
@@ -129,7 +129,7 @@ describe('agent-friendly MCP surface', () => {
     expect(c.versions.core).toMatch(/^\d+\./);
     expect(typeof c.generation.fal.available).toBe('boolean');
     expect(typeof c.ktx2.available).toBe('boolean');
-    expect(c.profiles).toContain('mobile-hero@1');
+    expect(c.profiles).toContain(profileLabel(getProfile('mobile-hero'))); // latest version, whichever it is
   });
 
   it('compare_glb scores two files and returns a comparison sheet', async () => {

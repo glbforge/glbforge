@@ -3,6 +3,7 @@
  * then a 3x3 majority filter over the label map — anti-aliased edge pixels
  * otherwise form thin halo rings between color regions.
  */
+import { srgbToLinear as srgbToLinearUnit } from '../color.js';
 
 export interface Quantization {
   /** Per-pixel cluster index (-1 outside the solid mask). */
@@ -114,6 +115,5 @@ export function quantizeColors(
 
 /** sRGB 0-255 -> linear 0-1 (glTF baseColorFactor space). */
 export function srgbToLinear(value: number): number {
-  const c = value / 255;
-  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  return srgbToLinearUnit(value / 255);
 }

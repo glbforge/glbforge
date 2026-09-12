@@ -59,7 +59,18 @@ the same registration into another checkout.
 - **"No visible loss" is measured**: `optimize()` renders 4 fixed cameras before
   and after and gates SSIM on `profile.minSsim`. Changing the rig, render size,
   supersampling, or shading changes every reported number — treat
-  `verifyRig()` as frozen.
+  `verifyRig()` as frozen. Breaking that freeze is a deliberate pass of its
+  own: re-measure the calibration points on the LFS fixtures, republish the
+  profiles (see the versioned-budgets rule) and record the before/after table
+  in `docs/BUDGETS.md`. Done once so far, for the 0.9.0 colour-space fix.
+- **The renderer shades in linear light and writes sRGB** (`harness/render.ts`).
+  glTF stores base color in two encodings — `baseColorFactor` is linear, a
+  base-color texture is sRGB bytes — and base color is `factor * texture`, not
+  whichever is present. Getting this wrong is invisible in a single render and
+  catastrophic in a *comparison*: `prune()` folds a solid base-color texture
+  into the factor, so a correct optimization scored as visible loss. Transfer
+  functions live in `core/src/color.ts`; normal/ORM maps are linear data and
+  must never be decoded through them.
 - **Isomorphic core.** `sharp` and `node:*` are imported lazily inside Node-only
   paths; the Studio stubs `sharp` out. Browser paths get decoders/encoders
   injected (`textureEncoder`, `textureDecoder`).

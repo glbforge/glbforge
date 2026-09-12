@@ -285,7 +285,7 @@ describe('severity is the profile\'s call', () => {
   it('web budget profiles downgrade topology to info and keep the default visible', () => {
     for (const name of ['mobile-hero', 'desktop-hero@1', 'product-configurator']) {
       const r = runPacks(ir(), { profile: name });
-      expect(r.profile).toMatch(/@1$/);
+      expect(r.profile).toMatch(/^[a-z-]+@\d+$/); // versioned label; which version is latest is not this test's business
       expect(r.packs).toEqual(['core-geometry@1', 'core-scene@1']);
       expect(topoOnly(r.findings)).toHaveLength(2);
       for (const f of topoOnly(r.findings)) { expect(f.severity).toBe('info'); expect(f.default_severity).toBe('warning'); }

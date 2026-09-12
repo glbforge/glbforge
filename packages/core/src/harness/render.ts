@@ -5,10 +5,23 @@
  * identical pixels. Used for training-pair generation (`glbforge dataset`),
  * perceptual verification of optimization (SSIM before/after), and agent
  * previews (MCP thumbnails).
+ *
+ * Colour spaces, since glTF uses two of them for one quantity: shading runs
+ * in LINEAR light and the output buffer is sRGB-encoded, like any viewer.
+ * `baseColorFactor` is already linear; base-color texels are sRGB bytes and
+ * are decoded on sample. Getting this wrong is not a cosmetic bug — it makes
+ * a surface that moves between the texture slot and the factor slot (which
+ * is exactly what `prune()` does to a solid texture) score as a visible
+ * change when nothing visible changed. Data textures (normal, ORM) would be
+ * linear already; only base color is ever decoded here.
+ *
+ * Texture sampling is nearest-neighbour with no mip pyramid: see
+ * `sampleTexel` for why that is deliberate and what it costs.
  */
 import { Document, Node, Primitive, Texture } from '@gltf-transform/core';
 import { readFloat } from '../accessors.js';
 import { computeSmoothNormals } from '../normals.js';
+import { SRGB8_TO_LINEAR, linearToSrgb8 } from '../color.js';
 
 export interface RenderCamera {
   name: string;
@@ -282,7 +295,12 @@ export async function renderViews(
   return views;
 }
 
-/** Box-filter an RGBA image by an integer factor; mask = any covered sample. */
+/**
+ * Box-filter an RGBA image by an integer factor; mask = any covered sample.
+ * The average is taken in LINEAR light and re-encoded, which is what a GPU
+ * does when it resolves multisamples into an sRGB framebuffer; averaging the
+ * encoded bytes instead would darken every antialiased edge.
+ */
 function downsample(
   rgba: Uint8Array, mask: Uint8Array, size: number, ss: number,
 ): { rgba: Uint8Array; mask: Uint8Array } {
@@ -296,15 +314,44 @@ function downsample(
       for (let dy = 0; dy < ss; dy++) {
         for (let dx = 0; dx < ss; dx++) {
           const p = (y * ss + dy) * big + (x * ss + dx);
-          r += rgba[p * 4]; g += rgba[p * 4 + 1]; b += rgba[p * 4 + 2]; m |= mask[p];
+          r += SRGB8_TO_LINEAR[rgba[p * 4]];
+          g += SRGB8_TO_LINEAR[rgba[p * 4 + 1]];
+          b += SRGB8_TO_LINEAR[rgba[p * 4 + 2]];
+          m |= mask[p];
         }
       }
       const o = y * size + x;
-      out[o * 4] = Math.round(r / n); out[o * 4 + 1] = Math.round(g / n); out[o * 4 + 2] = Math.round(b / n); out[o * 4 + 3] = 255;
+      out[o * 4] = linearToSrgb8(r / n); out[o * 4 + 1] = linearToSrgb8(g / n); out[o * 4 + 2] = linearToSrgb8(b / n); out[o * 4 + 3] = 255;
       outMask[o] = m;
     }
   }
   return { rgba: out, mask: outMask };
+}
+
+/**
+ * Nearest-neighbour texel index for a wrapped UV — no bilinear filter and no
+ * mip pyramid, deliberately:
+ *
+ * - Point sampling is exactly reproducible; a mip chain would mean choosing a
+ *   level from screen-space UV derivatives, and the level a fragment lands on
+ *   flips on rounding, which is how a "deterministic" renderer stops being
+ *   one across platforms.
+ * - The cost is real: the renderer is blind to minification aliasing that a
+ *   viewer would show as shimmer on a dense, high-frequency texture.
+ * - Two things blunt it. The Node decoder box-filters every texture down to
+ *   512px on load (one crude mip level, applied before any sampling), and
+ *   verification renders at 2x supersampling, so each output pixel already
+ *   averages four texel fetches.
+ *
+ * Texture-space fidelity is what `analyze`'s texture rules and the KTX2 path
+ * measure directly; SSIM here measures shape and shading. If that changes,
+ * the honest fix is derivative-based mip selection with a fixed rounding
+ * rule — not bilinear, which would only hide the aliasing at one scale.
+ */
+function sampleTexel(texture: DecodedTexture, u: number, v: number): number {
+  const tx = Math.min(texture.width - 1, Math.max(0, Math.floor((u % 1 + 1) % 1 * texture.width)));
+  const ty = Math.min(texture.height - 1, Math.max(0, Math.floor((v % 1 + 1) % 1 * texture.height)));
+  return (ty * texture.width + tx) * 4;
 }
 
 function rasterize(
@@ -392,19 +439,24 @@ function rasterize(
           }
           const lambert = 0.35 + 0.65 * Math.abs(nx * light[0] + ny * light[1] + nz * light[2]);
 
+          // Linear base colour. glTF defines it as factor * texture, both in
+          // linear light: the factor is stored linear, texels are sRGB bytes.
+          // Multiplying (rather than letting the texture win) is what makes
+          // prune()'s fold of a solid texture into the factor a no-op here.
           let r = frag.color[0], g = frag.color[1], b = frag.color[2];
           if (frag.texture && uv.length) {
             // Perspective-correct UV.
             const iu = (w0 * uv[j] / A[2] + w1 * uv[j + 2] / B[2] + w2 * uv[j + 4] / C[2]) * z;
             const iv = (w0 * uv[j + 1] / A[2] + w1 * uv[j + 3] / B[2] + w2 * uv[j + 5] / C[2]) * z;
-            const tx = Math.min(frag.texture.width - 1, Math.max(0, Math.floor((iu % 1 + 1) % 1 * frag.texture.width)));
-            const ty = Math.min(frag.texture.height - 1, Math.max(0, Math.floor((iv % 1 + 1) % 1 * frag.texture.height)));
-            const ti = (ty * frag.texture.width + tx) * 4;
-            r = frag.texture.rgba[ti] / 255; g = frag.texture.rgba[ti + 1] / 255; b = frag.texture.rgba[ti + 2] / 255;
+            const ti = sampleTexel(frag.texture, iu, iv);
+            r *= SRGB8_TO_LINEAR[frag.texture.rgba[ti]];
+            g *= SRGB8_TO_LINEAR[frag.texture.rgba[ti + 1]];
+            b *= SRGB8_TO_LINEAR[frag.texture.rgba[ti + 2]];
           }
-          color[p * 4] = Math.min(255, Math.round(r * lambert * 255));
-          color[p * 4 + 1] = Math.min(255, Math.round(g * lambert * 255));
-          color[p * 4 + 2] = Math.min(255, Math.round(b * lambert * 255));
+          // Shade in linear, write display-referred sRGB.
+          color[p * 4] = linearToSrgb8(r * lambert);
+          color[p * 4 + 1] = linearToSrgb8(g * lambert);
+          color[p * 4 + 2] = linearToSrgb8(b * lambert);
         }
       }
     }

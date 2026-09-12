@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document } from '@gltf-transform/core';
-import { createNodeIO, diffAssets, diffV1, fromGltf, listDiffRules, ERROR_CODES, type RuleFinding, type SceneIR } from '../src/index.js';
+import { createNodeIO, diffAssets, diffV1, fromGltf, getProfile, listDiffRules, profileLabel, ERROR_CODES, type RuleFinding, type SceneIR } from '../src/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -144,7 +144,7 @@ describe('diff@1', () => {
     const seat = box([-0.25, 0.45, -0.25], [0.5, 0.05, 0.5]);
     const broken = scene([{ name: 'seat', mesh: { positions: seat.positions, indices: seat.indices.slice(6) } }, ...legs()]);
     const web = await diffAssets(chair(), broken, { profile: 'mobile-hero' });
-    expect(web.profile).toBe('mobile-hero@1');
+    expect(web.profile).toBe(profileLabel(getProfile('mobile-hero'))); // resolves + labels the latest version
     expect(web.findings.find((f) => f.rule === 'diff/watertight-lost')).toMatchObject({ severity: 'warning', default_severity: 'warning' }); // web profiles do not override diff rules yet
     const off = await diffAssets(chair(), broken, { topology: false });
     expect(off.topology.shells).toBeNull();

@@ -90,9 +90,10 @@ describe('inspect', () => {
   });
 
   it('profile decides severity; topology off is reported as skipped; params reach the pack', async () => {
+    const { getProfile, profileLabel } = await import('@glbforge/core');
     const web = await call('inspect', { path: fx['centimeters.glb'], profile: 'mobile-hero' });
     const wd = web.data as { profile: string; findings: Array<{ rule: string; severity: string; default_severity: string }> };
-    expect(wd.profile).toBe('mobile-hero@1');
+    expect(wd.profile).toBe(profileLabel(getProfile('mobile-hero'))); // latest version, whichever it is
     const open = wd.findings.find((f) => f.rule === 'topo/open-edges')!;
     expect(open).toMatchObject({ severity: 'info', default_severity: 'warning' });
     expect(wd.findings.find((f) => f.rule === 'scale/too-small')!.severity).toBe('warning');

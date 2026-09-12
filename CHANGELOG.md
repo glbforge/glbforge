@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Perceptual verification scored base color across two transfer curves.**
+  The software renderer sampled base-color *textures* as if their bytes were
+  already linear, while `baseColorFactor` is stored and used as linear. Any
+  surface that moved between those two slots was compared against itself
+  through two different curves — and the pipeline moves colour between them
+  on its own: `prune()` folds a base-color texture that is one solid colour
+  into the factor and drops the image. That asset is correct and smaller, but
+  `optimize` reported visible loss and failed the budget. Isolated, the fold
+  scored 0.9045; it now scores 1.0000.
+
+  The renderer now decodes texels through sRGB, composes `factor * texture`
+  the way glTF defines it (it previously let the texture replace a non-white
+  factor entirely), shades in linear light, resolves supersamples in linear
+  light, and sRGB-encodes the output — so rendered previews and dataset pairs
+  are display-referred too, not just internally consistent.
+
+  This moves every SSIM the tool reports, which is why `verifyRig()` is
+  documented as frozen. The floors were re-derived rather than assumed: on
+  the Meshy 7 fixture the mobile-hero budget pass goes 0.9594 → 0.9637 (4K
+  textures) and the 40k counter-example 0.8999 → 0.9132, so 0.94 still sits
+  between them. **No cap changed**, but all three profiles are republished as
+  `@2` so the rationale text matches the measurement and `@1` keeps meaning
+  what CI recorded before this release. Full table: `docs/BUDGETS.md`.
+- Nearest-neighbour, mip-free texture sampling is now documented as a
+  deliberate determinism trade-off (`sampleTexel` in
+  `packages/core/src/harness/render.ts`) rather than an accident: the
+  renderer is blind to minification aliasing a viewer would show, blunted by
+  the decoder's 512px downscale and 2x supersampling.
+
+### Changed
+
+- `srgbToLinear` / `linearToSrgb` are published from `@glbforge/core`
+  (`packages/core/src/color.ts`), replacing three private copies of the
+  transfer function.
+
 ## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
 
 For agents editing assets in a loop. Rule ids and packs: `docs/error-codes.md`
