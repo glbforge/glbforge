@@ -188,13 +188,33 @@ async function verifyStripeSignature(env: Env, payload: string, header: string):
   return expected === parts.v1;
 }
 
+/**
+ * Static assets, with one correction: a 404 must never be cacheable.
+ *
+ * `site/_headers` marks `/studio/assets/*` immutable for a year, and those
+ * headers are applied by path — including to a MISS. A browser that asks for a
+ * hashed chunk in the seconds between a new index.html going live and that
+ * chunk propagating gets a 404 stamped `max-age=31536000, immutable`, and then
+ * keeps serving itself that 404 for a year: the Studio is broken for that user
+ * until they clear site data, and nothing in a redeploy can reach them.
+ * Observed live on 2026-09-12 — a browser held a 404 for a chunk that curl
+ * fetched fine.
+ */
+async function assetResponse(request: Request, env: Env): Promise<Response> {
+  const response = await env.ASSETS.fetch(request);
+  if (response.status !== 404) return response;
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-store');
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 // --- router -----------------------------------------------------------------
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
-    if (!path.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (!path.startsWith('/api/')) return assetResponse(request, env);
 
     // CSRF floor for state-changing calls: must come from our own origin.
     if (request.method === 'POST') {
