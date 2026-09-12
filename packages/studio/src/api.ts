@@ -102,6 +102,8 @@ export const api = {
     const blob = backend === 'local'
       ? await (await local()).usdzBlob(id, jpeg)
       : await fetch(`/api/assets/${id}/usdz?jpeg=${jpeg ? 1 : 0}`).then((r) => r.blob());
+    // On an iPhone the point of a USDZ is AR, not a file in Downloads.
+    if (isIOS()) return openInQuickLook(blob);
     triggerDownload(blob, derivedName(name, 'usdz'));
   },
   downloadGlb: async (id: string, name: string) => {
@@ -192,6 +194,24 @@ export const isTouch = (): boolean =>
 /** iPhone / iPad (incl. iPadOS desktop UA with touch): AR Quick Look opens USDZ; GLB has no native viewer. */
 export const isIOS = (): boolean =>
   typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+/**
+ * Hand a USDZ to AR Quick Look instead of saving it. Safari intercepts a click
+ * on an `<a rel="ar">` whose only child is an `<img>` and opens the AR viewer
+ * in place — the img child is load-bearing (without it the link just
+ * navigates), and a `download` attribute would make Safari save the file
+ * instead, which is the behaviour this replaces. From the AR view the share
+ * sheet still offers "Save to Files", so nothing is lost.
+ */
+function openInQuickLook(blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.rel = 'ar';
+  a.href = url;
+  a.appendChild(document.createElement('img'));
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 20_000);
+}
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

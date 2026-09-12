@@ -14,6 +14,15 @@
 
 ### Fixed
 
+- **USDZ export on an iPhone landed in Downloads instead of opening in AR.**
+  The iOS button said "open in AR Quick Look" but ran the same
+  `<a download>` as every other export, so the file went to the downloads
+  list and AR was a second, manual tap away. Safari opens AR Quick Look in
+  place when the click lands on an `<a rel="ar">` whose only child is an
+  `<img>` — the img is load-bearing, and a `download` attribute suppresses
+  the whole behaviour. `downloadUsdz` now takes that path on iOS and keeps
+  the plain download everywhere else; the share sheet inside the AR view
+  still saves the file for anyone who wants it.
 - **The Studio could not take a GLB from a phone.** The drop zone's file input
   carried `accept=".glb,.png,…"`, and iOS and Android filter the picker by the
   UTI/MIME each extension maps to — `.glb` maps to nothing, so every GLB in
