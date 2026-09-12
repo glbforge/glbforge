@@ -121,6 +121,33 @@
 - `srgbToLinear` / `linearToSrgb` are published from `@glbforge/core`
   (`packages/core/src/color.ts`), replacing three private copies of the
   transfer function.
+- **pnpm 12 and `pnpm/setup@v2`.** `pnpm/action-setup` is superseded by
+  `pnpm/setup`, which installs pnpm and the runtime in one step, caches the
+  store keyed on the lockfile, and runs the install itself: three workflow
+  steps become two in `ci.yml` and one in `action-selftest.yml`. `release.yml` keeps
+  `actions/setup-node` — npm OIDC trusted publishing needs the `.npmrc` its
+  `registry-url` writes, which `pnpm/setup` does not produce. The install stays an explicit
+    `pnpm install --frozen-lockfile` step: the released `v2` tag has no
+    `require-lockfile` input (that one is on the action's default branch), and
+    a plain install resolves from the registry when no lockfile is present.
+  - `pnpm/setup@v2` installs pnpm 11+ only, so `packageManager` moves from
+    `pnpm@10.15.1` to `pnpm@12.4.1`. `pnpm-lock.yaml` stays at
+    `lockfileVersion: '9.0'` and the diff is purely additive (+158 lines of
+    `configDependencies` / `packageManagerDependencies` metadata, 0 removed).
+  - pnpm 12 turns ignored build scripts from a warning into an error, and
+    keeps the decision in `pnpm-workspace.yaml` rather than `package.json`:
+    `allowBuilds: { esbuild: false }` records what pnpm 10 already did
+    silently. esbuild's binary comes from its `@esbuild/*` optional
+    dependency, so nothing needs the script — the Studio's Vite build is
+    unchanged.
+  - **Upgrading locally takes one command.** pnpm 10's `packageManager`
+    self-switch cannot bootstrap pnpm 11 or 12 on macOS arm64: it fetches
+    `@pnpm/macos-arm64`, which stopped publishing at 11.26.0 and whose 11.x
+    artifact is missing its binary (the failure mode `pnpm/setup@v2`'s release
+    notes describe). pnpm 12 ships as `@pnpm/exe.darwin-arm64` instead. Install
+    pnpm 11+ by any other route once — `npm install -g pnpm@12` — and the
+    `packageManager` pin governs from there. CI is unaffected: `pnpm/setup`
+    downloads the binary itself.
 - **Every GitHub Action dependency moves to its Node 24 major.** The Node 20
   runtime is deprecated and the runner was already force-migrating these, so
   the versions now say what actually runs. Workflows: `actions/checkout@v7`,

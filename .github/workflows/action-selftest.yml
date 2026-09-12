@@ -15,12 +15,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
+      # install: false — the action under test runs its own
+      # `pnpm install --frozen-lockfile` in use-local mode; this step only has
+      # to put pnpm and node on PATH and warm the store.
+      - uses: pnpm/setup@v2
         with:
-          node-version: 22
-          cache: pnpm
+          runtime: node@22
+          cache: true
+          install: false
 
       # The action under test, built from this very checkout. Optimize mode
       # is a no-op unless the PR changes a GLB; then it opens a PR against
