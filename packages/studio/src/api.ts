@@ -98,13 +98,18 @@ export const api = {
       : await fetch(`/api/assets/${id}/stl?size=${size}`).then((r) => r.blob());
     triggerDownload(blob, derivedName(name, 'stl'));
   },
+  /** Save the USDZ as a file (iOS Safari puts it in Files › Downloads). */
   downloadUsdz: async (id: string, name: string, jpeg = true) => {
-    const blob = backend === 'local'
-      ? await (await local()).usdzBlob(id, jpeg)
-      : await fetch(`/api/assets/${id}/usdz?jpeg=${jpeg ? 1 : 0}`).then((r) => r.blob());
-    // On an iPhone the point of a USDZ is AR, not a file in Downloads.
-    if (isIOS()) return openInQuickLook(blob);
-    triggerDownload(blob, derivedName(name, 'usdz'));
+    triggerDownload(await usdzBlob(id, jpeg), derivedName(name, 'usdz'));
+  },
+  /**
+   * iOS only: open the USDZ in AR Quick Look. Quick Look's own share button
+   * re-shares the URL it was opened with, and a blob URL has no file behind
+   * it, so this is the *view* path — `downloadUsdz` is the one that keeps a
+   * copy. The build is cached between the two so the second tap is instant.
+   */
+  viewUsdzInAr: async (id: string, jpeg = true) => {
+    openInQuickLook(await usdzBlob(id, jpeg));
   },
   downloadGlb: async (id: string, name: string) => {
     const blob = backend === 'local'
@@ -194,6 +199,22 @@ export const isTouch = (): boolean =>
 /** iPhone / iPad (incl. iPadOS desktop UA with touch): AR Quick Look opens USDZ; GLB has no native viewer. */
 export const isIOS = (): boolean =>
   typeof navigator !== 'undefined' && (/iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+/**
+ * One USDZ build shared by the AR and save paths — building it takes seconds,
+ * and on iOS the two buttons are the expected sequence (look at it, then keep
+ * it). Only the most recent asset is held, since the blob is megabytes.
+ */
+let usdzCache: { key: string; blob: Blob } | null = null;
+async function usdzBlob(id: string, jpeg: boolean): Promise<Blob> {
+  const key = `${id}:${jpeg}:${backend}`;
+  if (usdzCache?.key === key) return usdzCache.blob;
+  const blob = backend === 'local'
+    ? await (await local()).usdzBlob(id, jpeg)
+    : await fetch(`/api/assets/${id}/usdz?jpeg=${jpeg ? 1 : 0}`).then((r) => r.blob());
+  usdzCache = { key, blob };
+  return blob;
+}
 
 /**
  * Hand a USDZ to AR Quick Look instead of saving it. Safari intercepts a click

@@ -155,10 +155,12 @@ export function Inspector(props: {
         </button>
         {isIOS() ? (
           <>
-            <button onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬈ View in AR — Quick Look</button>
+            <button onClick={() => void api.viewUsdzInAr(asset.id)}>⬈ View in AR — Quick Look</button>
+            <button className="ghost" onClick={() => void api.downloadUsdz(asset.id, asset.name)}>⬇ Save USDZ to Files</button>
             <div style={{ color: 'var(--dim)', fontSize: 11 }}>
-              iPhone/iPad cannot open .glb files natively, so this exports a USDZ and opens it in AR
-              straight away — share from there to keep the file. Save the GLB for desktop or web viewers.
+              iPhone/iPad cannot open .glb natively, so AR gets a USDZ. Quick Look's share button
+              re-shares the link it was opened with, which is an in-memory blob — use Save to keep
+              the file. Save the GLB for desktop or web viewers.
             </div>
           </>
         ) : (
