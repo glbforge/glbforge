@@ -53,7 +53,7 @@ routes photographs to generators, and exports GLB / STL / USDZ.
 ### `--matte auto` — lift the subject, forge the sticker
 
 A photograph has no alpha and no white ground, so the forge refuses it. The
-matte (`matte/border@1`, `core/src/extrude/matte.ts`) is the third answer:
+matte (`matte/border@2`, `core/src/extrude/matte.ts`) is the third answer:
 it takes the frame edge as the background, grows it inward through pixels of
 that colour, and calls what survives the subject — the idea behind a phone's
 "lift subject", done with plain connectivity, so it adds no model download,
@@ -62,6 +62,11 @@ Colour decides each pixel's class and connectivity decides what happens to
 it, which is what keeps a mug's handle open: an enclosed region of
 background colour is a hole, not subject. Small enclosed regions (highlights,
 JPEG speckle) are filled, small disconnected pieces are dropped as debris.
+Matching is chromaticity-aware in one direction — a pixel that is close in
+colour and *darker* than the background is a shadow of it, so a cast shadow
+stops being welded to the object, while a white mug on a grey desk (brighter,
+same hue) is never absorbed. A 3x3 majority filter smooths the mask before
+tracing, so JPEG ringing along an edge does not become hundreds of contours.
 
 A mask is an **inference**, so it reports like one — coverage, pieces, holes,
 and a confidence built from how uniform the edge was, how much contrast the

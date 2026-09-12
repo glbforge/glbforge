@@ -162,16 +162,35 @@ export async function startUiServer(opts: {
       const profile = String(req.query.profile ?? 'mobile-hero');
       const bevel = Number(req.query.bevel ?? 0);
       const depth = req.query.depth ? Number(req.query.depth) : undefined;
-      const layers = req.query.layers ? Number(req.query.layers) : undefined;
+      const layers = req.query.layers === 'auto' ? 'auto' as const
+        : req.query.layers ? Number(req.query.layers) : undefined;
       const pillow = req.query.pillow ? Number(req.query.pillow) : undefined;
       const emboss = req.query.emboss ? Number(req.query.emboss) : undefined;
       const preset = req.query.preset ? String(req.query.preset) as 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber' : undefined;
       const matte = req.query.matte === 'auto' ? 'auto' as const : undefined;
-      const { doc } = await extrudeImage(new Uint8Array(req.body), { bevel, depth, layers, pillow, emboss, preset, matte });
+      const tolerance = req.query.matteTolerance ? Number(req.query.matteTolerance) : undefined;
+      const { doc, stats } = await extrudeImage(new Uint8Array(req.body), {
+        bevel, depth, layers, pillow, emboss, preset, matte,
+        matteOptions: tolerance ? { tolerance } : undefined,
+      });
       const io = await createNodeIO();
       const outBytes = await io.writeBinary(doc);
       const asset = await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', outBytes, profile);
-      res.json({ ...summary(asset), report: asset.report });
+      // Same forge note the in-browser engine returns, so the UI reads one shape.
+      res.json({
+        ...summary(asset),
+        report: asset.report,
+        forge: {
+          mode: stats.mode,
+          matte: stats.matte && {
+            confidence: stats.matte.confidence, coverage: stats.matte.coverage,
+            components: stats.matte.components, holes: stats.matte.holes,
+            version: stats.matte.version, notes: stats.matte.notes,
+          },
+          flatness: stats.flatness,
+          layers: stats.layerInfo?.length ?? 1,
+        },
+      });
     } catch (err) {
       console.error(`  [api] ${req.method} ${req.path}:`, err instanceof Error ? err.message : err);
       res.status(400).json({ error: err instanceof Error ? err.message : String(err) });

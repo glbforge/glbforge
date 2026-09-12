@@ -75,7 +75,8 @@ updated with the code: anything not listed here is not shipped):
   `--matte auto` (CLI) / `matte` (MCP `extrude_image`) / "Lift subject and
   forge" (Studio) lifts a subject off its background first, so a photo of an
   object on a plain ground becomes a sticker instead of being refused:
-  deterministic connectivity (`matte/border@1`), no model download, holes kept
+  deterministic connectivity (`matte/border@2`: chroma-aware, so a cast
+  shadow reads as the ground rather than as the object), no model download, holes kept
   open, debris dropped. The mask is an inference and says so — coverage,
   pieces, holes and a confidence; under 0.4 it refuses with the numbers rather
   than forging a blob, and the MCP reports an accepted lift as

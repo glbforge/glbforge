@@ -46,6 +46,7 @@ export function AssetRail(props: {
   const [pillow, setPillow] = useState(false);
   const [sculpt, setSculpt] = useState(false);
   const [preset, setPreset] = useState('');
+  const [matteTolerance, setMatteTolerance] = useState(34);
 
   // The forge traces a silhouette, so it refuses a photograph — core says so in
   // CLI terms ("pass --mode/--threshold"), which is no help inside a browser.
@@ -59,11 +60,16 @@ export function AssetRail(props: {
       try {
         return await api.extrude(image.name, image.bytes, {
           bevel: pillow || sculpt ? 0 : 0.015, profile: 'mobile-hero',
-          layers: layered ? 4 : undefined,
+          // 'auto', never a hard 4: k-means returns four clusters whether or
+          // not the artwork has four colours, and on a photo or a gradient
+          // that is stacked slabs with noisy contours. `ship` learned this;
+          // the Studio was still asking for 4.
+          layers: layered ? 'auto' : undefined,
           pillow: pillow ? 0.035 : undefined,
           emboss: sculpt ? 0.012 : undefined,
           preset: preset || undefined,
           matte,
+          matteTolerance: matte ? matteTolerance : undefined,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -157,6 +163,16 @@ export function AssetRail(props: {
               <button onClick={() => { void extrude(pending, 'auto'); setPending(null); }}>
                 ✂ Lift subject and forge <span className="choice-sub">instant · free · a sticker of the object</span>
               </button>
+              <label className="slider">
+                <span>cut tolerance {matteTolerance}</span>
+                <input
+                  type="range" min={12} max={70} step={2} value={matteTolerance}
+                  onChange={(e) => setMatteTolerance(Number(e.target.value))}
+                />
+                <span className="choice-sub">
+                  lower keeps more of the object, higher takes more of the background
+                </span>
+              </label>
             </>
           )}
           <button className={photoHint ? 'ghost' : undefined} onClick={() => { void extrude(pending); setPending(null); }}>

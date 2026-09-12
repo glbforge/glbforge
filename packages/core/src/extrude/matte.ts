@@ -20,7 +20,15 @@
  * version, never in place.
  */
 
-export const MATTE_VERSION = 'matte/border@1';
+/**
+ * Bumped from @1 (same day) when the distance function learned about shadows
+ * and the mask gained a smoothing pass: the pixels this produces are part of
+ * the deterministic output, so the algorithm's identity has to move with them.
+ * @1 was never pinnable — there is no version argument yet — so nothing can be
+ * left behind on it; when the first caller needs to pin, this becomes a table
+ * like PROFILE_VERSIONS and every published version stays.
+ */
+export const MATTE_VERSION = 'matte/border@2';
 
 export interface MatteOptions {
   /**
@@ -30,6 +38,19 @@ export interface MatteOptions {
    * rarely dissolves into the wall behind it.
    */
   tolerance?: number;
+  /**
+   * How far a pixel may sit from a background reference *in colour alone*
+   * while being darker than it, and still count as background — the shadow
+   * rule (see `isBackgroundColour`). Default 22. Raise it on a hard-lit
+   * photograph, drop it to 0 to disable shadow matching entirely.
+   */
+  shadowTolerance?: number;
+  /**
+   * Passes of a 3x3 majority filter over the background mask before anything
+   * is traced, which is what stops JPEG noise from becoming a ragged rim.
+   * Default 2; 0 = off.
+   */
+  smoothing?: number;
   /**
    * Enclosed background regions this small (as a share of the subject) are
    * filled in rather than kept as holes — specular highlights, light gaps in
@@ -77,12 +98,69 @@ const BUCKET_SHIFT = 8 - BUCKET_BITS;
 const REFERENCE_COVERAGE = 0.75;
 /** …and never more than this many, so a busy edge does not swallow everything. */
 const MAX_REFERENCES = 4;
+/** How far below the background's brightness the shadow rule still reaches. */
+const SHADOW_FLOOR = 0.45;
 /** A subject smaller/larger than these is not a subject worth cutting out. */
 const MIN_SENSIBLE_COVERAGE = 0.005;
 const MAX_SENSIBLE_COVERAGE = 0.92;
 
 const distance = (px: Uint8Array | Buffer, i: number, r: number, g: number, b: number): number =>
   Math.sqrt((px[i] - r) ** 2 + (px[i + 1] - g) ** 2 + (px[i + 2] - b) ** 2);
+
+const luma = (r: number, g: number, b: number): number => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+/**
+ * Distance in colour with luminance discounted — a shadow is the ground's own
+ * colour at lower brightness, so this is small across one and large across a
+ * genuinely different material.
+ *
+ * Normalizing by brightness is what makes it luminance-free: (r,g,b) and
+ * (r,g,b)*0.6 have the same chromaticity. The `+1` keeps near-black stable,
+ * where chromaticity stops meaning anything.
+ */
+const chromaDistance = (
+  px: Uint8Array | Buffer, i: number, r: number, g: number, b: number,
+): number => {
+  const pSum = px[i] + px[i + 1] + px[i + 2] + 1;
+  const rSum = r + g + b + 1;
+  return 255 * Math.sqrt(
+    (px[i] / pSum - r / rSum) ** 2
+    + (px[i + 1] / pSum - g / rSum) ** 2
+    + (px[i + 2] / pSum - b / rSum) ** 2,
+  );
+};
+
+/**
+ * A 3x3 majority filter, run in place over a 0/1 mask.
+ *
+ * The flood follows colour exactly, so JPEG ringing along an edge leaves it
+ * frayed — and a frayed mask becomes a frayed silhouette, which the tracer
+ * then faithfully turns into hundreds of tiny contours. Smoothing the mask is
+ * cheaper and more predictable than smoothing the geometry afterwards.
+ */
+function smoothMask(mask: Uint8Array, width: number, height: number, passes: number): void {
+  if (passes <= 0) return;
+  const next = new Uint8Array(mask.length);
+  for (let pass = 0; pass < passes; pass++) {
+    next.set(mask);
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const p = y * width + x;
+        let on = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx || dy) on += mask[p + dy * width + dx];
+          }
+        }
+        // Isolated pixels lose, enclosed pixels win, everything else holds —
+        // so edges move at most one pixel per pass and corners survive.
+        if (on <= 2) next[p] = 0;
+        else if (on >= 6) next[p] = 1;
+      }
+    }
+    mask.set(next);
+  }
+}
 
 /**
  * Lift the subject out of an opaque image.
@@ -99,6 +177,8 @@ export function liftSubject(
   opts: MatteOptions = {},
 ): Matte {
   const tolerance = opts.tolerance ?? 34;
+  const shadowTolerance = opts.shadowTolerance ?? 22;
+  const smoothing = opts.smoothing ?? 2;
   const holeShare = opts.holeShare ?? 0.02;
   const minComponentShare = opts.minComponentShare ?? 0.05;
   const n = width * height;
@@ -135,8 +215,26 @@ export function liftSubject(
   }
   const backgroundUniformity = referenced / edgePixels;
 
-  const isBackgroundColour = (i: number): boolean =>
-    references.some((ref) => distance(px, i, ref.r, ref.g, ref.b) <= tolerance);
+  /**
+   * Background is a match in colour *or* a shadow of one.
+   *
+   * The shadow arm is deliberately one-sided: a pixel qualifies only if it is
+   * chromatically close AND darker than the reference. A cast shadow is the
+   * ground's own colour with the light taken away, so it lands here and stops
+   * being welded to the object that cast it — while a white mug on a grey desk
+   * is *brighter* than the ground and is never absorbed by it. The floor stops
+   * the rule from running all the way down into black, where every colour is
+   * chromatically close to every other.
+   */
+  const isBackgroundColour = (i: number): boolean => references.some((ref) => {
+    if (distance(px, i, ref.r, ref.g, ref.b) <= tolerance) return true;
+    if (shadowTolerance <= 0) return false;
+    const pixelLuma = luma(px[i], px[i + 1], px[i + 2]);
+    const refLuma = luma(ref.r, ref.g, ref.b);
+    return pixelLuma <= refLuma
+      && pixelLuma >= refLuma * SHADOW_FLOOR
+      && chromaDistance(px, i, ref.r, ref.g, ref.b) <= shadowTolerance;
+  });
 
   // --- 2. Classify every pixel, then grow the background inward ------------
   // Colour decides the class and connectivity decides what to do about it —
@@ -145,6 +243,10 @@ export function liftSubject(
   // flood could reach" and so is the ring itself.
   const backgroundLike = new Uint8Array(n);
   for (let p = 0; p < n; p++) backgroundLike[p] = isBackgroundColour(p * 4) ? 1 : 0;
+  // Smooth the classification, not the geometry: a frayed mask becomes a
+  // frayed silhouette, and the tracer would turn every JPEG artifact along the
+  // rim into its own contour.
+  smoothMask(backgroundLike, width, height, smoothing);
 
   // Seeded only from edge pixels that match a reference, so a subject running
   // off the frame (a cropped object, a hand at the bottom) is not itself a

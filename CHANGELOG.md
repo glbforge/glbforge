@@ -4,11 +4,10 @@
 
 ### Added
 
-- **Subject lifting: `--matte auto`, the forge's third mask mode.** A
+- **Subject lifting: `--matte auto`, the forge's third mask mode** (`matte/border@2`). A
   photograph carries no alpha and no white ground, so the forge refuses it —
   correct, and a dead end for the most common thing anyone points a camera at.
-  `matte/border@1` (`core/src/extrude/matte.ts`) takes the frame edge as the
-  background, grows it inward through pixels of that colour, and calls what
+  `core/src/extrude/matte.ts` takes the frame edge as the background, grows it inward through pixels of that colour, and calls what
   survives the subject: the idea behind a phone's "lift subject", done with
   plain connectivity rather than a segmentation model, so it adds no download,
   runs identically in Node and the browser, and stays byte-for-byte
@@ -49,6 +48,39 @@
   generative routes go quiet under `--json` so stdout stays parseable.
 
 ### Fixed
+
+- **The Studio asked for four colour layers on everything.** `ship` learned in
+  this same release that k-means returns four clusters whether or not the
+  artwork has four colours — a gradient becomes stacked slabs with noisy
+  contours — and started passing `layers: 'auto'`. The Studio was still
+  hardcoding 4, so "layered colors" (on by default) failed or produced junk on
+  exactly the images people drop most: photos and gradients. It now passes
+  `'auto'` like everything else, and the Inspector shows the measurement
+  behind the decision: a gradient star reports *"1 layer — not flat-coloured:
+  its 4 dominant colours cover only 43%"* and forges at 220 triangles, while a
+  genuinely flat emblem still layers.
+- **A cast shadow was welded onto the subject it came from** (`matte/border@2`).
+  RGB distance cannot tell a shadow from an object: it is the ground's own
+  colour with the light taken away, it touches the subject, and the flood
+  therefore stopped at it and kept it. Background matching is now
+  chromaticity-based as well — a pixel also counts as background when it is
+  chromatically close to a reference *and darker than it*, down to 45% of its
+  brightness. The one-sidedness is the point: darker-and-same-hue is a shadow,
+  brighter-and-same-hue is a white mug on a grey desk, which must stay. A 3x3
+  majority filter (2 passes) then smooths the mask before anything is traced,
+  because JPEG ringing along an edge otherwise becomes hundreds of tiny
+  contours. Measured on a mug with a cast shadow: the shadow is background,
+  the handle's hole survives, and the rim traces to 872 triangles instead of a
+  frayed several thousand. The version moves to @2 because the pixels it
+  produces are part of the deterministic output; @1 shipped hours earlier and
+  was never pinnable.
+- **The Studio could not say why a forge did what it did.** Assets made by the
+  forge now carry a note the Inspector renders: which mask produced the
+  silhouette, and for a lifted one its confidence, coverage, pieces, holes and
+  the reasons behind the score — with a "cut tolerance" slider beside the lift
+  button to act on it. The note lives on the asset record, not on the call's
+  return value, because the UI re-fetches by id after every run.
+
 
 - **"Invalid glTF 2.0 binary" on an image the picker mislabelled.** Ingest
   routed on the filename and the MIME type, and on a phone both are routinely

@@ -127,6 +127,45 @@ export function Inspector(props: {
         </>
       )}
 
+      {asset.forge && (
+        <>
+          <div className="section-title">Forge</div>
+          <div className="forge-note">
+            {asset.forge.matte ? (
+              <>
+                <div>
+                  Subject lifted · confidence{' '}
+                  <b className={asset.forge.matte.confidence < 0.6 ? 'weak' : 'good'}>
+                    {(asset.forge.matte.confidence * 100).toFixed(0)}%
+                  </b>{' '}
+                  · {(asset.forge.matte.coverage * 100).toFixed(0)}% of the frame ·{' '}
+                  {asset.forge.matte.components} piece(s), {asset.forge.matte.holes} hole(s)
+                </div>
+                {asset.forge.matte.notes.map((note, i) => <div key={i} className="hint">· {note}</div>)}
+                {asset.forge.matte.confidence < 0.6 && (
+                  <div className="hint">
+                    · A low score usually means a shadow, a busy background, or a subject that
+                    shares the ground's colour. Re-drop the image and move "cut tolerance".
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>Silhouette from the image's own {asset.forge.mode === 'alpha' ? 'transparency' : 'white background'}</div>
+            )}
+            <div>
+              {asset.forge.layers > 1
+                ? `${asset.forge.layers} colour layers`
+                : '1 layer'}
+              {asset.forge.flatness && asset.forge.layers === 1 && (
+                asset.forge.flatness.distinct < 2
+                  ? ' — one colour, nothing to layer'
+                  : ` — not flat-coloured: its ${asset.forge.flatness.distinct} dominant colours cover only ${(asset.forge.flatness.coverage * 100).toFixed(0)}%`
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
       <div className="section-title">Actions</div>
       <div className="actions">
         <div className="row">

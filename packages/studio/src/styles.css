@@ -95,6 +95,11 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
 .choice { margin: 0 10px 10px; padding: 10px; border: 1px solid var(--line); border-radius: 8px;
   display: flex; flex-direction: column; gap: 7px; }
 .choice-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.forge-note { font-size: 12px; color: var(--dim); line-height: 1.5; margin-bottom: 8px; }
+.forge-note b.good { color: var(--good); }
+.forge-note b.weak { color: var(--warn); }
+.slider { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--dim); }
+.slider input { width: 100%; accent-color: var(--accent); }
 .choice-hint {
   color: var(--warn); font-size: 11.5px; line-height: 1.45;
   border-left: 2px solid var(--warn); padding: 2px 0 2px 8px; margin-bottom: 2px;

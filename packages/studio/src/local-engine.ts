@@ -23,7 +23,7 @@ import {
   type TextureDecoder,
   type TextureEncoder,
 } from '@glbforge/core';
-import { registerLocalUrls, type AssetDetail, type AssetSummary } from './api';
+import { registerLocalUrls, type AssetDetail, type AssetSummary, type ForgeNote } from './api';
 import { loadAssets, persistAsset } from './persist';
 
 interface LocalAsset {
@@ -34,6 +34,8 @@ interface LocalAsset {
   parentId?: string;
   blobUrl: string;
   fidelitySheet?: string | null;
+  /** What the forge decided, for assets it made — see ForgeNote in api.ts. */
+  forge?: ForgeNote;
 }
 
 const assets = new Map<string, LocalAsset>();
@@ -62,6 +64,7 @@ const toDetail = (a: LocalAsset): AssetDetail => ({
   steps: null,
   report: a.report as unknown as AssetDetail['report'],
   fidelitySheet: a.fidelitySheet ?? null,
+  forge: a.forge,
 });
 
 /** Constrained device: coarse pointer / low reported memory / mobile UA. */
@@ -269,18 +272,34 @@ export const localEngine = {
     toDetail(await ingest(name, new Uint8Array(bytes), profile)),
 
   extrude: async (name: string, bytes: ArrayBuffer, opts: {
-    bevel: number; profile: string; layers?: number; pillow?: number; emboss?: number;
-    preset?: string; matte?: 'auto' | 'off';
+    bevel: number; profile: string; layers?: number | 'auto'; pillow?: number; emboss?: number;
+    preset?: string; matte?: 'auto' | 'off'; matteTolerance?: number;
   }) => {
     const { px, width, height, pngBytes } = await decodeImage(bytes, name);
-    const { doc } = await extrudeFromRgba(px, width, height, {
+    const { doc, stats } = await extrudeFromRgba(px, width, height, {
       bevel: opts.bevel, layers: opts.layers, pillow: opts.pillow, emboss: opts.emboss,
       preset: opts.preset as 'enamel' | undefined, matte: opts.matte,
+      matteOptions: opts.matteTolerance ? { tolerance: opts.matteTolerance } : undefined,
       textureBytes: { bytes: pngBytes, mimeType: 'image/png' },
     });
     const io = await createIO();
     const out = await io.writeBinary(doc);
-    return toDetail(await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', out, opts.profile));
+    const asset = await ingest(name.replace(/\.[a-z0-9]+$/i, '') + '.glb', out, opts.profile);
+    // Record the forge's own decisions ON the asset: which mask it used, how
+    // sure a lifted one was, and whether 'auto' found flat colour to layer.
+    // It has to live on the record, not on this return value — the UI
+    // re-fetches the asset by id after every run.
+    asset.forge = {
+      mode: stats.mode,
+      matte: stats.matte && {
+        confidence: stats.matte.confidence, coverage: stats.matte.coverage,
+        components: stats.matte.components, holes: stats.matte.holes,
+        version: stats.matte.version, notes: stats.matte.notes,
+      },
+      flatness: stats.flatness,
+      layers: stats.layerInfo?.length ?? 1,
+    };
+    return toDetail(asset);
   },
 
   optimize: async (id: string, opts: { profile: string; ktx2: boolean }) => {

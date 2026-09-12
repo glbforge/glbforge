@@ -64,25 +64,63 @@ describe('liftSubject (matte/border@1)', () => {
     expect(b.coverage).toBe(a.coverage);
   });
 
-  it('keeps a real hole open and fills speckle', () => {
+  it('keeps a real hole open, fills a small one, and never sees a single-pixel speck', () => {
     // A ring: the middle is background the edge flood cannot reach, and it is
-    // large, so it must stay a hole. One stray pixel inside the ring wall is
-    // speckle and must be filled — otherwise every JPEG artifact becomes a
-    // contour the tracer has to carry.
+    // large, so it must stay a hole. Inside the wall sit two specks of
+    // background — a 3x3 that survives smoothing and is filled as noise, and a
+    // lone pixel that the smoothing pass removes before anything classifies
+    // it. Both end up subject; only one was ever a "hole".
     const size = 160, cx = 80, cy = 80;
     const { px, width, height } = scene(size, size, (x, y) => {
       const r = Math.hypot(x - cx, y - cy);
-      // Radius 35 puts this squarely in the ring's wall (22 < r < 55), not in
-      // its eye — a speck of background *inside* the subject.
-      if (x === 115 && y === 80) return BG;
+      if (Math.abs(x - 115) <= 1 && Math.abs(y - 80) <= 1) return BG;  // 3x3 speck
+      if (x === 45 && y === 80) return BG;                             // lone pixel
       return r < 55 && r > 22 ? FG : BG;
     });
     const matte = liftSubject(px, width, height);
 
     expect(at(matte, width, cx, cy)).toBe(0);           // the ring's eye stays open
-    expect(at(matte, width, 115, 80)).toBe(255);        // speckle filled
+    expect(at(matte, width, 115, 80)).toBe(255);        // 3x3 speck filled as noise
+    expect(at(matte, width, 45, 80)).toBe(255);         // lone pixel smoothed away
     expect(matte.holes).toBe(1);
     expect(matte.filledHoles).toBe(1);
+  });
+
+  it('reads a cast shadow as the ground it falls on, not as part of the subject', () => {
+    // The failure that sends people back to Photoshop: a shadow is the ground's
+    // own colour with the light taken away, it touches the object, and an
+    // RGB-distance flood therefore welds it on as a dark skirt.
+    const size = 160;
+    const shadowed = scene(size, size, (x, y) => {
+      if (Math.hypot(x - 70, y - 70) < 34) return FG;
+      // An ellipse of shadow, overlapping the disc and running off to the SE.
+      const sx = (x - 95) / 46, sy = (y - 95) / 26;
+      if (sx * sx + sy * sy < 1) return BG.map((c) => Math.round(c * 0.62)) as [number, number, number];
+      return BG;
+    });
+
+    const lifted = liftSubject(shadowed.px, shadowed.width, shadowed.height);
+    expect(at(lifted, shadowed.width, 70, 70)).toBe(255);    // the object
+    expect(at(lifted, shadowed.width, 125, 100)).toBe(0);    // its shadow, not the object
+
+    // Turning the rule off reproduces the old behaviour, which is the proof
+    // that the rule is what fixed it rather than some other change.
+    const naive = liftSubject(shadowed.px, shadowed.width, shadowed.height, { shadowTolerance: 0 });
+    expect(at(naive, shadowed.width, 125, 100)).toBe(255);
+    expect(lifted.coverage).toBeLessThan(naive.coverage);
+  });
+
+  it('never absorbs a subject that is merely brighter than the ground', () => {
+    // The shadow rule is one-sided on purpose: darker-and-same-hue is a
+    // shadow, brighter-and-same-hue is a white mug on a grey desk.
+    const size = 128;
+    const grey: [number, number, number] = [150, 152, 155];
+    const { px, width, height } = scene(size, size, (x, y) =>
+      (Math.hypot(x - 64, y - 64) < 34 ? [246, 248, 250] : grey));
+    const matte = liftSubject(px, width, height);
+
+    expect(at(matte, width, 64, 64)).toBe(255);
+    expect(matte.coverage).toBeGreaterThan(0.15);
   });
 
   it('does not eat a subject that runs off the frame', () => {

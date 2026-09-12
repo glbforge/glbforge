@@ -36,10 +36,26 @@ export interface Report {
   findings: Finding[];
 }
 
+/** What the forge decided, for assets it made. Absent on everything else. */
+export interface ForgeNote {
+  /** 'alpha' | 'luma' | 'matte' — where the silhouette came from. */
+  mode: string;
+  /** Set when a subject was lifted: how separable it was, and why. */
+  matte?: {
+    confidence: number; coverage: number; components: number; holes: number;
+    version: string; notes: string[];
+  };
+  /** Set when layers: 'auto' ran — the measurement behind layering or not. */
+  flatness?: { coverage: number; distinct: number; layers: number };
+  /** How many colour layers were actually built. */
+  layers: number;
+}
+
 export type AssetDetail = AssetSummary & {
   report: Report;
   /** reference | result | change-heatmap sheet (PNG URL or data URL), set on optimized variants. */
   fidelitySheet?: string | null;
+  forge?: ForgeNote;
 };
 
 // Browsers send no Content-Type for ArrayBuffer bodies; Express's raw
@@ -125,10 +141,10 @@ export const api = {
           method: 'POST', body: bytes, headers: OCTET,
         }).then((r) => check<AssetDetail>(r)),
 
-  extrude: async (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number; pillow?: number; emboss?: number; preset?: string; matte?: 'auto' | 'off' }) =>
+  extrude: async (name: string, bytes: ArrayBuffer, opts: { bevel: number; profile: string; layers?: number | 'auto'; pillow?: number; emboss?: number; preset?: string; matte?: 'auto' | 'off'; matteTolerance?: number }) =>
     backend === 'local'
       ? (await local()).extrude(name, bytes, opts)
-      : fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.emboss ? `&emboss=${opts.emboss}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}${opts.matte ? `&matte=${opts.matte}` : ''}`, {
+      : fetch(`/api/extrude?name=${encodeURIComponent(name)}&bevel=${opts.bevel}&profile=${opts.profile}${opts.layers ? `&layers=${opts.layers}` : ''}${opts.pillow ? `&pillow=${opts.pillow}` : ''}${opts.emboss ? `&emboss=${opts.emboss}` : ''}${opts.preset ? `&preset=${opts.preset}` : ''}${opts.matte ? `&matte=${opts.matte}` : ''}${opts.matteTolerance ? `&matteTolerance=${opts.matteTolerance}` : ''}`, {
           method: 'POST', body: bytes, headers: OCTET,
         }).then((r) => check<AssetDetail>(r)),
 
