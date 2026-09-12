@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { api, type AssetDetail, type AssetSummary } from '../api';
+import { api, isTouch, type AssetDetail, type AssetSummary } from '../api';
 import type { GenTask } from '../App';
 
 const IMAGE_RE = /\.(png|jpe?g|webp|svg)$/i;
@@ -21,6 +21,12 @@ export function AssetRail(props: {
   onReimport?: (taskId: string) => Promise<void>;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
+  const touch = isTouch();
+  // No `accept` on phones and tablets: iOS and Android filter the picker by the
+  // UTI/MIME each extension maps to, and `.glb` maps to nothing — every GLB in
+  // Files greys out and cannot be chosen. On desktop the filter is a
+  // convenience with no such cost.
+  const acceptTypes = touch ? undefined : '.glb,model/gltf-binary,.png,.jpg,.jpeg,.webp,.svg';
   const [over, setOver] = useState(false);
   const [pending, setPending] = useState<PendingImage | null>(null);
   const [pbr, setPbr] = useState(true);
@@ -82,10 +88,11 @@ export function AssetRail(props: {
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); void ingest(e.dataTransfer.files); }}
       >
-        Drop a <b>GLB</b> to analyze<br />or an <b>image</b> to make 3D
+        {touch
+          ? <>Tap to choose a <b>GLB</b><br />or an <b>image</b> to make 3D</>
+          : <>Drop a <b>GLB</b> to analyze<br />or an <b>image</b> to make 3D</>}
         <input
-          ref={fileInput} type="file" multiple hidden
-          accept=".glb,.png,.jpg,.jpeg,.webp,.svg"
+          ref={fileInput} type="file" multiple hidden accept={acceptTypes}
           onChange={(e) => e.target.files && void ingest(e.target.files)}
         />
       </div>

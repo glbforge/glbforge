@@ -14,6 +14,22 @@
 
 ### Fixed
 
+- **The Studio could not take a GLB from a phone.** The drop zone's file input
+  carried `accept=".glb,.png,…"`, and iOS and Android filter the picker by the
+  UTI/MIME each extension maps to — `.glb` maps to nothing, so every GLB in
+  Files rendered greyed out and untappable. There is no drag-and-drop on a
+  phone either, so the tap-to-browse path was the only one, and it was the
+  broken one. `accept` is now omitted on touch devices (kept on desktop, where
+  filtering costs nothing) and the drop zone reads "Tap to choose" rather than
+  "Drop a GLB" when there is nothing to drop with.
+- **Exports were named `<asset>.web.stl`.** `.web` / `.forge` / `.gen` /
+  `.lodN` are GLBForge's markers on a *GLB*; they say nothing about an STL or a
+  USDZ, and they leave a second dot before the extension, which iOS Files and
+  most mail clients read as a double extension. `downloadGlb` already worked
+  around this on its own; the rule is now one `derivedName()` helper used by
+  all three, so `cat.web.glb` exports as `cat-web.stl` / `cat-web.usdz` /
+  `cat-web.glb`, and `cat.web.lod1.glb` as `cat-web-lod1.glb`.
+
 - **Forged assets no longer fail the perceptual gate on a texture artifact.**
   `extrude` projects the source artwork as an OPAQUE base-color texture, but
   artwork with a transparent background carries no colour outside its

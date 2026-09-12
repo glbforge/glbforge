@@ -96,20 +96,19 @@ export const api = {
     const blob = backend === 'local'
       ? await (await local()).stlBlob(id, size)
       : await fetch(`/api/assets/${id}/stl?size=${size}`).then((r) => r.blob());
-    triggerDownload(blob, name.replace(/\.glb$/i, '') + '.stl');
+    triggerDownload(blob, derivedName(name, 'stl'));
   },
   downloadUsdz: async (id: string, name: string, jpeg = true) => {
     const blob = backend === 'local'
       ? await (await local()).usdzBlob(id, jpeg)
       : await fetch(`/api/assets/${id}/usdz?jpeg=${jpeg ? 1 : 0}`).then((r) => r.blob());
-    triggerDownload(blob, name.replace(/\.glb$/i, '') + '.usdz');
+    triggerDownload(blob, derivedName(name, 'usdz'));
   },
   downloadGlb: async (id: string, name: string) => {
     const blob = backend === 'local'
       ? await (await local()).glbBlob(id)
       : await fetch(`/api/assets/${id}/file`).then((r) => r.blob());
-    // Single extension for the saved file: iOS Files / mail clients mis-handle "name.web.glb".
-    triggerDownload(blob, name.replace(/\.web(\.lod\d+)?\.glb$/i, '-web$1.glb'));
+    triggerDownload(blob, derivedName(name, 'glb'));
   },
 
   upload: async (name: string, bytes: ArrayBuffer, profile: string) =>
@@ -165,6 +164,30 @@ export const api = {
 let localUrls: ((id: string) => string) | null = null;
 export function registerLocalUrls(fn: (id: string) => string): void { localUrls = fn; }
 function localFileUrl(id: string): string { return localUrls ? localUrls(id) : ''; }
+
+/**
+ * Name a file derived from an asset. `.web` / `.forge` / `.gen` / `.lodN` are
+ * GLBForge's markers on a *GLB*; they are meaningless on an STL and they put a
+ * second dot before the extension, which iOS Files and most mail clients read
+ * as a double extension. So `cat.web.glb` saves as `cat-web.stl`, never
+ * `cat.web.stl`, and `cat.web.lod1.glb` as `cat-web-lod1.glb`.
+ */
+export function derivedName(name: string, ext: string): string {
+  const stem = name.replace(/\.(glb|gltf)$/i, '');
+  const flat = stem.replace(
+    /\.(web|forge|gen)(?:\.lod(\d+))?$/i,
+    (_m, tag: string, lod?: string) => `-${tag.toLowerCase()}${lod ? `-lod${lod}` : ''}`,
+  );
+  return `${flat}.${ext}`;
+}
+
+/**
+ * Touch device: no drag-and-drop, and the OS file picker filters by `accept`.
+ * Both matter at the drop zone — see AssetRail.
+ */
+export const isTouch = (): boolean =>
+  typeof navigator !== 'undefined'
+  && (navigator.maxTouchPoints > 0 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
 
 /** iPhone / iPad (incl. iPadOS desktop UA with touch): AR Quick Look opens USDZ; GLB has no native viewer. */
 export const isIOS = (): boolean =>
