@@ -23,7 +23,21 @@
   padded exterior costs the encoder almost nothing where the discontinuity
   cost it a lot (18.3 KB → 9.3 KB beveled, 16.1 KB → 7.1 KB flat).
   Forge geometry is byte-identical — positions, normals, UVs and indices all
-  hash the same before and after, so the frozen dogfood table does not move.
+  hash the same before and after, so the frozen dogfood table does not move:
+  28 forge builds (4 source images x plain / bevel / layered / neon-3 /
+  plush-4 / pillow / emboss), each linted under `authoring@1` as forged and
+  again after a `mobile-hero` pass, produce identical rule sets and identical
+  geometry hashes on both sides. The six `guardian.*` / `veiled-guardian.*`
+  rows — the only rows whose source is checked in — were rebuilt from
+  `fixtures/veiled-guardian-tex4k.glb` and still read exactly as frozen
+  (152 non-manifold edges, 32 degenerate, one shell; lod1 39,952 tris, lod2
+  9,970).
+  One second-order effect, on single-colour artwork only: the flattened
+  projection is a solid texture, so `prune()` now folds it into
+  `baseColorFactor` (sRGB-correct) and drops the texture and its UV set.
+  `assets/sample-ring.glb` is regenerated (`extrude assets/ci-ring.png
+  --bevel 0.01`); its geometry hash, 2,048 triangles and watertight topology
+  are unchanged, the embedded PNG shrinks 694 B -> 524 B.
 
 ## 0.8.0 — 2026-09-11 — inspect: the after-every-edit read for agents
 
