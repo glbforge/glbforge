@@ -188,6 +188,47 @@ export function derivedName(name: string, ext: string): string {
   return `${flat}.${ext}`;
 }
 
+/** Formats every browser can decode *and* every generator accepts as input. */
+const PORTABLE_IMAGE = /^image\/(png|jpeg|webp|svg\+xml)$/;
+
+/**
+ * Normalize a picked image. A photo chosen on an iPhone arrives as HEIC —
+ * more so since the picker stopped filtering by `accept`, because iOS only
+ * transcodes to JPEG when a filter asks it to. Safari decodes HEIC happily,
+ * but nothing else does and no generator takes it, so anything outside the
+ * portable set is re-encoded to PNG here, once, at the door. Returns the
+ * bytes to use and the name to use with them.
+ */
+export async function normalizeImage(file: File, bytes: ArrayBuffer): Promise<{
+  name: string; bytes: ArrayBuffer; mime: string;
+}> {
+  const mime = file.type || '';
+  if (PORTABLE_IMAGE.test(mime)) return { name: file.name, bytes, mime };
+  const url = URL.createObjectURL(new Blob([bytes], mime ? { type: mime } : undefined));
+  try {
+    const image = new Image();
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error(
+        `Could not read ${file.name} as an image (${mime || 'unknown type'}).`));
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, image.naturalWidth);
+    canvas.height = Math.max(1, image.naturalHeight);
+    canvas.getContext('2d')!.drawImage(image, 0, 0);
+    const png: Blob = await new Promise((resolve, reject) =>
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('png encode failed'))), 'image/png'));
+    return {
+      name: file.name.replace(/\.[^.]+$/, '') + '.png',
+      bytes: await png.arrayBuffer(),
+      mime: 'image/png',
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /**
  * Touch device: no drag-and-drop, and the OS file picker filters by `accept`.
  * Both matter at the drop zone — see AssetRail.

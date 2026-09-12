@@ -1,8 +1,12 @@
 import { useRef, useState } from 'react';
-import { api, isTouch, type AssetDetail, type AssetSummary } from '../api';
+import { api, isTouch, normalizeImage, type AssetDetail, type AssetSummary } from '../api';
 import type { GenTask } from '../App';
 
-const IMAGE_RE = /\.(png|jpe?g|webp|svg)$/i;
+// Extensions are the fallback, not the test: a photo picked on a phone can
+// arrive as HEIC, and files handed over by some providers carry no extension
+// at all. `file.type` is what the OS actually says it is.
+const IMAGE_RE = /\.(png|jpe?g|webp|svg|heic|heif|avif|gif|bmp|tiff?)$/i;
+const looksLikeImage = (file: File) => file.type.startsWith('image/') || IMAGE_RE.test(file.name);
 
 interface PendingImage { name: string; bytes: ArrayBuffer; mime: string }
 
@@ -49,10 +53,10 @@ export function AssetRail(props: {
   const ingest = async (files: FileList | File[]) => {
     for (const file of Array.from(files)) {
       const bytes = await file.arrayBuffer();
-      if (IMAGE_RE.test(file.name)) {
-        const image = { name: file.name, bytes, mime: file.type || 'image/png' };
+      if (looksLikeImage(file)) {
+        const image = await normalizeImage(file, bytes);
         // SVGs are flat by definition; Meshy wants raster input anyway.
-        if (props.meshyAvailable && !file.name.toLowerCase().endsWith('.svg')) {
+        if (props.meshyAvailable && !image.name.toLowerCase().endsWith('.svg')) {
           setPending(image);
         } else {
           await extrude(image);

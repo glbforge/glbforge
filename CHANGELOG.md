@@ -36,6 +36,16 @@
   browsers start immediately and never saw it. Object URLs are now retained
   for ten minutes, and the anchor is attached to the document before the
   click, which some iOS versions require.
+- **…and then could not forge a photo from one.** Removing `accept` fixed the
+  picker but changed what iOS hands over: with no filter to transcode for, a
+  camera-roll pick arrives as the original `IMG_1234.HEIC`. The rail routed
+  images by filename extension alone, so a HEIC fell through to the GLB
+  branch and died on "Invalid glTF 2.0 binary" — the forge path was
+  unreachable from an iPhone's photo library. Routing now asks the OS
+  (`file.type`) and keeps the extension list as a fallback for providers that
+  send no type, and anything outside png/jpeg/webp/svg is re-encoded to PNG
+  once at the door (`normalizeImage`) so both the forge and the generators
+  get something they can read.
 - **The Studio could not take a GLB from a phone.** The drop zone's file input
   carried `accept=".glb,.png,…"`, and iOS and Android filter the picker by the
   UTI/MIME each extension maps to — `.glb` maps to nothing, so every GLB in
