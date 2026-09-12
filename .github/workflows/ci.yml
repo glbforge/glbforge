@@ -34,3 +34,44 @@ jobs:
         run: |
           node packages/cli/dist/index.js extrude assets/ci-ring.png -o /tmp/ring.glb --bevel 0.01
           node packages/cli/dist/index.js analyze /tmp/ring.glb --profile mobile-hero
+
+      # `ship` is the one command that DECIDES — forge vs generate, layered
+      # vs single — and then gates its own output on the budget and the
+      # perceptual floor. Its defaults shipped an asset the tool itself
+      # rejected for months because nothing here ever ran it. Two committed
+      # images, one per decision it has to get right.
+      - name: CLI dogfood (ship)
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          cp assets/ci-ring.png assets/ci-badge.png "$work/"
+
+          # Flat single-colour artwork. The whole chain has to agree for this
+          # to pass: the projection is solid, so optimize's prune() folds it
+          # into baseColorFactor and drops the texture, and the verifier has
+          # to score that fold as the lossless operation it is.
+          node packages/cli/dist/index.js ship "$work/ci-ring.png"
+
+          # A gradient must not be sliced into colour layers: k-means returns
+          # k clusters whether or not the artwork has k colours, which cost a
+          # five-point star 190k triangles.
+          node packages/cli/dist/index.js ship "$work/ci-badge.png"
+
+          # Intermediates stay in GLBForge's own namespace. `<input>.glb` is a
+          # filename the user may have authored and we must never write it.
+          for stem in ci-ring ci-badge; do
+            test -f "$work/$stem.forge.glb" || { echo "ship wrote no $stem.forge.glb" >&2; exit 1; }
+            test -f "$work/$stem.web.glb"   || { echo "ship wrote no $stem.web.glb" >&2; exit 1; }
+            test ! -f "$work/$stem.glb"     || { echo "ship clobbered $stem.glb — that name belongs to the user" >&2; exit 1; }
+          done
+
+          # Assert the layering decision structurally; the summary prose is
+          # free to be reworded, the shape of the asset is not.
+          node packages/cli/dist/index.js inspect "$work/ci-badge.forge.glb" --json > "$work/badge.json"
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const { shells } = r.topology, { meshes, triangles } = r.scene;
+            if (meshes !== 1 || shells !== 1) throw new Error(`gradient artwork was sliced into layers: ${meshes} meshes / ${shells} shells, expected 1 and 1`);
+            if (triangles > 20000) throw new Error(`forged ${triangles} triangles from a five-point star; the relief ceiling should hold this well under the budget`);
+            console.log(`ci-badge.forge.glb: ${meshes} mesh, ${shells} shell, ${triangles} triangles`);
+          ' "$work/badge.json"
