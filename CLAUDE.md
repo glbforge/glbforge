@@ -54,6 +54,17 @@ the same registration into another checkout.
   into a tool. The metric is invocations per asset *lineage* (hashes joined
   by session+path, path+time window, diff edges, explicit id) — a content
   hash alone would read 1.0 forever in an edit loop.
+- **The forge's projected texture is an opaque plate**, not the source image
+  (`extrude/bleed.ts`). Transparent-background artwork has no colour outside
+  its silhouette, and the wall/bevel UVs sample exactly that boundary; a
+  lossy re-encode rings across the art/void edge and throws away the RGB of
+  fully transparent texels, so the rim lost ~6 SSIM points. `extrudeImage`
+  and the Studio both run `flattenProjection` before embedding: pad the
+  colour outward from the nearest *fully opaque* texel, then set alpha to
+  255 everywhere. Don't reintroduce alpha — the silhouette lives in the
+  mesh, the trace has its own decode of the source, and seeding the padding
+  from antialiased texels (rather than opaque ones) paints a fine Voronoi
+  that costs more to encode than the artwork.
 - **Skinned / morphing prims** go through `core/src/skinning.ts`, not the plain
   simplifier; `join()` already skips them.
 - **"No visible loss" is measured**: `optimize()` renders 4 fixed cameras before

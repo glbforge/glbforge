@@ -1,12 +1,16 @@
 /**
  * Exact Euclidean distance transform (Felzenszwalb & Huttenlocher):
  * distance in pixels from each solid pixel to the nearest outside pixel.
- * Drives pillow/relief height profiles.
+ * Drives pillow/relief height profiles, and — as `nearestSource` — the
+ * texture edge padding in `bleed.ts`.
  */
 
 const INF = 1e20;
 
-function edt1d(f: Float64Array, n: number, d: Float64Array): void {
+/** Lower envelope of the parabolas in `f`. `arg`, when given, receives the
+ *  index of the parabola owning each sample — the site the distance is
+ *  measured to, which is what propagates a nearest-source index. */
+function edt1d(f: Float64Array, n: number, d: Float64Array, arg?: Int32Array): void {
   const v = new Int32Array(n);
   const z = new Float64Array(n + 1);
   let k = 0;
@@ -24,6 +28,7 @@ function edt1d(f: Float64Array, n: number, d: Float64Array): void {
   for (let q = 0; q < n; q++) {
     while (z[k + 1] < q) k++;
     d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+    if (arg) arg[q] = v[k];
   }
 }
 
@@ -67,4 +72,42 @@ export function sampleDistance(
     dist[i + width] * (1 - fx) * fy +
     dist[i + width + 1] * fx * fy
   );
+}
+
+/**
+ * Nearest-source map: for every pixel, the flat index of the closest pixel
+ * where `source` is set (itself, for source pixels). -1 where `source` is
+ * empty. Same exact two-pass EDT as `distanceTransform`, carrying the
+ * owning site through both passes.
+ */
+export function nearestSource(source: Uint8Array, width: number, height: number): Int32Array {
+  const sq = new Float64Array(width * height);
+  for (let i = 0; i < sq.length; i++) sq[i] = source[i] ? 0 : INF;
+
+  const n = Math.max(width, height);
+  const f = new Float64Array(n);
+  const d = new Float64Array(n);
+  const arg = new Int32Array(n);
+  const out = new Int32Array(width * height).fill(-1);
+
+  // Columns: nearest source within the column.
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < height; y++) f[y] = sq[y * width + x];
+    edt1d(f, height, d, arg);
+    for (let y = 0; y < height; y++) {
+      sq[y * width + x] = d[y];
+      out[y * width + x] = arg[y] * width + x;
+    }
+  }
+  // Rows: combine the column distances, inheriting that column's site.
+  const rowIdx = new Int32Array(width);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) { f[x] = sq[y * width + x]; rowIdx[x] = out[y * width + x]; }
+    edt1d(f, width, d, arg);
+    for (let x = 0; x < width; x++) {
+      sq[y * width + x] = d[x];
+      out[y * width + x] = d[x] >= INF ? -1 : rowIdx[arg[x]];
+    }
+  }
+  return out;
 }

@@ -4,6 +4,40 @@
 
 ### Fixed
 
+- **Forged assets no longer fail the perceptual gate on a texture artifact.**
+  `extrude` projects the source artwork as an OPAQUE base-color texture, but
+  artwork with a transparent background carries no colour outside its
+  silhouette — those texels decode to `(0,0,0,0)`. The wall and bevel UVs
+  sample exactly that 1-2 px antialiased boundary, and `optimize`'s WebP
+  pass both rings across the hard art/void discontinuity and discards the
+  RGB of fully transparent texels (libwebp cleans them to compress the alpha
+  plane). A 1 px texture error became a stippled band along the whole rim:
+  a 70 mm beveled enamel badge measured 92.3% min SSIM against the 94%
+  floor, 86.6% flat and 86.7% with a pillow, while the same asset scored
+  99.7% with `--no-textures`.
+  The forge now pads the artwork's colour out past the silhouette (nearest
+  fully opaque texel, exact EDT) and flattens the projection to opaque
+  before embedding it — `flattenProjection` in `core/src/extrude/bleed.ts`,
+  shared by the CLI/MCP path and the Studio. The same badge now measures
+  99.8-99.9% min SSIM, and the optimized asset is *smaller*, because a
+  padded exterior costs the encoder almost nothing where the discontinuity
+  cost it a lot (18.3 KB → 9.3 KB beveled, 16.1 KB → 7.1 KB flat).
+  Forge geometry is byte-identical — positions, normals, UVs and indices all
+  hash the same before and after, so the frozen dogfood table does not move:
+  28 forge builds (4 source images x plain / bevel / layered / neon-3 /
+  plush-4 / pillow / emboss), each linted under `authoring@1` as forged and
+  again after a `mobile-hero` pass, produce identical rule sets and identical
+  geometry hashes on both sides. The six `guardian.*` / `veiled-guardian.*`
+  rows — the only rows whose source is checked in — were rebuilt from
+  `fixtures/veiled-guardian-tex4k.glb` and still read exactly as frozen
+  (152 non-manifold edges, 32 degenerate, one shell; lod1 39,952 tris, lod2
+  9,970).
+  One second-order effect, on single-colour artwork only: the flattened
+  projection is a solid texture, so `prune()` now folds it into
+  `baseColorFactor` (sRGB-correct) and drops the texture and its UV set.
+  `assets/sample-ring.glb` is regenerated (`extrude assets/ci-ring.png
+  --bevel 0.01`); its geometry hash, 2,048 triangles and watertight topology
+  are unchanged, the embedded PNG shrinks 694 B -> 524 B.
 - **`ship` no longer overwrites `<input>.glb`.** The forge route wrote its
   intermediate to the input's name with a `.glb` extension, so
   `glbforge ship logo.png` silently replaced a `logo.glb` the user had
