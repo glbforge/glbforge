@@ -21,7 +21,12 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
+      # install: false — the explicit frozen install below runs after
+      # setup-node, which stays here for `registry-url`: npm OIDC trusted
+      # publishing needs the .npmrc it writes, and pnpm/setup writes none.
+      - uses: pnpm/setup@v2
+        with:
+          install: false
 
       - uses: actions/setup-node@v7
         with:

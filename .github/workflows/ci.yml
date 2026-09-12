@@ -15,14 +15,15 @@ jobs:
       # the CLI dogfood below still cover the full pipeline.
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
+      # pnpm/setup installs pnpm and the runtime, caches the store keyed on the
+      # lockfile, and runs the install — one step for what took three.
+      # require-lockfile keeps the --frozen-lockfile guarantee: a missing
+      # lockfile fails the job instead of being resolved from the registry.
+      - uses: pnpm/setup@v2
         with:
-          node-version: 22
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+          runtime: node@22
+          cache: true
+          require-lockfile: true
 
       - run: pnpm -r build
 
