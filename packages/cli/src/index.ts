@@ -307,7 +307,7 @@ program
     } else {
       const layerNote = stats.layerInfo
         ? `, ${stats.layerInfo.length} layers`
-        : stats.flatness ? ', 1 layer (artwork is not flat-coloured)' : '';
+        : stats.flatness ? `, 1 layer (${stats.flatness.distinct < 2 ? 'one colour' : 'not flat-coloured'})` : '';
       console.log(
         `  ${outPath} (${(outBytes.byteLength / 1048576).toFixed(1)}MB)  ` +
         `${stats.outerLoops} shape(s), ${stats.holes} hole(s)${layerNote}, ` +
@@ -363,10 +363,13 @@ program
         const { doc, stats } = await extrudeImage(raw, { layers: 'auto', pillow: 0.02, maxReliefTriangles: 24_000 });
         const io = await createIO();
         await writeFile(forged, await io.writeBinary(doc));
-        const cover = stats.flatness ? `${(stats.flatness.coverage * 100).toFixed(0)}%` : '';
+        const f = stats.flatness;
+        const why = !f ? ''
+          : f.distinct < 2 ? ' (one colour — nothing to layer)'
+          : ` (not flat-coloured: its ${f.distinct} dominant colours cover only ${(f.coverage * 100).toFixed(0)}%)`;
         const shape = stats.layerInfo
-          ? `${stats.layerInfo.length} colour layers${cover ? ` (${cover} of the artwork)` : ''}`
-          : `one shell${stats.flatness ? ` (no flat colour regions: the ${stats.flatness.distinct || 1} largest colours cover ${cover})` : ''}`;
+          ? `${stats.layerInfo.length} colour layers${f ? ` (${(f.coverage * 100).toFixed(0)}% of the artwork)` : ''}`
+          : `one shell${why}`;
         console.log(`  routed to forge → ${forged}: ${stats.triangles.toLocaleString()} tris, ${shape}`);
         const { collectSample } = await import('./collect.js');
         await collectSample({
