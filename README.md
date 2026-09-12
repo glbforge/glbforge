@@ -2,9 +2,13 @@
 
 **glbforge.dev** · raw AI mesh in, shipped asset out
 
-Makes AI-generated 3D assets (Meshy, etc.) actually shippable on the web:
-**analyze → optimize → scaffold a viewer**, with performance budgets as a
-CI-able contract.
+The deterministic layer after 3D generation, built for agents and CI. Two
+jobs: **the agent's eyes while a mesh is being edited** (`inspect` reads it
+semantically in tens of milliseconds, `diff` says what the last edit broke),
+and **the gate before it ships** (`analyze → optimize → verify`, with
+versioned performance budgets as a CI-able contract and "no visible loss"
+measured as an SSIM number). Also forges 2D artwork into watertight 3D,
+routes photographs to generators, and exports GLB / STL / USDZ.
 
 ## Status
 
@@ -24,7 +28,12 @@ CI-able contract.
 - ✅ `glbforge optimize` — weld/simplify/LOD/compress to hit the budget
 - ✅ `glbforge scaffold` — emit a React Three Fiber viewer for the optimized asset
 - ✅ `glbforge meshy` — generate/download via Meshy REST API (image/text → 3D, `--optimize` glue)
-- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 8 tools)
+- ✅ `glbforge ship <input>` — one call from a GLB, a logo, or a photo to a
+  budget-gated asset: route (optimize / forge / generate) → analyze →
+  optimize → gate. `--json` emits the route, the forge's decision and the
+  full optimization report as one document.
+- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 27 tools,
+  `dev.glbforge/glbforge` in the official MCP registry)
 - ✅ **GLBForge Studio** (`glbforge ui`) — local web UI: drag-drop analyze,
   one-click optimize with a before/after compare slider in the viewport,
   logo forging, Meshy generation with live progress, STL export. Zero
@@ -51,7 +60,9 @@ node packages/cli/dist/index.js ui model.glb   # GLBForge Studio on localhost:51
 ```
 
 `inspect <file>` (glb/gltf/usdz/usda/usdc) answers what an agent editing a
-mesh gets wrong blind, in ~70 ms on 150k triangles. `--profile authoring`
+mesh gets wrong blind: ~0.1 s on a 150k-triangle asset, ~0.8 s on a raw
+2M-triangle generation (the welded topology pass itself is ~70 ms per 150k
+triangles). `--profile authoring`
 (default) treats topology problems as warnings because they are most likely
 the last edit's doing; a budget profile (`mobile-hero`) reports them as info.
 `--packs core-geometry@1,core-scene@1` pins rule packs, `--no-topology` skips
@@ -296,8 +307,8 @@ a concrete fix. See `packages/core/src/rules.ts`.
 
 ## Design decisions
 
-- **Pure Node/TS, no Blender dependency.** Analysis and (upcoming)
-  optimization run on `@gltf-transform` + `meshoptimizer` — native to glTF, no
+- **Pure Node/TS, no Blender dependency.** Analysis and optimization run on
+  `@gltf-transform` + `meshoptimizer` + `sharp` — native to glTF, no
   lossy DCC round-trip, installable via `npx`, CI-friendly. Ops are designed
   as pluggable backends so Blender-only capabilities (retopo, UV unwrap,
   baking) can be added later without changing the CLI surface.

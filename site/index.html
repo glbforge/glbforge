@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GLBForge — the web-readiness layer for AI-generated 3D</title>
-  <meta name="description" content="AI generates 3D models. GLBForge makes them shippable: analyze against performance budgets, optimize 90%+, forge logos into 3D, export STL — CLI, Studio, MCP server, and GitHub Action." />
+  <meta name="description" content="GLBForge is the deterministic layer after 3D generation: inspect a mesh in tens of milliseconds while you are still editing it, diff what the last edit broke, optimize it 90%+ smaller against a versioned performance budget, and export GLB, STL or USDZ — CLI, in-browser Studio, 27-tool MCP server, GitHub Action." />
   <meta property="og:title" content="GLBForge" />
-  <meta property="og:description" content="Raw AI mesh in, shipped asset out. npx glbforge ui" />
+  <meta property="og:description" content="Inspect, diff, and ship 3D assets. Raw AI mesh in, budget-gated asset out. npx glbforge ship model.glb" />
   <meta property="og:url" content="https://glbforge.dev" />
   <link rel="llms" type="text/plain" href="/llms.txt" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬢</text></svg>" />
@@ -18,9 +18,9 @@
   </script>
   <style>
     :root {
-      --bg: #0e0f12; --panel: #16181d; --panel-2: #1c1f26; --line: #262a33;
-      --text: #e8eaf0; --dim: #8b91a0; --accent: #ff8a3d; --accent-2: #ffb547;
-      --good: #4ade80;
+      --bg: #0b0d14; --panel: #141826; --panel-2: #1a1f30; --line: #272c41;
+      --text: #e8eaf0; --dim: #8d93ab; --accent: #7c5cff; --accent-2: #63b3ff;
+      --good: #34d399;
     }
     * { box-sizing: border-box; margin: 0; }
     html { scroll-behavior: smooth; }
@@ -50,14 +50,14 @@
     }
     .cmd .dollar { color: var(--dim); }
     .cmd button {
-      background: var(--accent); border: 0; border-radius: 6px; color: #1a1206;
+      background: var(--accent); border: 0; border-radius: 6px; color: #f5f3ff;
       font-weight: 700; padding: 5px 11px; cursor: pointer; font-size: 13px;
     }
     .cmd button:hover { background: var(--accent-2); }
     .hero-note { color: var(--dim); font-size: 13px; margin-top: 10px; }
 
     model-viewer {
-      width: 100%; height: 340px; background: radial-gradient(ellipse at 50% 40%, #191c22 0%, var(--bg) 78%);
+      width: 100%; height: 340px; background: radial-gradient(ellipse at 50% 40%, #191d2e 0%, var(--bg) 78%);
       border: 1px solid var(--line); border-radius: 14px; --poster-color: transparent;
     }
     .mv-caption { color: var(--dim); font-size: 13px; margin-top: 8px; text-align: center; }
@@ -66,7 +66,7 @@
     .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 26px 0 8px; }
     @media (max-width: 700px) { .stats { grid-template-columns: repeat(2, 1fr); } }
     .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; text-align: center; }
-    .stat .n { font-size: 26px; font-weight: 800; color: var(--good); }
+    .stat .n { font-size: 26px; font-weight: 800; color: var(--accent-2); }
     .stat .l { color: var(--dim); font-size: 13px; margin-top: 2px; }
 
     section { padding: 44px 0 8px; }
@@ -88,9 +88,17 @@
     pre {
       background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
       padding: 16px 18px; overflow-x: auto; font: 13.5px ui-monospace, 'SF Mono', Menlo, monospace;
-      line-height: 1.7; color: #cdd3e0;
+      line-height: 1.7; color: #ccd2e6;
     }
-    pre .c { color: #5b6170; } pre .a { color: var(--accent-2); } pre .g { color: var(--good); }
+    pre .c { color: #5f6780; } pre .a { color: var(--accent-2); } pre .g { color: var(--good); }
+    pre .w { color: var(--accent); font-weight: 600; }
+
+    .status { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 760px) { .status { grid-template-columns: 1fr; } }
+    .status h3 { font-size: 14px; margin-bottom: 8px; color: var(--text); }
+    .status ul { margin: 0; padding-left: 18px; color: var(--dim); font-size: 14px; }
+    .status li { margin-bottom: 4px; }
+    .status .now h3 { color: var(--good); }
 
     footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 26px 0 40px; color: var(--dim); font-size: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
     footer .spacer { flex: 1; }
@@ -104,7 +112,9 @@
         <a href="https://github.com/glbforge/glbforge">GitHub</a>
         <a href="https://www.npmjs.com/package/glbforge">npm</a>
         <a href="/studio/">Studio ↗</a>
+        <a href="#loop">Inspect &amp; diff</a>
         <a href="#agents">Agents &amp; CI</a>
+        <a href="#state">Status</a>
       </div>
     </nav>
 
@@ -112,17 +122,20 @@
       <div>
         <h1>AI generates 3D models.<br /><em>GLBForge ships them.</em></h1>
         <p class="sub">
-          Raw AI meshes are 90MB, two million triangles, and wrong for the web.
-          GLBForge analyzes them against real performance budgets, optimizes them
-          90%+ smaller, forges logos into 3D for free, and hands you a viewer —
-          one command, on your machine.
+          Generation is the commodity. GLBForge is the deterministic layer after
+          it: read a mesh semantically in a tenth of a second while you are still editing it,
+          diff what the last edit broke, then optimize it 90%+ smaller and gate it
+          on a budget that either passes or fails. CLI, in-browser Studio, MCP
+          server, GitHub Action.
         </p>
         <div class="cmd">
           <span class="dollar">$</span>
-          <span id="npx">npx glbforge ui</span>
-          <button onclick="navigator.clipboard.writeText('npx glbforge ui');this.textContent='copied';setTimeout(()=>this.textContent='copy',1200)">copy</button>
+          <span id="npx">npx glbforge ship model.glb</span>
+          <button onclick="navigator.clipboard.writeText('npx glbforge ship model.glb');this.textContent='copied';setTimeout(()=>this.textContent='copy',1200)">copy</button>
         </div>
-        <p class="hero-note">Node 20+ · MIT · runs locally, nothing uploaded</p>
+        <p class="hero-note">Node 20+ · MIT · runs locally, nothing uploaded.
+          Hand <code>ship</code> a PNG or SVG instead and it forges the artwork; hand it
+          a photo and it routes to a generator. <code>npx glbforge ui</code> opens the Studio.</p>
       </div>
       <div>
         <model-viewer src="/models/plush.glb" camera-controls auto-rotate auto-rotate-delay="0" ar ar-modes="webxr scene-viewer"
@@ -133,22 +146,68 @@
 
     <div class="stats">
       <div class="stat"><div class="n">−94%</div><div class="l">89MB Meshy export → 5.5MB, in 7s</div></div>
-      <div class="stat"><div class="n">4×</div><div class="l">less GPU memory with KTX2 textures</div></div>
-      <div class="stat"><div class="n">0</div><div class="l">credits to forge a logo into 3D</div></div>
+      <div class="stat"><div class="n">~0.1s</div><div class="l">to read a 150k-triangle mesh (0.8s at 2M)</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">credits to forge artwork into 3D</div></div>
       <div class="stat"><div class="n">100%</div><div class="l">local — your assets stay on your machine</div></div>
     </div>
 
     <section>
       <h2>The pipeline, not the hype</h2>
-      <p class="lede">Generation is a commodity. The gap between "generated" and "shipped" is where projects die — GLBForge closes it with deterministic tooling: same input, same output, every time.</p>
+      <p class="lede">Generation is a commodity. The gap between "generated" and "shipped" is where projects die — GLBForge closes it with deterministic tooling: same input, same settings, same bytes and pixels, every time.</p>
       <div class="grid">
-        <div class="card"><h3><span class="ico">▦</span>Analyze</h3><p>Lighthouse-style report card: triangle/file/texture/GPU-memory budgets, topology defects, named lint rules with fixes. Exits non-zero over budget — it drops into CI like a linter.</p></div>
-        <div class="card"><h3><span class="ico">⚒</span>Optimize</h3><p>Weld → simplify to budget → smooth normals → WebP or KTX2 textures → meshopt compression → LOD chains. Typically 90%+ smaller with no visible loss.</p></div>
-        <div class="card"><h3><span class="ico">◆</span>Forge</h3><p>Logos, wordmarks, SVGs → watertight 3D. Layered colors, puffy-sticker relief, enamel/chrome/neon/acrylic presets. Instant, free, exact silhouette.</p></div>
-        <div class="card"><h3><span class="ico">⎔</span>Generate</h3><p>Meshy image/text-to-3D built in — every generation lands already analyzed and one click from web-ready. Bring your own key.</p></div>
-        <div class="card"><h3><span class="ico">⬇</span>Export</h3><p>Web-ready GLB, print-ready STL (mm-scaled, watertightness verdict), React Three Fiber viewer scaffold with LOD switching.</p></div>
+        <div class="card"><h3><span class="ico">◎</span>Inspect</h3><p>The read after every edit: one connected shell or floating pieces, watertight or holes, size in metres, up axis, origin placement, unapplied or mirrored transforms. Versioned rule ids, measured vs heuristic, a likely cause with its own confidence, a concrete fix. <code>front</code> is never guessed. ~0.1 s on a 150k-triangle asset; under a second on a raw 2M-triangle generation.</p></div>
+        <div class="card"><h3><span class="ico">⇄</span>Diff</h3><p>Two versions in, a change note out: per-part size deltas, triangle and shell deltas, topology regressions (was watertight, now has three open loops), origin drift, meshes added or removed, optional SSIM with the cameras fixed to the <em>before</em> framing. Regressions first.</p></div>
+        <div class="card"><h3><span class="ico">▦</span>Analyze</h3><p>Lighthouse-style report card: triangle/file/texture/GPU-memory budgets, welded-space topology, named lint rules with fixes. Exits non-zero over budget — it drops into CI like a linter.</p></div>
+        <div class="card"><h3><span class="ico">⚒</span>Optimize</h3><p>Weld → simplify to budget → smooth normals → WebP or KTX2 textures (4–8× less GPU memory) → meshopt compression → LOD chains. Typically 90%+ smaller, with the visual loss measured rather than claimed.</p></div>
+        <div class="card"><h3><span class="ico">◆</span>Forge</h3><p>Logos, wordmarks, SVGs → watertight 3D, no AI and no credits. Exact silhouette, layered colours (<code>--layers auto</code> measures the artwork first), pillow/emboss relief, bevels, enamel/chrome/neon/acrylic/rubber presets. Watertight, so it prints.</p></div>
+        <div class="card"><h3><span class="ico">⎔</span>Generate</h3><p>For photographic subjects: Meshy 7, plus open weights on fal.ai GPU inference — Hunyuan3D-2, TRELLIS, TripoSR. Bring your own key; every generation lands already analyzed and one step from web-ready.</p></div>
+        <div class="card"><h3><span class="ico">⬇</span>Export</h3><p>Web-ready GLB, print-ready STL (mm-scaled, watertightness verdict), and USDZ for iOS AR Quick Look — binary crate written in pure TypeScript, UsdPreviewSurface materials, UsdSkel skeletons and blend shapes. Plus a React Three Fiber viewer scaffold with LOD switching.</p></div>
         <div class="card"><h3><span class="ico">✓</span>Budgets as contracts</h3><p><code>mobile-hero</code>, <code>desktop-hero</code>, <code>product-configurator</code> — opinionated, <a href="/budgets/">versioned caps with a published methodology</a>; pin <code>mobile-hero@1</code> in CI and it never moves under you.</p></div>
+        <div class="card"><h3><span class="ico">⛭</span>Animated assets</h3><p>Skinned meshes and morph targets simplify bone-aware: the simplifier sees skin weights and morph deltas as attributes, dominant-joint boundaries are locked, and skins, inverse bind matrices and clips survive — into GLB and into UsdSkel.</p></div>
       </div>
+    </section>
+
+    <section id="loop">
+      <h2>In the edit loop, not just at the end</h2>
+      <p class="lede">A tool you run once per asset never becomes a habit. The inner loop is where the work happens — an agent driving a mesh through <code>bpy.ops</code> is blind after every call. <code>inspect</code> answers what it cannot see, in a fraction of a second; <code>diff</code> says what the last edit broke. Both read GLB, glTF, USDZ, USDA and USDC, and both are MCP tools as well as commands.</p>
+      <div class="duo">
+        <pre><span class="c">$</span> <span class="a">glbforge inspect</span> model.glb
+<span class="c">authoring@1 · core-geometry@1, core-scene@1 · 110 ms</span>
+
+1 mesh, 150,000 triangles, 1.43 × 1.90 × 1.28 m,
+Y-up. One shell, not watertight. Origin at the
+bounding-box centre, 0.95 m above the base.
+Front: unknown (declare it with an expectation).
+
+<span class="w">WARN</span> topo/non-manifold   measured
+  152 non-manifold edges (0.10% of its triangle
+  count): faces meet three or more to an edge.
+  cause (70%): a simplification artifact rather
+  than an authoring error.
+  → Harmless for display. For printing or
+    booleans, repair the source mesh.</pre>
+        <pre><span class="c">$</span> <span class="a">glbforge diff</span> before.glb after.glb
+<span class="c">authoring@1 · diff@1 · 87 ms</span>
+
+The asset is 100% deeper along Z (8.0 cm →
+16.0 cm). Triangles 4,292 → 20,024 (+367%).
+Shells 1 → 44: 43 new separate pieces.
+3 meshes added, 1 removed.
+<span class="w">1 regression at warning or above.</span>
+
+<span class="w">WARN</span> diff/shells-changed   measured
+  cause (60%): a cut or boolean split geometry
+  off, or new parts were added without joining.
+  → If the pieces should be one solid,
+    boolean-union them.</pre>
+      </div>
+      <p class="lede" style="margin-top:18px">Add <code>--expect "chair, single-shell, 0.4–1.2m tall, watertight, origin base"</code> and the run becomes a contract: shells, watertightness, size range and origin are measured and fail as errors; a bare category is a plausibility warning with a stated confidence; <code>front</code> is recorded as declared, never measured.</p>
+    </section>
+
+    <section id="measured">
+      <h2>"No visible loss" is a measured number</h2>
+      <p class="lede">Every <code>optimize</code> and <code>ship</code> renders the asset from four fixed cameras before and after — deterministic software rasterizer, linear-light shading, 2× supersampled — and scores the pairs with SSIM. The weakest view must clear the profile's floor or the report card takes an error and the command exits non-zero, exactly like a budget violation.</p>
+      <pre>  visual fidelity <span class="g">✓</span> SSIM 96.7%  weakest view 95.8% @ verify_135 · floor 94.0% · geometric deviation ≤ 0.1%</pre>
     </section>
 
     <section>
@@ -170,26 +229,31 @@
 
     <section id="studio">
       <h2>GLBForge Studio</h2>
-      <p class="lede"><a href="/studio/">Try it right now in your browser</a> — drag in a GLB or a logo, read the report card, optimize with one click, compare original-vs-optimized with a split slider. Everything runs client-side: your assets never leave your device. The same studio runs locally with Meshy generation and KTX2 via <code>npx glbforge ui</code>.</p>
+      <p class="lede"><a href="/studio/">Try it right now in your browser</a> — drag in a GLB or a logo, read the report card, optimize with one click, compare original-vs-optimized with a split slider and the measured SSIM, then export GLB, STL or USDZ. The whole pipeline runs client-side in WASM: your assets never leave the device. Only optional signed-in generation touches a server. The same Studio runs locally, with KTX2 and your own generation keys, via <code>npx glbforge ui</code>.</p>
       <pre><span class="c"># the whole studio, no install:</span>
 <span class="a">npx glbforge ui</span>
 
 <span class="c"># or the CLI, piece by piece:</span>
+<span class="a">npx glbforge inspect</span> model.glb --expect "chair, single-shell, watertight"
+<span class="a">npx glbforge diff</span> before.glb after.glb --visual
 <span class="a">npx glbforge analyze</span> model.glb --profile mobile-hero
 <span class="a">npx glbforge optimize</span> model.glb --ktx2 --lods 40000,10000
-<span class="a">npx glbforge extrude</span> logo.png --layers 4 --pillow 0.03 --preset enamel
+<span class="a">npx glbforge extrude</span> logo.png --layers auto --pillow 0.03 --preset enamel
 <span class="a">npx glbforge stl</span> model.glb --size 80
-<span class="a">npx glbforge scaffold</span> model.web.glb -o viewer</pre>
+<span class="a">npx glbforge usdz</span> model.web.glb
+<span class="a">npx glbforge init</span>   <span class="c"># wire it into a project: scripts, MCP, CLAUDE.md</span></pre>
     </section>
 
     <section id="agents">
       <h2>Built for agents and CI, not just humans</h2>
-      <p class="lede">The same pipeline is an MCP server — Claude Code, Cursor, and friends can take an asset from generation to web-ready inside one conversation, looking at rendered previews of their own output — and a GitHub Action that posts report cards on pull requests and opens a PR with the optimized, perceptually verified files.</p>
+      <p class="lede">The same pipeline is an MCP server — 27 tools, published in the official registry as <code>dev.glbforge/glbforge</code> — so Claude Code, Cursor and friends can inspect, diff, fix and ship an asset inside one conversation, looking at rendered previews of their own output. Every tool answers one envelope (<code>ok, summary, duration_ms, errors[], data</code>) where each diagnostic carries a stable code, a severity and the prim path it refers to; every response validates against a published schema; mutating tools take <code>dry_run</code> and return a diff plus a re-validation, so nothing changes silently. And a GitHub Action posts report cards on pull requests and opens a PR with the optimized, perceptually verified files.</p>
       <div class="duo">
         <pre><span class="c"># MCP server (Claude Code):</span>
 <span class="a">claude mcp add glbforge</span> -- npx -y @glbforge/mcp
 
 <span class="c"># then just ask:</span>
+<span class="c">"inspect chair.glb — is it one</span>
+<span class="c"> watertight shell, origin at the base?"</span>
 <span class="c">"make logo.png into a web-ready</span>
 <span class="c"> 3D asset under the mobile budget"</span></pre>
         <pre><span class="c"># .github/workflows/assets.yml</span>
@@ -201,6 +265,45 @@
     optimize: <span class="g">true</span>
 <span class="c"># → report card on every PR, plus a PR</span>
 <span class="c">#   with the web-ready files (SSIM-verified)</span></pre>
+      </div>
+    </section>
+
+    <section id="state">
+      <h2>Where it is today</h2>
+      <p class="lede">An honest scope statement, kept in step with the code — the same one <a href="/llms.txt">/llms.txt</a> serves to agents.</p>
+      <div class="status">
+        <div class="card now">
+          <h3>Shipping now</h3>
+          <ul>
+            <li><code>inspect</code> / <code>diff</code> / <code>--expect</code> contracts</li>
+            <li><code>analyze</code> + versioned budget profiles</li>
+            <li><code>optimize</code> with SSIM-gated fidelity</li>
+            <li><code>ship</code>: one call, any input, budget-gated</li>
+            <li>forge (2D → watertight 3D), STL, USDZ</li>
+            <li>generation: Meshy 7, Hunyuan3D-2, TRELLIS, TripoSR</li>
+            <li>skinned + morph-target assets, end to end</li>
+            <li>Studio (browser and local), 27-tool MCP server, GitHub Action, <code>init</code>, <code>audit</code></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Deliberately not</h3>
+          <ul>
+            <li>not a modeling suite — it reads and repackages meshes, it does not author them</li>
+            <li>not a renderer: the software rasterizer exists to measure fidelity, not to make beauty shots</li>
+            <li>not a model trainer, and not a Meshy clone</li>
+            <li>no Blender dependency — pure Node, gltf-transform + meshoptimizer + sharp</li>
+            <li>your files are never uploaded; the local usage counter is opt-in and never networked</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Known gaps</h3>
+          <ul>
+            <li>USD composition arcs (references, payloads, variants) are reported, not resolved — the readers see one layer</li>
+            <li>LOD chains are not perceptually scored yet (they are intentionally lossy, so no gate)</li>
+            <li>no progress streaming on long MCP tools; generation is poll-based by design</li>
+            <li>budget caps will not move without real device and network failure data</li>
+          </ul>
+        </div>
       </div>
     </section>
 

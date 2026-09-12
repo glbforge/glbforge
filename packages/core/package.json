@@ -35,7 +35,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "Analyze, optimize, extrude, and export AI-generated 3D assets for the web — budgets, lint rules, KTX2, LODs, STL.",
+  "description": "Inspect, diff, analyze, optimize, forge, and export 3D assets for the web — semantic mesh reads, versioned budgets, lint rules, SSIM verification, KTX2, LODs, STL, USDZ.",
   "keywords": [
     "gltf",
     "glb",

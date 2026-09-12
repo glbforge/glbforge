@@ -118,6 +118,33 @@
 
 ### Changed
 
+- **The public description now says what the tool is, not what it was.**
+  `glbforge.dev`, `site/llms.txt`, the root and per-package READMEs, the npm
+  `description` fields and `server.json` all described the 0.4-era product —
+  analyze, optimize, scaffold a viewer — with no mention of `inspect`,
+  `diff`, `ship`, USDZ, skinned assets, the open-model generators, or the
+  other 19 MCP tools added since. An agent asked "what is glbforge.dev"
+  answered from the conception, which is the one audience that cannot check.
+  The landing page now leads with the two jobs (the agent's eyes during
+  authoring, the gate before shipping), carries an *In the edit loop* section
+  with real `inspect` / `diff` output, states that "no visible loss" is a
+  measured SSIM, and ends with a **Where it is today** block: what ships, what
+  is deliberately out of scope, and the known gaps (USD composition arcs are
+  reported not resolved, LOD chains are not perceptually scored, no MCP
+  progress streaming). `llms.txt` gains the same gap list, the `ship` entry,
+  `inspect` / `diff` / `usage` commands, and an anchor to the branch rather
+  than a stale "as of v0.6.x". Latency claims are re-measured end-to-end
+  (~0.1 s for `inspect` on a 150k-triangle asset, ~0.8 s at 2M) instead of
+  quoting the topology pass alone, and the KTX2 GPU-memory figure reads 4-8x on
+  the public pages, matching `docs/BUDGETS.md` rather than the npm README's
+  bare 4x.
+- **Site and Studio palette moves from orange/amber to violet and blue.** One
+  token swap (`--accent` `#7c5cff`, `--accent-2` `#63b3ff`, cooled greys, a
+  blue-black ground) applied to all four static pages and
+  `packages/studio/src/styles.css`, so the Studio build in `site/studio/` was
+  regenerated (`pnpm --filter @glbforge/studio build:site`). Semantic colours
+  are unchanged where they carry meaning: emerald for a pass, amber for a
+  warning, red for a failure inside the Studio.
 - `srgbToLinear` / `linearToSrgb` are published from `@glbforge/core`
   (`packages/core/src/color.ts`), replacing three private copies of the
   transfer function.

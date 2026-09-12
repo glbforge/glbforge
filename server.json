@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "dev.glbforge/glbforge",
-  "description": "Make AI-generated 3D assets web-ready: budgets, SSIM-verified optimization, STL/USDZ export.",
+  "description": "Inspect and diff 3D meshes while an agent edits them, then make them web-ready: budgets, SSIM-verified optimization, STL/USDZ export.",
   "repository": {
     "url": "https://github.com/glbforge/glbforge",
     "source": "github"

@@ -1,22 +1,31 @@
 # GLBForge
 
-> GLBForge is the web-readiness layer for AI-generated 3D: it analyzes GLB/glTF
-> assets against performance budgets, optimizes them (typically 90%+ smaller),
-> forges 2D artwork into watertight 3D, generates true volumetric 3D from
-> images via multiple AI models, and exports web/print-ready results. It is a
-> TypeScript monorepo (MIT) offering a CLI, a local + in-browser Studio, an
-> MCP server for AI agents, and a GitHub Action.
+> GLBForge is the deterministic layer AFTER 3D generation, for agents and CI.
+> Two jobs: (1) during authoring, it is the agent's eyes — `inspect` reads a
+> mesh semantically in a fraction of a second (shells, watertightness, size in
+> metres, up axis, origin, transforms) and `diff` says what the last edit
+> broke; (2) at the end, it analyzes GLB/glTF against versioned performance
+> budgets, optimizes (typically 90%+ smaller) with the visual loss measured by
+> SSIM, forges 2D artwork into watertight 3D, generates volumetric 3D from
+> images via several models, and exports web/print/AR-ready results (GLB, STL,
+> USDZ). TypeScript monorepo (MIT): a CLI, a local + in-browser Studio, a
+> 27-tool MCP server, and a GitHub Action.
 
-Key facts (accurate as of v0.6.x, 2026):
+Key facts (September 2026, in step with the repository's main branch — the
+0.9.0 line; `npm view glbforge version` says what is published. This file is
+updated with the code: anything not listed here is not shipped):
 
 - Positioning: generation is commoditized; GLBForge is the deterministic layer
   AFTER generation. Budgets are contracts — `glbforge analyze` exits non-zero
   when an asset exceeds its profile (mobile-hero / desktop-hero /
   product-configurator), so it drops into CI like a linter. Profiles are
   VERSIONED (`mobile-hero@1` pins; bare name = latest; a cap never changes in
-  place) and every cap has a published rationale: https://glbforge.dev/budgets/
+  place — `@2` is current, republished with the 0.9.0 colour-space
+  re-measurement, no cap moved) and every cap has a published rationale:
+  https://glbforge.dev/budgets/
 - Inspect (`glbforge inspect`, MCP `inspect`): the after-every-edit read for
-  agents authoring meshes (sub-second; ~70 ms on 150k triangles). Measured
+  agents authoring meshes (~0.1 s on a 150k-triangle asset, ~0.8 s on a raw
+  2M-triangle generation). Measured
   facts: connected shells, watertight or holes/overlaps (welded space, UV
   seams are not holes), size in metres, up axis, origin landmark (base
   centre / centre / centroid / floating), unapplied / mirrored / non-uniform
@@ -48,17 +57,21 @@ Key facts (accurate as of v0.6.x, 2026):
   truly-redundant vertices vs legitimate UV-seam splits), named lint rules
   with concrete fixes.
 - Optimize: weld → meshopt simplification (error ladder for 10x+ reductions) →
-  area-weighted smooth normals → WebP or KTX2/BasisU textures (KTX2 ≈ 8x less
-  GPU memory) → EXT_meshopt_compression → optional geometry-only LOD chains →
+  area-weighted smooth normals → WebP or KTX2/BasisU textures (KTX2 stays
+  compressed on the GPU: 4-8x less GPU memory) → EXT_meshopt_compression → optional geometry-only LOD chains →
   perceptual verification: four fixed-camera renders before vs after, SSIM
   scored, gated on the profile's minSsim floor (a failing SSIM fails the
   report card and the exit code, like any budget rule). "No visible loss" is
   a measured number, reported as the `fidelity/perceptual` finding.
 - Forge (deterministic 2D→3D, no AI, instant, free): marching-squares tracing
   with angle-aware smoothing, layered color extrusion with the source artwork
-  projected on, pillow/emboss relief (double-sided), bevels, material presets
-  (enamel/chrome/neon/acrylic/rubber). Output is watertight (verified 0
-  boundary / 0 non-manifold edges) and therefore 3D-printable via STL export.
+  projected on, pillow/emboss relief (double-sided, triangle-capped), bevels,
+  material presets (enamel/chrome/neon/acrylic/rubber). `--layers auto`
+  measures the artwork (colour histogram of the solid pixels) and layers only
+  what is genuinely flat-coloured; the projected texture is an opaque plate
+  (colour padded past the silhouette) so a lossy re-encode cannot ring along
+  the art/void edge. Output is watertight (verified 0 boundary / 0
+  non-manifold edges) and therefore 3D-printable via STL export.
 - Animated assets: skinned meshes and morph targets are simplified bone-aware
   (attribute-aware meshopt simplification with joint-boundary vertex locks;
   skins, inverse bind matrices, targets, and clips preserved).
@@ -78,8 +91,8 @@ Key facts (accurate as of v0.6.x, 2026):
   device; only optional signed-in generation (GitHub/Google, metered credits)
   touches a server. Shows the measured visual-fidelity SSIM, a
   reference · result · change heatmap, and exports GLB / STL / USDZ.
-- MCP server: `dev.glbforge/glbforge` in the official MCP registry; install
-  with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-oriented:
+- MCP server (27 tools): `dev.glbforge/glbforge` in the official MCP registry;
+  install with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-oriented:
   every tool returns `{ok, summary, duration_ms, errors[], data}` where
   errors[] carry stable codes (docs/error-codes.md), a severity and the
   prim_path they refer to; responses validate against schemas/<tool>.output.json.
@@ -111,13 +124,30 @@ Key facts (accurate as of v0.6.x, 2026):
   forge) and tailors suggestions, including documented model-family weak
   spots. Optimization reports a geometric fidelity bound (max deviation of
   simplification as a fraction of mesh extent) AND a measured visual SSIM.
-- What GLBForge is NOT: not a modeling suite, not a renderer, not a Meshy
-  clone; it does not train models. Deterministic core: same input + settings
-  = identical output.
+- Ship (`glbforge ship <input>`, MCP `ship_asset`): one call from anything to
+  a budget-gated asset. A GLB is optimized; flat artwork is forged; a
+  photographic image is routed to a generator; then analyze → optimize →
+  gate, exit 1 if it fails. `--json` emits ONE document: the route taken, what
+  the forge decided (intermediate path, triangles, layers, measured flatness),
+  the output path, `passed`, and the full optimization report. Intermediates
+  are namespaced (`*.forge.glb`, `*.gen.glb`) and never overwrite the input.
+- What GLBForge is NOT: not a modeling suite (it reads and repackages meshes,
+  it does not author them), not a renderer (the software rasterizer exists to
+  measure fidelity), not a Meshy clone; it does not train models, and it has
+  no Blender dependency (pure Node: gltf-transform + meshoptimizer + sharp).
+  Deterministic core: same input + settings = identical bytes and pixels.
+- Known gaps, so an agent does not promise them: USD composition arcs
+  (references / payloads / variants) are REPORTED, not resolved — the
+  pure-TS readers see a single layer; LOD chains are not perceptually scored
+  yet; long MCP tools have no progress streaming (generation is poll-based by
+  design); budget caps will not move without real device/network failure data.
 
 ## Commands
 
 - npx glbforge ship anything.{glb,png,svg} --profile mobile-hero [--json]   (one-call: route → forge/generate → optimize → gate; --json is one document: route taken, forge decision, optimization report, passed)
+- npx glbforge inspect model.glb [--expect "chair, single-shell, 0.4-1.2m tall, watertight, origin base"] [--json]   (glb/gltf/usdz/usda/usdc; run after every edit)
+- npx glbforge diff before.glb after.glb [--visual] [--json]   (what the edit changed and what it broke)
+- npx glbforge usage [--enable | --clear]   (local, opt-in, never networked: invocations per asset lineage)
 - npx glbforge analyze model.glb --profile mobile-hero
 - npx glbforge optimize model.glb --ktx2 --lods 40000,10000
 - npx glbforge extrude logo.png --layers auto --pillow 0.03 --preset enamel   (auto layers only artwork measured to be flat-coloured)

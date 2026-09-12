@@ -37,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge MCP server \u2014 agent-oriented 3D asset tooling: validate / inspect / render GLB and USDZ with stable error codes and prim paths, plus optimize, export, and generation.",
+  "description": "GLBForge MCP server — agent-oriented 3D asset tooling: inspect and diff a mesh after every edit, validate / inspect / render GLB and USD with stable error codes and prim paths, plus budget-gated optimization, forging, export, and generation.",
   "keywords": [
     "gltf",
     "glb",

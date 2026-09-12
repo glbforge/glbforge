@@ -3,6 +3,12 @@
 The engine behind [glbforge](https://www.npmjs.com/package/glbforge): pure
 TypeScript analysis, optimization, extrusion, and export for glTF/GLB assets.
 
+- `inspectScene(ir, {profile, expect})` — semantic read for the edit loop:
+  shells, watertightness, size in metres, up axis, origin landmark, node
+  transforms; versioned rule packs, measured/heuristic certainty, causes
+  with confidence, fixes
+- `diffScenes(before, after, opts)` — what an edit changed and what it broke,
+  per part; `diff@1` rules with regressions first
 - `analyze(doc, {profile})` — geometry/texture/material stats, welded-space
   topology (boundary, non-manifold, truly-redundant vertices), named lint
   rules with fixes, budget scoring
@@ -11,6 +17,10 @@ TypeScript analysis, optimization, extrusion, and export for glTF/GLB assets.
 - `extrudeImage(bytes, opts)` — raster/SVG silhouette → beveled watertight
   mesh with the source image projected as texture
 - `toStl(doc, {targetSizeMm})` — binary STL, world transforms baked, z-up
-- Profiles: `mobile-hero`, `desktop-hero`, `product-configurator`
+- `toUsdz(doc, opts)` — iOS AR Quick Look: binary usdc (crate 0.8.0) written
+  in pure TS, UsdPreviewSurface materials, UsdSkel skeletons and blend shapes
+- Profiles: `mobile-hero`, `desktop-hero`, `product-configurator` (versioned;
+  a published cap never changes in place)
+- Isomorphic: `sharp` and `node:*` load lazily, browsers inject codecs
 
 Docs: **https://github.com/glbforge/glbforge**

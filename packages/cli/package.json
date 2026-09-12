@@ -37,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "GLBForge CLI — make AI-generated 3D assets web-ready: analyze against budgets, optimize, extrude logos to 3D, export STL, scaffold R3F viewers.",
+  "description": "GLBForge CLI — inspect and diff 3D meshes in the edit loop, then make them web-ready: versioned performance budgets, SSIM-verified optimization, 2D artwork to watertight 3D, GLB/STL/USDZ export.",
   "keywords": [
     "gltf",
     "glb",
