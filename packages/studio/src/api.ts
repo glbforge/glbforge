@@ -188,7 +188,7 @@ let localUrls: ((id: string) => string) | null = null;
 export function registerLocalUrls(fn: (id: string) => string): void { localUrls = fn; }
 function localFileUrl(id: string): string { return localUrls ? localUrls(id) : ''; }
 
-import type { FileKind } from '@glbforge/core';
+import type { FileKind } from '@glbforge/core/sniff';
 
 /**
  * Name a file derived from an asset. `.web` / `.forge` / `.gen` / `.lodN` are

@@ -4,6 +4,26 @@
 
 ### Added
 
+- **See the cut before forging it** — `--matte-preview <file.png>` (CLI),
+  `matte_preview: true` on the MCP `extrude_image`, and a live redraw in the
+  Studio under the "cut tolerance" slider. Choosing a tolerance previously
+  meant forging, rendering, squinting at a 3D thumbnail, undoing and guessing
+  again — and the thumbnail does not even show the thing being judged, which
+  is *which pixels survived*. All three now answer that directly: the subject
+  at full opacity, the removed background ghosted (`cutoutRgba`), with
+  coverage, pieces, holes and confidence beside it. The preview decodes at the
+  same 1024px ceiling the forge traces at, so it is the cut the forge would
+  make and not a different one at a different scale; the Studio works at 256px
+  so it can re-mask on every slider step. The MCP reply carries `nextActions`
+  naming the tolerance to try next — higher when the background did not
+  separate, lower when the cut ate into the object, or generation when the
+  image is a scene rather than an object. `matte_tolerance` / `--matte-
+  tolerance` expose the knob itself.
+  `@glbforge/core` gained `./matte` and `./sniff` subpath exports so a browser
+  can take the lift without pulling the pipeline into its main bundle — via
+  the barrel it cost the Studio 128 kB gzip, via the subpath 4.5 kB.
+
+
 - **Subject lifting: `--matte auto`, the forge's third mask mode** (`matte/border@2`). A
   photograph carries no alpha and no white ground, so the forge refuses it —
   correct, and a dead end for the most common thing anyone points a camera at.
@@ -48,6 +68,18 @@
   generative routes go quiet under `--json` so stdout stays parseable.
 
 ### Fixed
+
+- **The shadow rule could eat the whole subject** (`matte/border@2`, found in
+  testing before release). A neutral object *darker* than a neutral ground is
+  chromatically identical to a shadow of that ground — a grey laptop on a
+  white desk — so the shadow arm absorbed it entirely and the lift returned
+  nothing. Nothing local distinguishes the two cases, but the outcome does: a
+  shadow is part of the scene around an object, so removing it should cost a
+  fraction of the object and never most of it. The lift now builds both cuts
+  and keeps the shadow-aware one only while it leaves at least 30% of what the
+  strict cut kept, saying so in its notes when it falls back. Both floods are
+  O(pixels), so the second pass is cheap.
+
 
 - **The Studio asked for four colour layers on everything.** `ship` learned in
   this same release that k-means returns four clusters whether or not the

@@ -5,7 +5,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js"
+    ".": "./dist/index.js",
+    "./matte": "./dist/extrude/matte.js",
+    "./sniff": "./dist/sniff.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -35,7 +37,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "Inspect, diff, analyze, optimize, forge, and export 3D assets for the web — semantic mesh reads, versioned budgets, lint rules, SSIM verification, KTX2, LODs, STL, USDZ.",
+  "description": "Inspect, diff, analyze, optimize, forge, and export 3D assets for the web \u2014 semantic mesh reads, versioned budgets, lint rules, SSIM verification, KTX2, LODs, STL, USDZ.",
   "keywords": [
     "gltf",
     "glb",

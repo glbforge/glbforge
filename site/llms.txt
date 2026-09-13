@@ -80,7 +80,12 @@ updated with the code: anything not listed here is not shipped):
   open, debris dropped. The mask is an inference and says so — coverage,
   pieces, holes and a confidence; under 0.4 it refuses with the numbers rather
   than forging a blob, and the MCP reports an accepted lift as
-  `SUBJECT_LIFTED`.
+  `SUBJECT_LIFTED`. The cut is previewable before any geometry exists:
+  `--matte-preview cut.png` (CLI), `matte_preview: true` on `extrude_image`
+  (returns the cut as an image plus the tolerances to try next), and a live
+  redraw under the Studio's tolerance slider. `--matte-tolerance` /
+  `matte_tolerance` tunes it: lower keeps more of the object, higher takes
+  more of the background.
 - Animated assets: skinned meshes and morph targets are simplified bone-aware
   (attribute-aware meshopt simplification with joint-boundary vertex locks;
   skins, inverse bind matrices, targets, and clips preserved).

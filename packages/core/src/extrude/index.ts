@@ -4,7 +4,7 @@ import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { measureFlatness, quantizeColors, srgbToLinear, type Flatness } from './layers.js';
 import { distanceTransform, sampleDistance } from './relief.js';
 import { flattenProjection } from './bleed.js';
-import { liftSubject, type Matte, type MatteOptions } from './matte.js';
+import { liftSubject, cutoutRgba, type Matte, type MatteOptions } from './matte.js';
 import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import type { Material, Texture } from '@gltf-transform/core';
 
@@ -307,6 +307,34 @@ export async function extrudeFromRgba(
       ...(matte ? { matte } : {}),
     },
   };
+}
+
+/**
+ * The cut, as a picture, without building anything.
+ *
+ * `extrudeImage` decides a silhouette and then spends real time on geometry;
+ * choosing a tolerance needs only the first half. This decodes at exactly the
+ * resolution the forge traces at — so the preview is the cut the forge would
+ * make, not a different one at a different scale — lifts the subject, and
+ * returns both the numbers and a PNG with the removed background ghosted.
+ *
+ * Node entry (sharp decodes); browsers have a canvas and call `liftSubject`
+ * plus `cutoutRgba` directly.
+ */
+export async function previewMatte(
+  imageBytes: Uint8Array,
+  opts: MatteOptions & { dim?: number } = {},
+): Promise<{ matte: Matte; png: Uint8Array; width: number; height: number }> {
+  const sharp = (await import('sharp')).default;
+  const raw = await sharp(imageBytes)
+    .resize(TRACE_MAX, TRACE_MAX, { fit: 'inside', withoutEnlargement: true })
+    .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width, height } = raw.info;
+  const matte = liftSubject(raw.data, width, height, opts);
+  const png = await sharp(Buffer.from(cutoutRgba(raw.data, matte, opts.dim)), {
+    raw: { width, height, channels: 4 },
+  }).png().toBuffer();
+  return { matte, png: new Uint8Array(png), width, height };
 }
 
 /** Cheap SVG sniff: XML/SVG tag near the start of the buffer. */

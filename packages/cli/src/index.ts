@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
 import { resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
@@ -271,6 +271,8 @@ program
     if (v !== 'auto' && v !== 'off') throw new Error(`--matte takes "auto" or "off", got "${v}"`);
     return v;
   })
+  .option('--matte-tolerance <n>', 'how far a pixel may sit from the background colour and still be cut away (default 34); lower keeps more of the object, higher takes more of the background', (v) => parseFloat(v))
+  .option('--matte-preview <file.png>', 'look before you forge: write the cut as a PNG (subject opaque, removed background ghosted), print its numbers, and build no geometry')
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))
   .option('--depth <m>', 'extrusion depth in meters', parseFloat)
   .option('--bevel <m>', 'bevel radius on both rims (signage look)', parseFloat, 0)
@@ -293,7 +295,8 @@ program
   .option('--roughness <n>', 'roughness factor 0-1', parseFloat, 0.6)
   .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
-    out?: string; mode?: 'alpha' | 'luma'; matte?: 'auto' | 'off'; threshold?: number; depth?: number;
+    out?: string; mode?: 'alpha' | 'luma'; matte?: 'auto' | 'off'; matteTolerance?: number;
+    mattePreview?: string; threshold?: number; depth?: number;
     bevel: number; bevelSegments: number; layers?: number | 'auto'; layerStep?: number;
     pillow?: number; emboss?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
     width: number; simplify: number; texture: boolean; color?: string;
@@ -301,6 +304,25 @@ program
   }) => {
     const outPath = opts.out ?? image.replace(/\.[a-z0-9]+$/i, '') + '.glb';
     const bytes = await readFile(image);
+
+    // Preview: the cut as a picture, no geometry. Tuning a tolerance by
+    // forging and eyeballing a 3D render is slow and looks at the wrong thing.
+    if (opts.mattePreview) {
+      const { matte, png } = await previewMatte(new Uint8Array(bytes),
+        opts.matteTolerance ? { tolerance: opts.matteTolerance } : {});
+      await writeFile(opts.mattePreview, png);
+      const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
+      if (opts.json) {
+        console.log(JSON.stringify({ preview: opts.mattePreview, tolerance: opts.matteTolerance ?? 34, ...matte, alpha: undefined }, null, 2));
+      } else {
+        console.log(`  ${opts.mattePreview}  ${pct(matte.coverage)} kept, ${matte.components} piece(s), ${matte.holes} hole(s)`);
+        console.log(`  confidence ${pct(matte.confidence)} (${matte.version}, tolerance ${opts.matteTolerance ?? 34})${matte.confidence < 0.4 ? ' — below the floor; extrude would refuse this cut' : ''}`);
+        for (const note of matte.notes) console.log(`    · ${note}`);
+        console.log('  Adjust with --matte-tolerance, then drop --matte-preview to forge it.');
+      }
+      process.exitCode = matte.confidence >= 0.4 ? 0 : 1;
+      return;
+    }
     const color = opts.color
       ? ([1, 3, 5].map((i) => parseInt(opts.color!.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
           .concat(1) as [number, number, number, number])
@@ -308,6 +330,7 @@ program
 
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
       mode: opts.mode, matte: opts.matte, threshold: opts.threshold, depth: opts.depth,
+      matteOptions: opts.matteTolerance ? { tolerance: opts.matteTolerance } : undefined,
       bevel: opts.bevel, bevelSegments: opts.bevelSegments,
       layers: opts.layers, layerStep: opts.layerStep,
       pillow: opts.pillow, emboss: opts.emboss, preset: opts.preset,

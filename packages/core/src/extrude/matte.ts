@@ -100,6 +100,11 @@ const REFERENCE_COVERAGE = 0.75;
 const MAX_REFERENCES = 4;
 /** How far below the background's brightness the shadow rule still reaches. */
 const SHADOW_FLOOR = 0.45;
+/**
+ * The shadow-aware cut must leave at least this share of what the strict cut
+ * kept, or it is discarded as having eaten the object rather than its shadow.
+ */
+const SHADOW_KEEP_SHARE = 0.3;
 /** A subject smaller/larger than these is not a subject worth cutting out. */
 const MIN_SENSIBLE_COVERAGE = 0.005;
 const MAX_SENSIBLE_COVERAGE = 0.92;
@@ -226,9 +231,9 @@ export function liftSubject(
    * the rule from running all the way down into black, where every colour is
    * chromatically close to every other.
    */
-  const isBackgroundColour = (i: number): boolean => references.some((ref) => {
+  const isBackgroundColour = (i: number, withShadowArm: boolean): boolean => references.some((ref) => {
     if (distance(px, i, ref.r, ref.g, ref.b) <= tolerance) return true;
-    if (shadowTolerance <= 0) return false;
+    if (!withShadowArm || shadowTolerance <= 0) return false;
     const pixelLuma = luma(px[i], px[i + 1], px[i + 2]);
     const refLuma = luma(ref.r, ref.g, ref.b);
     return pixelLuma <= refLuma
@@ -236,95 +241,127 @@ export function liftSubject(
       && chromaDistance(px, i, ref.r, ref.g, ref.b) <= shadowTolerance;
   });
 
-  // --- 2. Classify every pixel, then grow the background inward ------------
+  // --- 2 & 3. Classify, grow the background inward, keep what is real ------
   // Colour decides the class and connectivity decides what to do about it —
   // that split is what keeps a ring's eye open. Deciding by connectivity
   // alone would weld the hole shut, because the eye is "not background the
   // flood could reach" and so is the ring itself.
-  const backgroundLike = new Uint8Array(n);
-  for (let p = 0; p < n; p++) backgroundLike[p] = isBackgroundColour(p * 4) ? 1 : 0;
-  // Smooth the classification, not the geometry: a frayed mask becomes a
-  // frayed silhouette, and the tracer would turn every JPEG artifact along the
-  // rim into its own contour.
-  smoothMask(backgroundLike, width, height, smoothing);
-
-  // Seeded only from edge pixels that match a reference, so a subject running
-  // off the frame (a cropped object, a hand at the bottom) is not itself a
-  // seed and does not get eaten from the outside in.
-  const background = new Uint8Array(n);
   const queue = new Int32Array(n);
-  let head = 0, tail = 0;
-  const push = (p: number) => {
-    if (background[p] || !backgroundLike[p]) return;
-    background[p] = 1;
-    queue[tail++] = p;
-  };
-  for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
-  for (let y = 1; y < height - 1; y++) { push(y * width); push(y * width + width - 1); }
-  while (head < tail) {
-    const p = queue[head++];
-    const x = p % width, y = (p / width) | 0;
-    if (x > 0) push(p - 1);
-    if (x < width - 1) push(p + 1);
-    if (y > 0) push(p - width);
-    if (y < height - 1) push(p + width);
+
+  interface Pass {
+    alpha: Uint8Array; subject: number;
+    components: number; droppedComponents: number;
+    holes: number; filledHoles: number;
   }
 
-  /** Connected components within one class, in scan order (so labels are stable). */
-  const componentsOf = (member: (p: number) => boolean): { labels: Int32Array; sizes: number[] } => {
-    const labels = new Int32Array(n).fill(-1);
-    const sizes: number[] = [];
-    for (let seed = 0; seed < n; seed++) {
-      if (labels[seed] !== -1 || !member(seed)) continue;
-      const label = sizes.length;
-      let size = 0;
-      head = tail = 0;
-      labels[seed] = label; queue[tail++] = seed;
-      while (head < tail) {
-        const p = queue[head++];
-        size++;
-        const x = p % width, y = (p / width) | 0;
-        const visit = (q: number) => {
-          if (labels[q] !== -1 || !member(q)) return;
-          labels[q] = label; queue[tail++] = q;
-        };
-        if (x > 0) visit(p - 1);
-        if (x < width - 1) visit(p + 1);
-        if (y > 0) visit(p - width);
-        if (y < height - 1) visit(p + width);
-      }
-      sizes.push(size);
+  const build = (withShadowArm: boolean): Pass => {
+    const backgroundLike = new Uint8Array(n);
+    for (let p = 0; p < n; p++) backgroundLike[p] = isBackgroundColour(p * 4, withShadowArm) ? 1 : 0;
+    // Smooth the classification, not the geometry: a frayed mask becomes a
+    // frayed silhouette, and the tracer would turn every JPEG artifact along
+    // the rim into its own contour.
+    smoothMask(backgroundLike, width, height, smoothing);
+
+    // Seeded only from edge pixels that match a reference, so a subject
+    // running off the frame (a cropped object, a hand at the bottom) is not
+    // itself a seed and does not get eaten from the outside in.
+    const background = new Uint8Array(n);
+    let head = 0, tail = 0;
+    const push = (p: number) => {
+      if (background[p] || !backgroundLike[p]) return;
+      background[p] = 1;
+      queue[tail++] = p;
+    };
+    for (let x = 0; x < width; x++) { push(x); push((height - 1) * width + x); }
+    for (let y = 1; y < height - 1; y++) { push(y * width); push(y * width + width - 1); }
+    while (head < tail) {
+      const p = queue[head++];
+      const x = p % width, y = (p / width) | 0;
+      if (x > 0) push(p - 1);
+      if (x < width - 1) push(p + 1);
+      if (y > 0) push(p - width);
+      if (y < height - 1) push(p + width);
     }
-    return { labels, sizes };
+
+    /** Connected components within one class, in scan order (stable labels). */
+    const componentsOf = (member: (p: number) => boolean): { labels: Int32Array; sizes: number[] } => {
+      const labels = new Int32Array(n).fill(-1);
+      const sizes: number[] = [];
+      for (let seed = 0; seed < n; seed++) {
+        if (labels[seed] !== -1 || !member(seed)) continue;
+        const label = sizes.length;
+        let size = 0;
+        head = tail = 0;
+        labels[seed] = label; queue[tail++] = seed;
+        while (head < tail) {
+          const p = queue[head++];
+          size++;
+          const x = p % width, y = (p / width) | 0;
+          const visit = (q: number) => {
+            if (labels[q] !== -1 || !member(q)) return;
+            labels[q] = label; queue[tail++] = q;
+          };
+          if (x > 0) visit(p - 1);
+          if (x < width - 1) visit(p + 1);
+          if (y > 0) visit(p - width);
+          if (y < height - 1) visit(p + width);
+        }
+        sizes.push(size);
+      }
+      return { labels, sizes };
+    };
+
+    const subjectParts = componentsOf((p) => !backgroundLike[p]);
+    const largest = subjectParts.sizes.length ? Math.max(...subjectParts.sizes) : 0;
+    const kept = subjectParts.sizes.map((size) => size >= largest * minComponentShare);
+    const components = kept.filter(Boolean).length;
+    const droppedComponents = kept.length - components;
+
+    const alpha = new Uint8Array(n);
+    let subject = 0;
+    for (let p = 0; p < n; p++) {
+      const label = subjectParts.labels[p];
+      if (label !== -1 && kept[label]) { alpha[p] = 255; subject++; }
+    }
+
+    // Background-coloured pixels the flood could not reach are enclosed. Small
+    // ones are noise inside the subject — a highlight, a JPEG artifact, a gap
+    // in fur — and get filled; large ones are real openings and stay
+    // transparent, so a mug keeps its handle. Debris dropped above is never
+    // refilled: it was excluded on purpose, not by enclosure.
+    const enclosed = componentsOf((p) => backgroundLike[p] === 1 && !background[p]);
+    const fill = enclosed.sizes.map((size) => subject > 0 && size < subject * holeShare);
+    for (let p = 0; p < n; p++) {
+      const label = enclosed.labels[p];
+      if (label !== -1 && fill[label]) { alpha[p] = 255; subject++; }
+    }
+    return {
+      alpha, subject, components, droppedComponents,
+      holes: fill.filter((f) => !f).length,
+      filledHoles: fill.filter(Boolean).length,
+    };
   };
 
-  // --- 3. Keep the real pieces, keep the real holes -------------------------
-  const subjectParts = componentsOf((p) => !backgroundLike[p]);
-  const largest = subjectParts.sizes.length ? Math.max(...subjectParts.sizes) : 0;
-  const kept = subjectParts.sizes.map((size) => size >= largest * minComponentShare);
-  const components = kept.filter(Boolean).length;
-  const droppedComponents = kept.length - components;
-
-  const alpha = new Uint8Array(n);
-  let subject = 0;
-  for (let p = 0; p < n; p++) {
-    const label = subjectParts.labels[p];
-    if (label !== -1 && kept[label]) { alpha[p] = 255; subject++; }
+  // The shadow arm is an inference on top of an inference, and it has one
+  // catastrophic failure: a neutral object DARKER than a neutral ground is
+  // chromatically identical to a shadow of that ground, so the arm eats the
+  // whole subject (a grey laptop on a white desk). Nothing local can tell
+  // those apart — but the outcome can. Build both and keep the shadow-aware
+  // cut only while it still leaves a subject behind; a shadow is part of the
+  // scene around an object, so removing it should cost a fraction of the
+  // object, never most of it.
+  let pass = build(shadowTolerance > 0);
+  let shadowArm = shadowTolerance > 0;
+  if (shadowArm) {
+    const strict = build(false);
+    if (pass.subject < Math.max(n * MIN_SENSIBLE_COVERAGE, strict.subject * SHADOW_KEEP_SHARE)) {
+      pass = strict;
+      shadowArm = false;
+      notes.push('shadow matching removed almost the whole subject, so the strict cut was used instead — the object is probably a darker shade of the background\'s own colour');
+    }
   }
-
-  // Background-coloured pixels the flood could not reach are enclosed. Small
-  // ones are noise inside the subject — a highlight, a JPEG artifact, a gap in
-  // fur — and get filled; large ones are real openings and stay transparent,
-  // so a mug keeps its handle. Debris dropped above is never refilled: it was
-  // excluded on purpose, not by enclosure.
-  const enclosed = componentsOf((p) => backgroundLike[p] === 1 && !background[p]);
-  const fill = enclosed.sizes.map((size) => subject > 0 && size < subject * holeShare);
-  for (let p = 0; p < n; p++) {
-    const label = enclosed.labels[p];
-    if (label !== -1 && fill[label]) { alpha[p] = 255; subject++; }
-  }
-  const holes = fill.filter((f) => !f).length;
-  const filledHoles = fill.filter(Boolean).length;
+  const { alpha, components, droppedComponents, holes, filledHoles } = pass;
+  let subject = pass.subject;
 
   // --- 4. How separable was it, really? ------------------------------------
   // Edge contrast across the cut: a crisp subject on a clean ground reads far
@@ -384,4 +421,31 @@ export function liftSubject(
     version: MATTE_VERSION,
     notes,
   };
+}
+
+/**
+ * Paint the mask onto a copy of the image: the cut, as a picture.
+ *
+ * Numbers describe a matte; they do not show it. Anyone choosing a tolerance —
+ * a person moving a slider, an agent sweeping values — needs to see which
+ * pixels survived before committing to geometry, and `alpha` on its own is not
+ * something either can look at.
+ *
+ * `dim` is how much of the removed background to keep as a ghost (0 = fully
+ * transparent, 0.15 = a faint reminder of what was cut). A ghost is more
+ * useful than empty space: it shows whether the cut took the shadow, clipped
+ * the handle, or ate the whole object.
+ */
+export function cutoutRgba(
+  px: Uint8Array | Buffer,
+  matte: Pick<Matte, 'alpha'>,
+  dim = 0.15,
+): Uint8Array {
+  const out = new Uint8Array(px.length);
+  out.set(px);
+  for (let p = 0; p < matte.alpha.length; p++) {
+    if (matte.alpha[p]) { out[p * 4 + 3] = 255; continue; }
+    out[p * 4 + 3] = Math.round(255 * dim);
+  }
+  return out;
 }

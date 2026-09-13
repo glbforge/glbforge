@@ -1,6 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, isTouch, normalizeImage, type AssetDetail, type AssetSummary } from '../api';
-import { sniffFileKind, isImageKind, describeBytes, type FileKind } from '@glbforge/core';
+// Subpath imports, not the barrel: these two modules are dependency-free, and
+// reaching them through '@glbforge/core' pulls the whole pipeline (gltf-transform
+// and all) into the main bundle for the sake of two pure functions.
+import { liftSubject, cutoutRgba, type Matte } from '@glbforge/core/matte';
+import { sniffFileKind, isImageKind, describeBytes, type FileKind } from '@glbforge/core/sniff';
 import type { GenTask } from '../App';
 
 // Neither the name nor the MIME type is the authority: a phone picker can hand
@@ -13,6 +17,65 @@ const looksLikeImage = (file: File, kind: FileKind) =>
   || (kind === 'unknown' && (file.type.startsWith('image/') || IMAGE_RE.test(file.name)));
 
 interface PendingImage { name: string; bytes: ArrayBuffer; mime: string }
+
+
+/**
+ * The cut, live, while the slider moves.
+ *
+ * A tolerance you cannot see is a tolerance you cannot choose: before this the
+ * only way to judge a value was to forge it, look at the 3D result, undo, and
+ * guess again. The lift itself is pure and cheap, so at preview resolution it
+ * re-runs per slider step — decode once, re-mask on every change.
+ */
+function MattePreview(props: {
+  image: PendingImage;
+  tolerance: number;
+  onMeasured: (matte: Matte | null) => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [source, setSource] = useState<ImageData | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // Decode once per image, small: 256px is enough to judge a silhouette and
+  // keeps the re-mask under a frame.
+  useEffect(() => {
+    let alive = true;
+    const url = URL.createObjectURL(new Blob([props.image.bytes], { type: props.image.mime }));
+    const img = new Image();
+    img.onload = () => {
+      if (!alive) return;
+      const scale = Math.min(1, 256 / Math.max(img.naturalWidth, img.naturalHeight, 1));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const off = document.createElement('canvas');
+      off.width = w; off.height = h;
+      const ctx = off.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, w, h);
+      setSource(ctx.getImageData(0, 0, w, h));
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => { if (alive) { setFailed(true); URL.revokeObjectURL(url); } };
+    img.src = url;
+    return () => { alive = false; };
+  }, [props.image]);
+
+  useEffect(() => {
+    if (!source || !canvas.current) return;
+    const px = new Uint8Array(source.data.buffer.slice(0));
+    const matte = liftSubject(px, source.width, source.height, { tolerance: props.tolerance });
+    const cut = cutoutRgba(px, matte, 0.12);
+    const el = canvas.current;
+    el.width = source.width; el.height = source.height;
+    el.getContext('2d')!.putImageData(
+      new ImageData(new Uint8ClampedArray(cut.buffer, cut.byteOffset, cut.byteLength), source.width, source.height),
+      0, 0,
+    );
+    props.onMeasured(matte);
+  }, [source, props.tolerance]);
+
+  if (failed) return null;
+  return <canvas ref={canvas} className="matte-preview" />;
+}
 
 export function AssetRail(props: {
   assets: AssetSummary[];
@@ -47,6 +110,7 @@ export function AssetRail(props: {
   const [sculpt, setSculpt] = useState(false);
   const [preset, setPreset] = useState('');
   const [matteTolerance, setMatteTolerance] = useState(34);
+  const [previewMatte, setPreviewMatte] = useState<Matte | null>(null);
 
   // The forge traces a silhouette, so it refuses a photograph — core says so in
   // CLI terms ("pass --mode/--threshold"), which is no help inside a browser.
@@ -93,6 +157,7 @@ export function AssetRail(props: {
       if (looksLikeImage(file, kind)) {
         const image = await normalizeImage(file, bytes, kind);
         setPhotoHint(false);
+        setPreviewMatte(null);
         // SVGs are flat by definition; Meshy wants raster input anyway.
         if (props.meshyAvailable && !image.name.toLowerCase().endsWith('.svg')) {
           setPending(image);
@@ -163,6 +228,17 @@ export function AssetRail(props: {
               <button onClick={() => { void extrude(pending, 'auto'); setPending(null); }}>
                 ✂ Lift subject and forge <span className="choice-sub">instant · free · a sticker of the object</span>
               </button>
+              <MattePreview image={pending} tolerance={matteTolerance} onMeasured={setPreviewMatte} />
+              {previewMatte && (
+                <div className="matte-readout">
+                  <b className={previewMatte.confidence < 0.6 ? 'weak' : 'good'}>
+                    {(previewMatte.confidence * 100).toFixed(0)}% confident
+                  </b>
+                  {' · '}{(previewMatte.coverage * 100).toFixed(0)}% kept
+                  {' · '}{previewMatte.components} piece{previewMatte.components === 1 ? '' : 's'}
+                  {previewMatte.holes > 0 && `, ${previewMatte.holes} hole${previewMatte.holes === 1 ? '' : 's'}`}
+                </div>
+              )}
               <label className="slider">
                 <span>cut tolerance {matteTolerance}</span>
                 <input

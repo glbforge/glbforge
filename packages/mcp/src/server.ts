@@ -69,6 +69,7 @@ import {
   type OptimizeSummary,
   type SceneIR,
   type SceneSnapshot,
+  previewMatte,
 } from '@glbforge/core';
 import { FAL_MODELS, FalClient, MeshyClient, type TaskKind } from '@glbforge/meshy';
 import { registerAgentTools, registerEnvelopeTool } from './agent-tools.js';
@@ -120,6 +121,58 @@ const reply = (data: Record<string, unknown>, summary: string, opts: { image?: I
 
 const previewKind = (preview: string, render: boolean | undefined): PreviewKind | 'compare' =>
   render === false ? 'none' : render === true && preview === 'none' ? 'thumbnail' : (preview as PreviewKind | 'compare');
+
+/**
+ * The cut, before any geometry: an image of what survives plus the numbers
+ * that decided it.
+ *
+ * An agent choosing a tolerance otherwise has to forge, render and squint at a
+ * 3D thumbnail for every value — seconds each, and the thing it needs to judge
+ * (which pixels were kept) is not what the thumbnail shows. This answers the
+ * actual question, in milliseconds, and writes nothing.
+ */
+async function mattePreview(path: string, bytes: Buffer, tolerance?: number) {
+  // Core decodes at exactly the resolution the forge traces at, so this is the
+  // cut the forge would make rather than a different one at a different scale.
+  const { matte, png } = await previewMatte(new Uint8Array(bytes), tolerance ? { tolerance } : {});
+
+  const usable = matte.confidence >= 0.4;
+  const errors: Diagnostic[] = [diag(
+    'SUBJECT_LIFTED', '/Asset',
+    `${matte.version}: ${(matte.coverage * 100).toFixed(0)}% of the frame, ${matte.components} piece(s), `
+    + `${matte.holes} hole(s), confidence ${(matte.confidence * 100).toFixed(0)}%`
+    + (matte.notes.length ? ` — ${matte.notes.join('; ')}` : '')
+    + (usable ? '' : '. Below the 40% floor: extrude_image would refuse this cut.'),
+  )];
+  return reply({
+    path,
+    preview_only: true,
+    written: false,
+    matte: {
+      version: matte.version,
+      confidence: matte.confidence,
+      coverage: matte.coverage,
+      components: matte.components,
+      holes: matte.holes,
+      dropped_components: matte.droppedComponents,
+      background_uniformity: matte.backgroundUniformity,
+      edge_contrast: matte.edgeContrast,
+      tolerance: tolerance ?? 34,
+      usable,
+      notes: matte.notes,
+    },
+    // What to actually do about a given failure, rather than a number to stare at.
+    nextActions: usable
+      ? [{ tool: 'extrude_image', args: { path, matte: 'auto', ...(tolerance ? { matte_tolerance: tolerance } : {}) }, note: 'forge this cut' }]
+      : [
+        { tool: 'extrude_image', args: { path, matte: 'auto', matte_preview: true, matte_tolerance: Math.round((tolerance ?? 34) * 1.5) }, note: matte.coverage > 0.85 ? 'the background did not separate: try a higher tolerance' : 'try a higher tolerance' },
+        { tool: 'extrude_image', args: { path, matte: 'auto', matte_preview: true, matte_tolerance: Math.max(8, Math.round((tolerance ?? 34) * 0.6)) }, note: 'or a lower one, if the cut ate into the object' },
+        { tool: 'generate_image_to_3d', args: { path }, note: 'a scene rather than an object: generate instead of forging' },
+      ],
+  },
+  `Matte preview of ${basename(path)}: ${(matte.coverage * 100).toFixed(0)}% kept, confidence ${(matte.confidence * 100).toFixed(0)}%${usable ? '' : ' (below the floor — this cut would be refused)'}`,
+  { image: { type: 'image', data: Buffer.from(png).toString('base64'), mimeType: 'image/png' }, errors });
+}
 
 async function readDoc(path: string): Promise<{ doc: Document; bytes: Buffer }> {
   let bytes: Buffer;
@@ -605,6 +658,10 @@ export function createServer(): McpServer {
         .describe('Solid-pixel test: alpha (transparent bg) | luma (white bg). Auto-detected.'),
       matte: z.enum(['auto', 'off']).optional()
         .describe('Lift the subject off its background when the image carries no alpha of its own — a photo of an object on a plain ground becomes a sticker instead of being refused. Returns the mask\'s confidence and what drove it; refuses rather than forging a blob when the subject does not separate. Default off.'),
+      matte_tolerance: z.number().min(4).max(120).optional()
+        .describe('How far a pixel may sit from the background colour and still be cut away (default 34). Lower keeps more of the object, higher takes more of the background. Sweep it with matte_preview before forging.'),
+      matte_preview: z.boolean().default(false)
+        .describe('LOOK BEFORE YOU FORGE: skip the geometry entirely and return the cut as an image — the subject at full opacity, the removed background ghosted — plus its coverage, pieces, holes and confidence. Costs a fraction of a forge, writes nothing, and is the way to choose matte_tolerance. Ignored unless matte=auto.'),
       threshold: z.number().int().min(0).max(255).optional(),
       width: z.number().positive().default(1).describe('World width in meters'),
       depth: z.number().positive().optional().describe('Extrusion depth in meters (default width*0.08)'),
@@ -627,15 +684,21 @@ export function createServer(): McpServer {
       render: RENDER_FLAG,
       dry_run: DRY_RUN,
     },
-  }, async ({ path, out, mode, matte, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness, preview, render, dry_run }) => {
+  }, async ({ path, out, mode, matte, matte_tolerance, matte_preview, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness, preview, render, dry_run }) => {
     let bytes: Buffer;
     try { bytes = await readFile(path); } catch (err) { throw Object.assign(new Error(`Cannot read ${path}: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_NOT_FOUND' }); }
+
+    // Preview: the cut as a picture plus its numbers, before any geometry
+    // exists. Tuning a tolerance by forging, rendering and squinting at a
+    // thumbnail costs seconds per attempt; this costs milliseconds.
+    if (matte_preview && matte === 'auto') return mattePreview(path, bytes, matte_tolerance);
     const rgba = color
       ? ([1, 3, 5].map((i) => parseInt(color.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
           .concat(1) as [number, number, number, number])
       : undefined;
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
-      mode, matte, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify,
+      mode, matte, matteOptions: matte_tolerance ? { tolerance: matte_tolerance } : undefined,
+      threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify,
       texture, color: rgba, metallic, roughness,
     });
     const io = await createNodeIO();

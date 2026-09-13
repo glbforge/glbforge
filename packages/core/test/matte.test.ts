@@ -110,6 +110,22 @@ describe('liftSubject (matte/border@1)', () => {
     expect(lifted.coverage).toBeLessThan(naive.coverage);
   });
 
+  it('keeps a neutral object that is merely darker than a neutral ground', () => {
+    // The shadow arm's one catastrophic failure: a grey object on a light grey
+    // desk is chromatically identical to a shadow of that desk, so matching on
+    // chromaticity alone eats the whole subject. Nothing local separates them,
+    // so the outcome decides — the strict cut is kept when the shadow-aware
+    // one leaves nothing behind.
+    const size = 160;
+    const { px, width, height } = scene(size, size, (x, y) =>
+      (Math.hypot(x - 80, y - 80) < 55 ? [172, 178, 170] : [205, 205, 203]));
+    const matte = liftSubject(px, width, height);
+
+    expect(at(matte, width, 80, 80)).toBe(255);
+    expect(matte.coverage).toBeGreaterThan(0.3);
+    expect(matte.notes.join(' ')).toContain('strict cut was used');
+  });
+
   it('never absorbs a subject that is merely brighter than the ground', () => {
     // The shadow rule is one-sided on purpose: darker-and-same-hue is a
     // shadow, brighter-and-same-hue is a white mug on a grey desk.

@@ -68,6 +68,14 @@ stops being welded to the object, while a white mug on a grey desk (brighter,
 same hue) is never absorbed. A 3x3 majority filter smooths the mask before
 tracing, so JPEG ringing along an edge does not become hundreds of contours.
 
+**Look before you forge.** A tolerance you cannot see is a tolerance you
+cannot choose, so the cut is previewable everywhere it is offered:
+`glbforge extrude photo.jpg --matte auto --matte-preview cut.png` writes the
+cut (subject opaque, removed background ghosted) and prints its numbers
+without building geometry; `extrude_image` takes `matte_preview: true` and
+returns that image plus `nextActions` naming the tolerances to try; and the
+Studio redraws the cut live under the lift button as the slider moves.
+
 A mask is an **inference**, so it reports like one — coverage, pieces, holes,
 and a confidence built from how uniform the edge was, how much contrast the
 cut ran through, and whether the result is a sensible size. Below 0.4 the

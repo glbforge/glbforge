@@ -29,6 +29,17 @@
       ],
       "description": "Lift the subject off its background when the image carries no alpha of its own — a photo of an object on a plain ground becomes a sticker instead of being refused. Returns the mask's confidence and what drove it; refuses rather than forging a blob when the subject does not separate. Default off."
     },
+    "matte_tolerance": {
+      "type": "number",
+      "minimum": 4,
+      "maximum": 120,
+      "description": "How far a pixel may sit from the background colour and still be cut away (default 34). Lower keeps more of the object, higher takes more of the background. Sweep it with matte_preview before forging."
+    },
+    "matte_preview": {
+      "type": "boolean",
+      "default": false,
+      "description": "LOOK BEFORE YOU FORGE: skip the geometry entirely and return the cut as an image — the subject at full opacity, the removed background ghosted — plus its coverage, pieces, holes and confidence. Costs a fraction of a forge, writes nothing, and is the way to choose matte_tolerance. Ignored unless matte=auto."
+    },
     "threshold": {
       "type": "integer",
       "minimum": 0,
