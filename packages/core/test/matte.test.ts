@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extrudeFromRgba, liftSubject, MATTE_VERSION } from '../src/index.js';
+import { extrudeFromRgba, liftSubject, tuneMatte, MATTE_VERSION } from '../src/index.js';
 
 /**
  * Synthetic scenes, because the point of each case is one property of the
@@ -196,6 +196,45 @@ describe('liftSubject (matte/border@1)', () => {
 
     expect(matte.confidence).toBeLessThan(0.4);
     expect(matte.notes.length).toBeGreaterThan(0);
+  });
+});
+
+describe('tuneMatte', () => {
+  it('picks a tolerance that beats both ends of the ladder', () => {
+    // A subject close to its ground: too tight leaves background attached,
+    // too loose eats the object, and the useful value is somewhere between.
+    const size = 160;
+    const { px, width, height } = scene(size, size, (x, y) =>
+      (Math.hypot(x - 80, y - 80) < 50 ? [150, 158, 146] : [196, 198, 190]));
+
+    const tuned = tuneMatte(px, width, height);
+    expect(tuned.candidates).toHaveLength(8);
+    expect(tuned.matte.confidence).toBe(Math.max(...tuned.candidates.map((c) => c.confidence)));
+    // The winner is a real cut, not a degenerate one at either extreme.
+    expect(tuned.matte.coverage).toBeGreaterThan(0.15);
+    expect(tuned.matte.coverage).toBeLessThan(0.8);
+    expect(at(tuned.matte, width, 80, 80)).toBe(255);
+  });
+
+  it('beats the fixed default on an image the default handles badly', () => {
+    const size = 160;
+    const { px, width, height } = scene(size, size, (x, y) =>
+      (Math.hypot(x - 80, y - 80) < 50 ? [150, 158, 146] : [196, 198, 190]));
+    const fixed = liftSubject(px, width, height);            // tolerance 34
+    const tuned = tuneMatte(px, width, height);
+    expect(tuned.matte.confidence).toBeGreaterThanOrEqual(fixed.confidence);
+  });
+
+  it('is deterministic, and ties go to the lower tolerance', () => {
+    const { px, width, height } = disc();
+    const a = tuneMatte(px, width, height);
+    const b = tuneMatte(px, width, height);
+    expect(b.tolerance).toBe(a.tolerance);
+    expect(Buffer.from(b.matte.alpha)).toEqual(Buffer.from(a.matte.alpha));
+    // On a flat ground every rung cuts identically, so the first one wins.
+    const best = Math.max(...a.candidates.map((c) => c.confidence));
+    const firstBest = a.candidates.find((c) => c.confidence === best)!;
+    expect(a.tolerance).toBe(firstBest.tolerance);
   });
 });
 

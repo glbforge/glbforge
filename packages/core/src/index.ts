@@ -7,7 +7,7 @@ export { createNodeIO } from './io.js';
 export { extrudeImage, extrudeFromRgba, previewMatte, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
 export { measureFlatness, type Flatness } from './extrude/layers.js';
 export { flattenProjection } from './extrude/bleed.js';
-export { liftSubject, cutoutRgba, MATTE_VERSION, type Matte, type MatteOptions } from './extrude/matte.js';
+export { liftSubject, cutoutRgba, tuneMatte, DEFAULT_TOLERANCE, MATTE_VERSION, type Matte, type MatteOptions, type TunedMatte } from './extrude/matte.js';
 export { sniffFileKind, isImageKind, describeBytes, type FileKind } from './sniff.js';
 export { detectKtx2Encoder, ktx2Compress, type Ktx2Encoder } from './ktx2.js';
 export { stripMaterials, prepareLod } from './optimize.js';

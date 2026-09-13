@@ -30,6 +30,9 @@
  */
 export const MATTE_VERSION = 'matte/border@2';
 
+/** The tolerance used when neither the caller nor the tuner picks one. */
+export const DEFAULT_TOLERANCE = 34;
+
 export interface MatteOptions {
   /**
    * How far a pixel's colour may sit from a background reference and still
@@ -63,6 +66,12 @@ export interface MatteOptions {
    * debris (a shadow blob, a crumb, a bit of the next object). Default 0.05.
    */
   minComponentShare?: number;
+  /**
+   * Sweep the tolerance ladder and keep the best-scoring cut instead of using
+   * one fixed value (see `tuneMatte`). Costs eight passes, which is
+   * milliseconds at preview resolution.
+   */
+  tune?: boolean;
 }
 
 export interface Matte {
@@ -181,7 +190,7 @@ export function liftSubject(
   height: number,
   opts: MatteOptions = {},
 ): Matte {
-  const tolerance = opts.tolerance ?? 34;
+  const tolerance = opts.tolerance ?? DEFAULT_TOLERANCE;
   const shadowTolerance = opts.shadowTolerance ?? 22;
   const smoothing = opts.smoothing ?? 2;
   const holeShare = opts.holeShare ?? 0.02;
@@ -448,4 +457,49 @@ export function cutoutRgba(
     out[p * 4 + 3] = Math.round(255 * dim);
   }
   return out;
+}
+
+/** The ladder `tuneMatte` sweeps, coarse-to-fine across the useful range. */
+const TOLERANCE_LADDER = [12, 18, 24, 30, 36, 44, 52, 64] as const;
+
+export interface TunedMatte {
+  /** The tolerance that scored best. */
+  tolerance: number;
+  /** Its matte, so callers never recompute the winner. */
+  matte: Matte;
+  /** Every rung tried, in ladder order — the evidence behind the pick. */
+  candidates: Array<{ tolerance: number; confidence: number; coverage: number }>;
+}
+
+/**
+ * Pick the tolerance, instead of making someone guess it.
+ *
+ * A lift has one real knob and no way to know its value in advance: too tight
+ * leaves background welded on, too loose eats the object, and where those
+ * meet depends entirely on the photograph. But `confidence` already scores
+ * exactly that — it falls off at both ends, because a cut through background
+ * has little contrast across it and a cut that swallowed the frame fails the
+ * size check — so the knob can be swept and scored rather than guessed.
+ *
+ * Eight passes over a 256px preview is a few milliseconds; the caller gets the
+ * winner and the whole ladder, so a UI can start the slider in the right place
+ * and an agent can see the shape of the curve rather than one number.
+ *
+ * Deterministic: fixed ladder, fixed order, and ties go to the lower
+ * tolerance — the more conservative cut, which keeps more of the object.
+ */
+export function tuneMatte(
+  px: Uint8Array | Buffer,
+  width: number,
+  height: number,
+  opts: Omit<MatteOptions, 'tolerance'> = {},
+): TunedMatte {
+  let best: { tolerance: number; matte: Matte } | null = null;
+  const candidates: TunedMatte['candidates'] = [];
+  for (const tolerance of TOLERANCE_LADDER) {
+    const matte = liftSubject(px, width, height, { ...opts, tolerance });
+    candidates.push({ tolerance, confidence: matte.confidence, coverage: matte.coverage });
+    if (!best || matte.confidence > best.matte.confidence) best = { tolerance, matte };
+  }
+  return { tolerance: best!.tolerance, matte: best!.matte, candidates };
 }

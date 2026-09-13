@@ -4,6 +4,24 @@
 
 ### Added
 
+- **Auto-tune: the matte picks its own tolerance.** The one knob a lift has
+  cannot be known in advance — too tight leaves background welded on, too
+  loose eats the object, and where those meet depends entirely on the
+  photograph. But `confidence` already falls off at both ends, so the knob can
+  be swept and scored instead of guessed. `tuneMatte` walks an eight-rung
+  ladder (12→64), keeps the best-scoring cut, ties going to the lower (more
+  conservative) tolerance, and returns the whole ladder as the evidence behind
+  the pick. Deterministic, and a few milliseconds at preview resolution.
+  The Studio tunes on drop, so the slider opens at the right value with an
+  "auto" tag and a "reset to auto" link once you move it; `--matte-tolerance
+  auto` on the CLI prints the ladder it scored
+  (`12:94% 18:99% 24:100% 30:100% …`); `matte_tolerance: "auto"` on
+  `extrude_image`, and `matte_preview` tunes by default — an agent asking what
+  an image looks like cut out is really asking what the best cut is. When
+  every rung scores below the floor the reply stops suggesting the same knob
+  and says so: crop closer, or generate instead of forging.
+
+
 - **See the cut before forging it** — `--matte-preview <file.png>` (CLI),
   `matte_preview: true` on the MCP `extrude_image`, and a live redraw in the
   Studio under the "cut tolerance" slider. Choosing a tolerance previously

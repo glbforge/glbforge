@@ -261,6 +261,10 @@ program
     process.exitCode = passed ? 0 : 1;
   });
 
+/** `--matte-tolerance 30` pins a value; `auto` sweeps for one; absent = the default. */
+const matteTuning = (value: number | 'auto' | undefined) =>
+  value === 'auto' ? { tune: true } : value !== undefined ? { tolerance: value } : {};
+
 program
   .command('extrude')
   .description('Deterministic logo/graphic -> extruded 3D GLB (no AI). Traces the image silhouette and projects the source image back on as texture.')
@@ -271,7 +275,12 @@ program
     if (v !== 'auto' && v !== 'off') throw new Error(`--matte takes "auto" or "off", got "${v}"`);
     return v;
   })
-  .option('--matte-tolerance <n>', 'how far a pixel may sit from the background colour and still be cut away (default 34); lower keeps more of the object, higher takes more of the background', (v) => parseFloat(v))
+  .option('--matte-tolerance <n|auto>', 'how far a pixel may sit from the background colour and still be cut away (default 34; "auto" sweeps the ladder and keeps the best-scoring cut). Lower keeps more of the object, higher takes more of the background', (v) => {
+    if (v === 'auto') return 'auto' as const;
+    const n = parseFloat(v);
+    if (!Number.isFinite(n)) throw new Error(`--matte-tolerance takes a number or "auto", got "${v}"`);
+    return n;
+  })
   .option('--matte-preview <file.png>', 'look before you forge: write the cut as a PNG (subject opaque, removed background ghosted), print its numbers, and build no geometry')
   .option('--threshold <n>', '0-255 cutoff for the mode', (v) => parseInt(v, 10))
   .option('--depth <m>', 'extrusion depth in meters', parseFloat)
@@ -295,7 +304,7 @@ program
   .option('--roughness <n>', 'roughness factor 0-1', parseFloat, 0.6)
   .option('--json', 'emit JSON stats instead of the summary line')
   .action(async (image: string, opts: {
-    out?: string; mode?: 'alpha' | 'luma'; matte?: 'auto' | 'off'; matteTolerance?: number;
+    out?: string; mode?: 'alpha' | 'luma'; matte?: 'auto' | 'off'; matteTolerance?: number | 'auto';
     mattePreview?: string; threshold?: number; depth?: number;
     bevel: number; bevelSegments: number; layers?: number | 'auto'; layerStep?: number;
     pillow?: number; emboss?: number; preset?: 'enamel' | 'chrome' | 'neon' | 'acrylic' | 'rubber';
@@ -308,16 +317,19 @@ program
     // Preview: the cut as a picture, no geometry. Tuning a tolerance by
     // forging and eyeballing a 3D render is slow and looks at the wrong thing.
     if (opts.mattePreview) {
-      const { matte, png } = await previewMatte(new Uint8Array(bytes),
-        opts.matteTolerance ? { tolerance: opts.matteTolerance } : {});
+      const { matte, png, tolerance, tuned } = await previewMatte(new Uint8Array(bytes), matteTuning(opts.matteTolerance));
       await writeFile(opts.mattePreview, png);
       const pct = (n: number) => `${(n * 100).toFixed(0)}%`;
       if (opts.json) {
-        console.log(JSON.stringify({ preview: opts.mattePreview, tolerance: opts.matteTolerance ?? 34, ...matte, alpha: undefined }, null, 2));
+        console.log(JSON.stringify({ preview: opts.mattePreview, tolerance, tuned, ...matte, alpha: undefined }, null, 2));
       } else {
         console.log(`  ${opts.mattePreview}  ${pct(matte.coverage)} kept, ${matte.components} piece(s), ${matte.holes} hole(s)`);
-        console.log(`  confidence ${pct(matte.confidence)} (${matte.version}, tolerance ${opts.matteTolerance ?? 34})${matte.confidence < 0.4 ? ' — below the floor; extrude would refuse this cut' : ''}`);
+        console.log(`  confidence ${pct(matte.confidence)} (${matte.version}, tolerance ${tolerance}${tuned ? ', auto-tuned' : ''})${matte.confidence < 0.4 ? ' — below the floor; extrude would refuse this cut' : ''}`);
         for (const note of matte.notes) console.log(`    · ${note}`);
+        if (tuned) {
+          // The ladder, so the pick is evidence rather than an assertion.
+          console.log(`  ladder: ${tuned.map((c) => `${c.tolerance}:${pct(c.confidence)}`).join('  ')}`);
+        }
         console.log('  Adjust with --matte-tolerance, then drop --matte-preview to forge it.');
       }
       process.exitCode = matte.confidence >= 0.4 ? 0 : 1;
@@ -330,7 +342,7 @@ program
 
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
       mode: opts.mode, matte: opts.matte, threshold: opts.threshold, depth: opts.depth,
-      matteOptions: opts.matteTolerance ? { tolerance: opts.matteTolerance } : undefined,
+      matteOptions: matteTuning(opts.matteTolerance),
       bevel: opts.bevel, bevelSegments: opts.bevelSegments,
       layers: opts.layers, layerStep: opts.layerStep,
       pillow: opts.pillow, emboss: opts.emboss, preset: opts.preset,

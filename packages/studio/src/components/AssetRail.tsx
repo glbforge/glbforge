@@ -3,7 +3,7 @@ import { api, isTouch, normalizeImage, type AssetDetail, type AssetSummary } fro
 // Subpath imports, not the barrel: these two modules are dependency-free, and
 // reaching them through '@glbforge/core' pulls the whole pipeline (gltf-transform
 // and all) into the main bundle for the sake of two pure functions.
-import { liftSubject, cutoutRgba, type Matte } from '@glbforge/core/matte';
+import { liftSubject, cutoutRgba, tuneMatte, DEFAULT_TOLERANCE, type Matte } from '@glbforge/core/matte';
 import { sniffFileKind, isImageKind, describeBytes, type FileKind } from '@glbforge/core/sniff';
 import type { GenTask } from '../App';
 
@@ -31,6 +31,8 @@ function MattePreview(props: {
   image: PendingImage;
   tolerance: number;
   onMeasured: (matte: Matte | null) => void;
+  /** Called once per image with the best tolerance the sweep found. */
+  onTuned: (tolerance: number) => void;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<ImageData | null>(null);
@@ -58,6 +60,15 @@ function MattePreview(props: {
     img.src = url;
     return () => { alive = false; };
   }, [props.image]);
+
+  // Tune once per image, before the first draw: the slider should open at the
+  // best value this photograph allows, not at a constant that happens to suit
+  // some other photograph. Eight passes at 256px is a few milliseconds.
+  useEffect(() => {
+    if (!source) return;
+    const px = new Uint8Array(source.data.buffer.slice(0));
+    props.onTuned(tuneMatte(px, source.width, source.height).tolerance);
+  }, [source]);
 
   useEffect(() => {
     if (!source || !canvas.current) return;
@@ -109,7 +120,8 @@ export function AssetRail(props: {
   const [pillow, setPillow] = useState(false);
   const [sculpt, setSculpt] = useState(false);
   const [preset, setPreset] = useState('');
-  const [matteTolerance, setMatteTolerance] = useState(34);
+  const [matteTolerance, setMatteTolerance] = useState(DEFAULT_TOLERANCE);
+  const [autoTuned, setAutoTuned] = useState<number | null>(null);
   const [previewMatte, setPreviewMatte] = useState<Matte | null>(null);
 
   // The forge traces a silhouette, so it refuses a photograph — core says so in
@@ -158,6 +170,7 @@ export function AssetRail(props: {
         const image = await normalizeImage(file, bytes, kind);
         setPhotoHint(false);
         setPreviewMatte(null);
+        setAutoTuned(null);
         // SVGs are flat by definition; Meshy wants raster input anyway.
         if (props.meshyAvailable && !image.name.toLowerCase().endsWith('.svg')) {
           setPending(image);
@@ -228,7 +241,12 @@ export function AssetRail(props: {
               <button onClick={() => { void extrude(pending, 'auto'); setPending(null); }}>
                 ✂ Lift subject and forge <span className="choice-sub">instant · free · a sticker of the object</span>
               </button>
-              <MattePreview image={pending} tolerance={matteTolerance} onMeasured={setPreviewMatte} />
+              <MattePreview
+                image={pending}
+                tolerance={matteTolerance}
+                onMeasured={setPreviewMatte}
+                onTuned={(t) => { setAutoTuned(t); setMatteTolerance(t); }}
+              />
               {previewMatte && (
                 <div className="matte-readout">
                   <b className={previewMatte.confidence < 0.6 ? 'weak' : 'good'}>
@@ -240,7 +258,12 @@ export function AssetRail(props: {
                 </div>
               )}
               <label className="slider">
-                <span>cut tolerance {matteTolerance}</span>
+                <span>
+                  cut tolerance {matteTolerance}
+                  {autoTuned !== null && (matteTolerance === autoTuned
+                    ? <b className="auto-tag"> auto</b>
+                    : <button className="link" type="button" onClick={() => setMatteTolerance(autoTuned)}>reset to auto ({autoTuned})</button>)}
+                </span>
                 <input
                   type="range" min={12} max={70} step={2} value={matteTolerance}
                   onChange={(e) => setMatteTolerance(Number(e.target.value))}

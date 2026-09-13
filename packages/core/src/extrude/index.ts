@@ -4,7 +4,7 @@ import { buildExtrusion, type ExtrudeStats } from './build.js';
 import { measureFlatness, quantizeColors, srgbToLinear, type Flatness } from './layers.js';
 import { distanceTransform, sampleDistance } from './relief.js';
 import { flattenProjection } from './bleed.js';
-import { liftSubject, cutoutRgba, type Matte, type MatteOptions } from './matte.js';
+import { liftSubject, cutoutRgba, tuneMatte, DEFAULT_TOLERANCE, type Matte, type MatteOptions, type TunedMatte } from './matte.js';
 import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import type { Material, Texture } from '@gltf-transform/core';
 
@@ -177,7 +177,11 @@ export async function extrudeFromRgba(
   // and an explicit `mode` is the caller overruling all of this.
   let matte: Matte | undefined;
   if (opts.matte === 'auto' && !hasAlpha && !opts.mode) {
-    matte = liftSubject(px, tw, th, opts.matteOptions);
+    // `tune: true` sweeps the one knob this has and keeps the best-scoring
+    // cut, so nobody has to guess a tolerance that depends on the photograph.
+    matte = opts.matteOptions?.tune
+      ? tuneMatte(px, tw, th, opts.matteOptions).matte
+      : liftSubject(px, tw, th, opts.matteOptions);
     if (matte.confidence < MIN_MATTE_CONFIDENCE) {
       throw new Error(
         `Could not lift a subject from this image (confidence ${(matte.confidence * 100).toFixed(0)}%, `
@@ -323,18 +327,26 @@ export async function extrudeFromRgba(
  */
 export async function previewMatte(
   imageBytes: Uint8Array,
-  opts: MatteOptions & { dim?: number } = {},
-): Promise<{ matte: Matte; png: Uint8Array; width: number; height: number }> {
+  opts: MatteOptions & { dim?: number; tune?: boolean } = {},
+): Promise<{
+  matte: Matte; png: Uint8Array; width: number; height: number;
+  tolerance: number; tuned?: TunedMatte['candidates'];
+}> {
   const sharp = (await import('sharp')).default;
   const raw = await sharp(imageBytes)
     .resize(TRACE_MAX, TRACE_MAX, { fit: 'inside', withoutEnlargement: true })
     .ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const { width, height } = raw.info;
-  const matte = liftSubject(raw.data, width, height, opts);
+  const tuned = opts.tune ? tuneMatte(raw.data, width, height, opts) : null;
+  const matte = tuned ? tuned.matte : liftSubject(raw.data, width, height, opts);
   const png = await sharp(Buffer.from(cutoutRgba(raw.data, matte, opts.dim)), {
     raw: { width, height, channels: 4 },
   }).png().toBuffer();
-  return { matte, png: new Uint8Array(png), width, height };
+  return {
+    matte, png: new Uint8Array(png), width, height,
+    tolerance: tuned ? tuned.tolerance : opts.tolerance ?? DEFAULT_TOLERANCE,
+    ...(tuned ? { tuned: tuned.candidates } : {}),
+  };
 }
 
 /** Cheap SVG sniff: XML/SVG tag near the start of the buffer. */

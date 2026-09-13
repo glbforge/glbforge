@@ -68,6 +68,13 @@ stops being welded to the object, while a white mug on a grey desk (brighter,
 same hue) is never absorbed. A 3x3 majority filter smooths the mask before
 tracing, so JPEG ringing along an edge does not become hundreds of contours.
 
+**The tolerance tunes itself.** `tuneMatte` sweeps an eight-rung ladder and
+keeps the best-scoring cut, because confidence falls off at both ends of the
+knob — too tight leaves the background attached, too loose eats the object.
+The Studio does it on drop (the slider opens on the tuned value, tagged
+`auto`), `--matte-tolerance auto` does it on the CLI and prints the ladder,
+and the MCP's `matte_preview` does it by default.
+
 **Look before you forge.** A tolerance you cannot see is a tolerance you
 cannot choose, so the cut is previewable everywhere it is offered:
 `glbforge extrude photo.jpg --matte auto --matte-preview cut.png` writes the

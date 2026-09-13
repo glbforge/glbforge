@@ -111,6 +111,11 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
   background-size: 12px 12px;
   background-position: 0 0, 0 6px, 6px -6px, -6px 0;
 }
+.auto-tag { color: var(--good); font-weight: 600; }
+.link {
+  background: none; border: 0; padding: 0 0 0 6px; color: var(--accent-2);
+  font: inherit; cursor: pointer; text-decoration: underline;
+}
 .matte-readout { font-size: 11.5px; color: var(--dim); }
 .matte-readout b.good { color: var(--good); }
 .matte-readout b.weak { color: var(--warn); }
