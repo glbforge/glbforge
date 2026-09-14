@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -172,6 +173,44 @@ describe('agent-friendly MCP surface', () => {
     const pinned = (await client.callTool({ name: 'analyze_glb', arguments: { path: glb, profile: 'mobile-hero@1', preview: 'none' } })) as Result;
     expect(parse(pinned).profileVersion).toBe(1);
   });
+
+  it('creates a missing output directory rather than failing at the write', async () => {
+    // The documented workflow — "optimize it and save it to public/" — used to
+    // run the whole pipeline and then raise ENOENT on the writeFile.
+    const out = join(dir, 'public', 'models', 'ring.web.glb');
+    const r = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out, targetTriangles: 3000, lods: [500], preview: 'none' } })) as Result;
+    expect(envelope(r).ok).toBe(true);
+    expect(parse(r).outPath).toBe(out);
+    expect(existsSync(out)).toBe(true);
+    expect(existsSync(join(dir, 'public', 'models', 'ring.web.lod1.glb'))).toBe(true); // siblings land beside it
+
+    // dry_run writes nothing, so it creates nothing either.
+    const ghost = join(dir, 'ghost');
+    const d = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out: join(ghost, 'ring.web.glb'), targetTriangles: 3000, dry_run: true, preview: 'none' } })) as Result;
+    expect(parse(d).written).toBe(false);
+    expect(existsSync(ghost)).toBe(false);
+  }, 60_000);
+
+  it('refuses an unusable out up front, before the input is even read', async () => {
+    const wall = join(dir, 'wall.txt');
+    await writeFile(wall, 'not a directory');
+    const blocked = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out: join(wall, 'ring.web.glb') } })) as Result;
+    const env = envelope(blocked);
+    expect(env.ok).toBe(false);
+    expect(env.errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+    expect(env.summary).toContain(wall);
+
+    // A directory passed as `out` is the other way to spell it.
+    const asDir = (await client.callTool({ name: 'extrude_image', arguments: { path: join(dir, 'ring.png'), out: dir } })) as Result;
+    expect(envelope(asDir).errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+
+    // Ordering: the output path is checked before the input is opened, so a
+    // run that is wrong in both ways reports the cheap check, not FILE_NOT_FOUND.
+    const both = (await client.callTool({ name: 'export_stl', arguments: { path: join(dir, 'missing.glb'), out: join(wall, 'x.stl') } })) as Result;
+    const order = envelope(both);
+    expect(order.errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+    expect(order.errors.some((e: { code: string }) => e.code === 'FILE_NOT_FOUND')).toBe(false);
+  }, 30_000);
 
   it('extrude_image and export_stl return thumbnails and next actions', async () => {
     const out = join(dir, 'forged.glb');

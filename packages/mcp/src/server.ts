@@ -76,6 +76,7 @@ import { registerAgentTools, registerEnvelopeTool } from './agent-tools.js';
 import { compact, section, visualFidelityOf, type ReportSection } from './compact.js';
 import { note, plural, reply as envelopeReply, severityTail } from './envelope.js';
 import { findingsToDiagnostics } from './findings.js';
+import { prepareOut } from './outputs.js';
 import { renderComparison, renderPreview, type ImageBlock, type PreviewKind } from './preview.js';
 import type { ToolName } from './schemas.js';
 
@@ -481,6 +482,7 @@ export function createServer(): McpServer {
       out: z.string().optional().describe('Absolute path to also save the PNG'),
     },
   }, async ({ path, view, size, out }) => {
+    await prepareOut(out);
     const { doc } = await readDoc(path);
     const preview = (await renderPreview(doc, view, size))!;
     if (out) await writeFile(out, preview.png);
@@ -513,6 +515,7 @@ export function createServer(): McpServer {
     const prof = getProfile(profile);
     const io = await createNodeIO();
     const outPath = out ?? input.replace(/\.(glb|png|jpe?g|webp|svg)$/i, '') + '.web.glb';
+    await prepareOut(outPath, dry_run);
 
     const finish = async (doc: Document, sourceBytes: number, beforeIr: SceneIR | null) => {
       quiet(doc);
@@ -622,6 +625,7 @@ export function createServer(): McpServer {
     },
   }, async ({ path, out, profile, targetTriangles, lods, textures, compress, textureFormat, verify, preview, render, dry_run }) => {
     const outPath = out ?? path.replace(/\.glb$/i, '') + '.web.glb';
+    await prepareOut(outPath, dry_run);
     const prof = getProfile(profile);
     const { doc, bytes } = await readDoc(path);
     const io = await createNodeIO();
@@ -706,6 +710,7 @@ export function createServer(): McpServer {
     // exists. Tuning a tolerance by forging, rendering and squinting at a
     // thumbnail costs seconds per attempt; this costs milliseconds.
     if (matte_preview && matte === 'auto') return mattePreviewReply(path, bytes, matte_tolerance);
+    await prepareOut(out, dry_run);
     const rgba = color
       ? ([1, 3, 5].map((i) => parseInt(color.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
           .concat(1) as [number, number, number, number])
@@ -756,6 +761,7 @@ export function createServer(): McpServer {
       dry_run: DRY_RUN,
     },
   }, async ({ path, out, sizeMm, preview, render, dry_run }) => {
+    await prepareOut(out, dry_run);
     const { doc, bytes } = await readDoc(path);
     const report = analyze(doc, { profile: getProfile('mobile-hero') });
     const topo = report.geometry.topology!;
@@ -800,6 +806,7 @@ export function createServer(): McpServer {
       dry_run: DRY_RUN,
     },
   }, async ({ path, out, jpeg, format, preview, render, dry_run }) => {
+    await prepareOut(out, dry_run);
     const { doc, bytes } = await readDoc(path);
     const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
     const beforeSnap = snapshotScene(beforeIr);
@@ -871,6 +878,7 @@ export function createServer(): McpServer {
       return reply({ status: st.status, queuePosition: st.queuePosition }, `${model} request ${requestId}: ${st.status}${st.queuePosition !== undefined ? ` (queue ${st.queuePosition})` : ''}`);
     }
     if (!out) throw new Error('pass "out" to download the finished model');
+    await prepareOut(out, dry_run);
     const bytes = await client.downloadGlb(await client.resultGlbUrl(FAL_MODELS[model], requestId));
     if (!dry_run) await writeFile(out, bytes);
     const io = await createNodeIO();
@@ -967,6 +975,7 @@ export function createServer(): McpServer {
     if (task.status !== 'SUCCEEDED') {
       throw new Error(`Task is ${task.status} (${task.progress}%) — not downloadable yet.`);
     }
+    await prepareOut(out, dry_run);
     const bytes = await client.downloadModel(task, 'glb');
     if (!dry_run) await writeFile(out, bytes);
     const io = await createNodeIO();

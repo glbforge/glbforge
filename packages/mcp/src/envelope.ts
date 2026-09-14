@@ -116,7 +116,7 @@ export function failure(err: unknown, tool: string) {
   return { content: [{ type: 'text' as const, text: JSON.stringify(env) }], structuredContent: env as unknown as Record<string, unknown>, isError: true };
 }
 
-const CODES: Record<string, true> = { FILE_NOT_FOUND: true, FILE_UNREADABLE: true, FORMAT_UNSUPPORTED: true, USDZ_NO_LAYER: true, TOOL_ERROR: true };
+const CODES: Record<string, true> = { FILE_NOT_FOUND: true, FILE_UNREADABLE: true, FORMAT_UNSUPPORTED: true, OUTPUT_NOT_WRITABLE: true, USDZ_NO_LAYER: true, TOOL_ERROR: true };
 
 /** "3 meshes, 1 skeleton, 2 warnings" style tail for summaries. */
 export function severityTail(errors: Diagnostic[]): string {
