@@ -5,7 +5,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "build:og": "node scripts/build-og.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3"
