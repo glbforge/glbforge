@@ -5,12 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GLBForge — Budget profiles: methodology and versions</title>
   <meta name="description" content="Why each GLBForge performance-budget cap is what it is: the device, network, and GPU-memory model behind mobile-hero, desktop-hero, and product-configurator, how the perceptual SSIM floor was calibrated, and the version changelog." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬢</text></svg>" />
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0b0d14" />
   <style>
     :root { --bg:#0b0d14; --panel:#141826; --line:#272c41; --text:#e8eaf0; --dim:#8d93ab; --accent:#7c5cff; }
     * { box-sizing: border-box; margin: 0; }
     body { background: var(--bg); color: var(--text); font: 16px/1.7 -apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; padding: 40px 22px 80px; }
     .wrap { max-width: 860px; margin: 0 auto; }
+    .mark { width: 1em; height: 1em; vertical-align: -0.13em; }
     a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
     h1 { font-size: 30px; margin-bottom: 18px; }
     h2 { font-size: 22px; margin: 34px 0 10px; } h3 { font-size: 17px; margin: 26px 0 8px; color: var(--accent); }
@@ -24,7 +29,7 @@
   </style>
 </head>
 <body><div class="wrap">
-  <p><a href="/">⬢ GLBForge</a></p>
+  <p><a href="/"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,5 55,18.5 32,32 9,18.5" fill="#63b3ff"/><polygon points="55,18.5 55,45.5 32,59 32,32" fill="#7c5cff"/><polygon points="9,18.5 32,32 32,59 9,45.5" fill="#4b31b0"/></svg> GLBForge</a></p>
   <h1>Budget profiles: methodology and versions</h1>
   <p>GLBForge budgets are <strong>contracts, not advice</strong>: <code>glbforge analyze</code> exits non-zero when an asset breaks its profile, the GitHub Action gates on it, and <code>optimize</code> targets it. A contract you cannot pin is not a contract, so every profile is <strong>versioned</strong>. A cap never changes in place: any change is a new version appended here with the reason, and <code>--profile mobile-hero@1</code> (CLI, Action, MCP) keeps meaning exactly what it meant when you wrote it. <code>--profile mobile-hero</code> resolves to the latest version. Reports carry the label (<code>mobile-hero@1</code>), and <code>list_profiles rationale=true</code> returns this text from the MCP server.</p>
   <p>Live copy: <a href="https://glbforge.dev/budgets/">https://glbforge.dev/budgets/</a> · Source of truth: <code>packages/core/src/profiles.ts</code> (every published version is frozen there and tested).</p>

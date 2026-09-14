@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="GLBForge">
+  <title>GLBForge</title>
+  <!-- An isometric cube: the hexagonal brand mark, read corner-on. The top
+       face is the site's accent-2 blue, the side faces its accent purple and
+       a shade of it. Flat colour blocks only: interior detail (a wireframe
+       top, a mesh/solid split) does not survive a 16px favicon. -->
+  <polygon points="32,5 55,18.5 32,32 9,18.5" fill="#63b3ff"/>
+  <polygon points="55,18.5 55,45.5 32,59 32,32" fill="#7c5cff"/>
+  <polygon points="9,18.5 32,32 32,59 9,45.5" fill="#4b31b0"/>
+</svg>

@@ -9,7 +9,11 @@
   <meta property="og:description" content="Inspect, diff, and ship 3D assets. Raw AI mesh in, budget-gated asset out. npx glbforge ship model.glb" />
   <meta property="og:url" content="https://glbforge.dev" />
   <link rel="llms" type="text/plain" href="/llms.txt" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬢</text></svg>" />
+  <link rel="icon" href="/favicon.ico" sizes="32x32" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0b0d14" />
   <script type="module">
     import { ModelViewerElement } from 'https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js';
     // Our GLBs use EXT_meshopt_compression; point model-viewer at the decoder.
@@ -33,8 +37,8 @@
     .wrap { max-width: 1060px; margin: 0 auto; padding: 0 22px; }
 
     nav { display: flex; align-items: center; gap: 22px; padding: 18px 0; flex-wrap: wrap; }
+    .mark { width: 1em; height: 1em; vertical-align: -0.13em; }
     .brand { font-weight: 800; font-size: 18px; color: var(--text); }
-    .brand span { color: var(--accent); }
     nav .links { margin-left: auto; display: flex; gap: 18px; font-size: 14px; }
 
     .hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 36px; align-items: center; padding: 48px 0 30px; }
@@ -107,7 +111,7 @@
 <body>
   <div class="wrap">
     <nav>
-      <div class="brand"><span>⬢</span> GLBForge</div>
+      <div class="brand"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,5 55,18.5 32,32 9,18.5" fill="#63b3ff"/><polygon points="55,18.5 55,45.5 32,59 32,32" fill="#7c5cff"/><polygon points="9,18.5 32,32 32,59 9,45.5" fill="#4b31b0"/></svg> GLBForge</div>
       <div class="links">
         <a href="https://github.com/glbforge/glbforge">GitHub</a>
         <a href="https://www.npmjs.com/package/glbforge">npm</a>
@@ -308,7 +312,7 @@ Shells 1 → 44: 43 new separate pieces.
     </section>
 
     <footer>
-      <span>⬢ GLBForge · MIT</span>
+      <span><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><polygon points="32,5 55,18.5 32,32 9,18.5" fill="#63b3ff"/><polygon points="55,18.5 55,45.5 32,59 32,32" fill="#7c5cff"/><polygon points="9,18.5 32,32 32,59 9,45.5" fill="#4b31b0"/></svg> GLBForge · MIT</span>
       <span class="spacer"></span>
       <a href="https://github.com/glbforge/glbforge">GitHub</a>
       <a href="https://www.npmjs.com/package/glbforge">npm</a>
