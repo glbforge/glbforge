@@ -10,6 +10,13 @@ export default defineConfig({
   },
   build: {
     rollupOptions: { external: [/^node:/] },
+    // Rollup's CommonJS interop picks between inlining a CJS module and
+    // wrapping it in a lazy require() shim, and with the default 'auto' that
+    // choice races: identical source builds React's `scheduler` one way or the
+    // other, shifting the chunk content and every content hash with it. The
+    // committed build then churns ~380 lines for no source change. Always
+    // wrapping costs ~4.6KB across the bundle and makes the output reproducible.
+    commonjsOptions: { strictRequires: true },
   },
   optimizeDeps: { exclude: ['sharp'] },
   server: {
