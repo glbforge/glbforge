@@ -391,6 +391,26 @@ function smoothLoop(points: Array<[number, number]>, iterations: number): Array<
   return current;
 }
 
+/**
+ * `#rgb` / `#rrggbb` → an RGBA base-color factor, or a refusal.
+ *
+ * Both callers used to pad the string to six digits and run parseInt over the
+ * pieces, which quietly accepted anything: "zzz" became NaN and reached the
+ * file as `baseColorFactor: [null, null, 0, 1]`, a GLB no strict loader will
+ * take, written without a word of complaint. The same padding read "#abc" as
+ * "#abc000" rather than the "#aabbcc" every other tool means by it. A colour
+ * is either legible or it is a typo worth hearing about.
+ */
+export function parseHexColor(hex: string): [number, number, number, number] {
+  const raw = hex.trim().replace(/^#/, '');
+  const expanded = raw.length === 3 ? [...raw].map((c) => c + c).join('') : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
+    throw new Error(`Not a hex colour: "${hex}". Use #rgb or #rrggbb, for example "#ff2266".`);
+  }
+  const byte = (i: number) => parseInt(expanded.slice(i * 2, i * 2 + 2), 16) / 255;
+  return [byte(0), byte(1), byte(2), 1];
+}
+
 /** Drop specks and re-derive containment nesting after filtering. */
 function cleanLoops(loops: Loop[], width: number, height: number, smoothing = 2): Loop[] {
   const minArea = width * height * 0.00005;

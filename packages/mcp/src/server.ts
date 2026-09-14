@@ -70,6 +70,7 @@ import {
   type SceneIR,
   type SceneSnapshot,
   previewMatte,
+  parseHexColor,
 } from '@glbforge/core';
 import { FAL_MODELS, FalClient, MeshyClient, type TaskKind } from '@glbforge/meshy';
 import { registerAgentTools, registerEnvelopeTool } from './agent-tools.js';
@@ -707,8 +708,7 @@ export function createServer(): McpServer {
     // thumbnail costs seconds per attempt; this costs milliseconds.
     if (matte_preview && matte === 'auto') return mattePreviewReply(path, bytes, matte_tolerance);
     const rgba = color
-      ? ([1, 3, 5].map((i) => parseInt(color.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
-          .concat(1) as [number, number, number, number])
+      ? parseHexColor(color)
       : undefined;
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {
       mode, matte, matteOptions: matteTuning(matte_tolerance),

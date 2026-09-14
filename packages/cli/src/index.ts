@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
 import { resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
@@ -336,8 +336,7 @@ program
       return;
     }
     const color = opts.color
-      ? ([1, 3, 5].map((i) => parseInt(opts.color!.replace('#', '').padEnd(6, '0').slice(i - 1, i + 1), 16) / 255)
-          .concat(1) as [number, number, number, number])
+      ? parseHexColor(opts.color!)
       : undefined;
 
     const { doc, stats } = await extrudeImage(new Uint8Array(bytes), {

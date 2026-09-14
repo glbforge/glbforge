@@ -4,7 +4,7 @@ export { analyze, type AnalyzeOptions } from './analyze/index.js';
 export { runRules, RULE_IDS } from './rules.js';
 export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncoder } from './optimize.js';
 export { createNodeIO } from './io.js';
-export { extrudeImage, extrudeFromRgba, previewMatte, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
+export { extrudeImage, extrudeFromRgba, previewMatte, parseHexColor, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
 export { measureFlatness, type Flatness } from './extrude/layers.js';
 export { flattenProjection } from './extrude/bleed.js';
 export { liftSubject, cutoutRgba, tuneMatte, DEFAULT_TOLERANCE, MATTE_VERSION, type Matte, type MatteOptions, type TunedMatte } from './extrude/matte.js';

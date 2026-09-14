@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extrudeFromRgba } from '../src/index.js';
+import { extrudeFromRgba, parseHexColor } from '../src/index.js';
 
 /**
  * Inputs the forge has to survive rather than inputs it is shown off with.
@@ -42,4 +42,30 @@ describe('the forge on artwork that fights back', () => {
     // simplify: 0 is a request for the raw contour, and still honoured.
     expect(await triangles(stroke(1), { simplify: 0 })).toBeGreaterThan(1000);
   }, 30_000);
+});
+
+describe('parseHexColor', () => {
+  it('reads #rgb the way every other tool reads it', () => {
+    // Not "#abc000", which is what padding the string to six digits produced.
+    expect(parseHexColor('#abc')).toEqual(parseHexColor('#aabbcc'));
+    expect(parseHexColor('#abc')[2]).toBeCloseTo(0.8, 5);
+  });
+
+  it('accepts a bare or padded six-digit colour', () => {
+    expect(parseHexColor('ff2266')).toEqual([1, 0x22 / 255, 0x66 / 255, 1]);
+    expect(parseHexColor('  #ff2266  ')).toEqual(parseHexColor('ff2266'));
+  });
+
+  it('refuses a typo rather than writing NaN into the material', () => {
+    // "zzz" used to reach the file as baseColorFactor [null, null, 0, 1].
+    for (const bad of ['zzz', '#ff226699', '#gg0000', '#ff22', '']) {
+      expect(() => parseHexColor(bad)).toThrow(/Not a hex colour/);
+    }
+  });
+
+  it('never yields a non-finite channel for anything it accepts', () => {
+    for (const ok of ['#000', '#fff', '#abc', 'ff2266', '#0a0A0a']) {
+      expect(parseHexColor(ok).every(Number.isFinite)).toBe(true);
+    }
+  });
 });
