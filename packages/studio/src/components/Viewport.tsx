@@ -4,6 +4,7 @@ import { Bounds, Center, ContactShadows, Environment, Lightformer, OrbitControls
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { api, type AssetDetail } from '../api';
+import { Mark } from './Mark';
 
 const ktx2Loader = new KTX2Loader().setTranscoderPath(import.meta.env.BASE_URL + 'basis/');
 
@@ -87,7 +88,7 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
     return (
       <div className="viewport">
         <div className="viewport-empty">
-          <div style={{ fontSize: 40 }}>⬢</div>
+          <Mark size={40} />
           <div>Drop an asset to begin</div>
         </div>
       </div>

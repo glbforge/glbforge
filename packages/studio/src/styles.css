@@ -2,6 +2,7 @@
   --bg: #0b0d14; --panel: #141826; --panel-2: #1a1f30; --line: #272c41;
   --text: #e8eaf0; --dim: #8d93ab; --accent: #7c5cff; --accent-2: #63b3ff;
   --good: #34d399; --warn: #fbbf24; --bad: #f87171;
+  --accent-shade: #4b31b0; /* the cube's shaded face, see components/Mark.tsx */
 }
 * { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
@@ -15,7 +16,7 @@ body {
   background: var(--panel); border-bottom: 1px solid var(--line); flex: none;
 }
 .brand { font-weight: 700; font-size: 15px; letter-spacing: 0.2px; }
-.brand-mark { color: var(--accent); }
+.mark { vertical-align: -0.13em; }
 .brand-sub { color: var(--dim); font-weight: 400; }
 .busy { color: var(--accent-2); }
 .error { color: var(--bad); cursor: pointer; margin-left: auto; max-width: 60%;

@@ -3,6 +3,7 @@ import { api, cloud, detectBackend, getBackend, restoreLocal, type AssetDetail, 
 import { AssetRail } from './components/AssetRail';
 import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
+import { Mark } from './components/Mark';
 
 export default function App() {
   const [assets, setAssets] = useState<AssetSummary[]>([]);
@@ -166,7 +167,7 @@ export default function App() {
     <div className="studio">
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark">⬢</span> GLBForge <span className="brand-sub">Studio</span>
+          <Mark /> GLBForge <span className="brand-sub">Studio</span>
         </div>
         {mode === 'local' && (
           <div className="mode-badge" title="Analyze, forge, optimize and STL all run in your browser — those assets never leave your device. Only Meshy generation (sign-in) touches a server.">
