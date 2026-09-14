@@ -196,76 +196,192 @@
     "data": {
       "anyOf": [
         {
-          "type": "object",
-          "properties": {
-            "out": {
-              "type": "string"
-            },
-            "dry_run": {
-              "type": "boolean"
-            },
-            "written": {
-              "type": "boolean"
-            },
-            "diff": {
+          "anyOf": [
+            {
               "type": "object",
               "properties": {
-                "added_prims": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                "out": {
+                  "type": "string"
                 },
-                "removed_prims": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                "dry_run": {
+                  "type": "boolean"
                 },
-                "changed_properties": {
+                "written": {
+                  "type": "boolean"
+                },
+                "diff": {
+                  "type": "object",
+                  "properties": {
+                    "added_prims": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "removed_prims": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "changed_properties": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "prim_path": {
+                            "type": "string"
+                          },
+                          "property": {
+                            "type": "string"
+                          },
+                          "before": {},
+                          "after": {}
+                        },
+                        "required": [
+                          "prim_path",
+                          "property"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "summary": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "added_prims",
+                    "removed_prims",
+                    "changed_properties",
+                    "summary"
+                  ],
+                  "additionalProperties": false
+                },
+                "post_validation": {
+                  "description": "validate(mode=quick) of the output (null when the output format cannot be validated)"
+                }
+              },
+              "required": [
+                "out",
+                "dry_run",
+                "written",
+                "diff"
+              ],
+              "additionalProperties": true
+            },
+            {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "preview_only": {
+                  "type": "boolean",
+                  "const": true
+                },
+                "written": {
+                  "type": "boolean",
+                  "const": false
+                },
+                "matte": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string"
+                    },
+                    "confidence": {
+                      "type": "number"
+                    },
+                    "coverage": {
+                      "type": "number"
+                    },
+                    "components": {
+                      "type": "integer"
+                    },
+                    "holes": {
+                      "type": "integer"
+                    },
+                    "dropped_components": {
+                      "type": "integer"
+                    },
+                    "background_uniformity": {
+                      "type": "number"
+                    },
+                    "edge_contrast": {
+                      "type": "number"
+                    },
+                    "tolerance": {
+                      "type": "number"
+                    },
+                    "auto_tuned": {
+                      "type": "boolean"
+                    },
+                    "ladder": {
+                      "description": "The swept rungs and their scores, when auto-tuned"
+                    },
+                    "usable": {
+                      "type": "boolean",
+                      "description": "false when confidence is under the 0.4 floor: extrude_image would refuse this cut"
+                    },
+                    "notes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "confidence",
+                    "coverage",
+                    "components",
+                    "holes",
+                    "dropped_components",
+                    "background_uniformity",
+                    "edge_contrast",
+                    "tolerance",
+                    "auto_tuned",
+                    "usable",
+                    "notes"
+                  ],
+                  "additionalProperties": false
+                },
+                "nextActions": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
-                      "prim_path": {
+                      "tool": {
                         "type": "string"
                       },
-                      "property": {
-                        "type": "string"
+                      "args": {
+                        "type": "object",
+                        "additionalProperties": {}
                       },
-                      "before": {},
-                      "after": {}
+                      "note": {
+                        "type": "string"
+                      }
                     },
                     "required": [
-                      "prim_path",
-                      "property"
+                      "tool",
+                      "args",
+                      "note"
                     ],
                     "additionalProperties": false
                   }
-                },
-                "summary": {
-                  "type": "string"
                 }
               },
               "required": [
-                "added_prims",
-                "removed_prims",
-                "changed_properties",
-                "summary"
+                "path",
+                "preview_only",
+                "written",
+                "matte",
+                "nextActions"
               ],
-              "additionalProperties": false
-            },
-            "post_validation": {
-              "description": "validate(mode=quick) of the output (null when the output format cannot be validated)"
+              "additionalProperties": true
             }
-          },
-          "required": [
-            "out",
-            "dry_run",
-            "written",
-            "diff"
           ],
-          "additionalProperties": true
+          "description": "The forged piece, or — with matte_preview — the cut it would make, which writes nothing and so has no out/diff"
         },
         {
           "type": "object",
@@ -273,7 +389,8 @@
           "additionalProperties": false,
           "description": "Empty when ok is false"
         }
-      ]
+      ],
+      "description": "The forged piece, or — with matte_preview — the cut it would make, which writes nothing and so has no out/diff"
     }
   },
   "required": [

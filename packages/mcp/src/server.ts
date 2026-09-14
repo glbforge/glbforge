@@ -734,8 +734,19 @@ export function createServer(): McpServer {
         + (lifted.notes.length ? ` ${lifted.notes.join('; ')}.` : ''),
       ));
     }
+    // `stats.matte` carries the mask itself — one byte per traced pixel, which
+    // is a quarter of a million numbers at the default trace size. In-process
+    // that is the useful thing; over MCP it is JSON that buries the answer (and
+    // an agent's context) under a silhouette it cannot read anyway. The numbers
+    // that decide anything travel; the pixels stay home. `matte_preview`
+    // returns the mask as a picture, which is the form a reader can use.
+    const { matte: _mask, ...forged } = stats;
     return reply({
-      out, bytes: outBytes.byteLength, sha256: sha256(outBytes), ...stats,
+      out, bytes: outBytes.byteLength, sha256: sha256(outBytes), ...forged,
+      ...(lifted ? { matte: {
+        version: lifted.version, confidence: lifted.confidence, coverage: lifted.coverage,
+        components: lifted.components, holes: lifted.holes, notes: lifted.notes,
+      } } : {}),
       nextActions: [{ tool: 'analyze_glb', args: { path: out }, note: 'verify watertightness + budget' }],
       dry_run, written: !dry_run, diff: diffScenes(EMPTY_SNAPSHOT, afterIr), post_validation: post.validation,
     }, `${dry_run ? 'Would forge' : 'Forged'} ${basename(path)} → ${basename(out)}: ${(stats as { triangles?: number }).triangles?.toLocaleString('en-US') ?? '?'} triangles, ${(outBytes.byteLength / 1024).toFixed(0)} KB`, { image: image?.image, errors });

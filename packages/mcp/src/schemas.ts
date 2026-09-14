@@ -286,6 +286,33 @@ export const MutationShape = {
   post_validation: z.unknown().describe('validate(mode=quick) of the output (null when the output format cannot be validated)'),
 };
 
+/**
+ * `extrude_image` with `matte_preview` never reaches the geometry, so it has no
+ * `out`, no `diff` and nothing to validate — it answers a different question
+ * (what does this cut keep?) and needs its own shape.
+ */
+export const MattePreviewDataSchema = z.object({
+  path: z.string(),
+  preview_only: z.literal(true),
+  written: z.literal(false),
+  matte: z.object({
+    version: z.string(),
+    confidence: z.number(),
+    coverage: z.number(),
+    components: z.number().int(),
+    holes: z.number().int(),
+    dropped_components: z.number().int(),
+    background_uniformity: z.number(),
+    edge_contrast: z.number(),
+    tolerance: z.number(),
+    auto_tuned: z.boolean(),
+    ladder: z.unknown().describe('The swept rungs and their scores, when auto-tuned'),
+    usable: z.boolean().describe('false when confidence is under the 0.4 floor: extrude_image would refuse this cut'),
+    notes: z.array(z.string()),
+  }),
+  nextActions: z.array(z.object({ tool: z.string(), args: z.record(z.unknown()), note: z.string() })),
+}).passthrough();
+
 /** Loose schemas for the pre-existing tool payloads: their fields are unchanged and additive. */
 const loose = (shape: z.ZodRawShape) => z.object(shape).passthrough();
 
@@ -299,7 +326,10 @@ export const LegacyDataSchemas = {
   ship_asset: loose({}),
   audit_directory: loose({ scanned: z.number(), failing: z.array(z.string()) }),
   optimize_glb: loose({ outPath: z.string(), sha256: z.string().nullable(), steps: z.array(z.string()), ...MutationShape }),
-  extrude_image: loose({ out: z.string(), ...MutationShape }),
+  extrude_image: z.union([
+    loose({ out: z.string(), ...MutationShape }),
+    MattePreviewDataSchema,
+  ]).describe('The forged piece, or — with matte_preview — the cut it would make, which writes nothing and so has no out/diff'),
   export_stl: loose({ out: z.string(), ...MutationShape }),
   export_usdz: loose({ out: z.string(), ...MutationShape }),
   generate_image_to_3d: loose({ requestId: z.string(), model: z.string() }),

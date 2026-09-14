@@ -32,6 +32,16 @@ beforeAll(async () => {
   }
   const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
   await writeFile(join(dir, 'ring.png'), png);
+  // A subject on a plain ground with no alpha of its own: the case matte exists
+  // for, and the only input that exercises the matte reply shapes.
+  const opaque = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const i = (y * size + x) * 4;
+    const inside = Math.hypot(x - 48, y - 48) < 30;
+    opaque[i] = inside ? 30 : 240; opaque[i + 1] = inside ? 90 : 240;
+    opaque[i + 2] = inside ? 200 : 240; opaque[i + 3] = 255;
+  }
+  await writeFile(join(dir, 'blob.png'), await sharp(opaque, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
   const { doc } = await extrudeImage(new Uint8Array(png), { pillow: 0.04 });
   glb = join(dir, 'ring.glb');
   await writeFile(glb, await (await createNodeIO()).writeBinary(doc));
@@ -184,5 +194,38 @@ describe('agent-friendly MCP surface', () => {
     const usdz = (await client.callTool({ name: 'export_usdz', arguments: { path: out, out: join(dir, 'forged.usdz'), preview: 'none' } })) as Result;
     expect(parse(usdz).files[0].name).toBe('model.usdc');
     expect(parse(usdz).textures).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('matte_preview answers with the cut, not a forge', async () => {
+    // It writes no file, so it has no out/diff/post_validation: a data shape the
+    // forge schema does not describe. Validated clients reject the whole reply
+    // when the schema does not admit it, which made the preview unreachable.
+    const r = (await client.callTool({
+      name: 'extrude_image',
+      arguments: { path: join(dir, 'blob.png'), out: join(dir, 'unused.glb'), matte: 'auto', matte_preview: true },
+    })) as Result;
+    const d = parse(r);
+    expect(envelope(r).ok).toBe(true);
+    expect(d.preview_only).toBe(true);
+    expect(d.written).toBe(false);
+    expect(d.matte.usable).toBe(true);
+    expect(d.matte.ladder.length).toBeGreaterThan(1);
+    expect(image(r)).toBeDefined();
+  }, 60_000);
+
+  it('a matte forge reports the cut without shipping the mask', async () => {
+    // core hands back the mask itself — one byte per traced pixel. In-process
+    // that is the point; over MCP it is a quarter-million numbers of JSON that
+    // an agent cannot read and must pay for. The numbers travel, the pixels do not.
+    const r = (await client.callTool({
+      name: 'extrude_image',
+      arguments: { path: join(dir, 'blob.png'), out: join(dir, 'matted.glb'), matte: 'auto', preview: 'none' },
+    })) as Result;
+    const d = parse(r);
+    expect(d.written).toBe(true);
+    expect(d.mode).toBe('matte');
+    expect(d.matte.confidence).toBeGreaterThan(0.4);
+    expect(d.matte).not.toHaveProperty('alpha');
+    expect(JSON.stringify(d).length).toBeLessThan(8000);
   }, 60_000);
 });
