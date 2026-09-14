@@ -216,8 +216,10 @@ export async function extrudeFromRgba(
     if (solid / mask.length > 0.9) {
       throw new Error(
         'The image fills the whole canvas — this looks like a photograph, not flat artwork. ' +
-        'Use a generative model (glbforge ship routes there automatically, or glbforge gen), ' +
-        'or pass an explicit --mode/--threshold to isolate a silhouette.',
+        'If it is an object on a plain background, matte lifts it out for free, here, now ' +
+        '(`matte: "auto"` / `--matte`; preview the cut first with `matte_preview` / `--matte-preview`). ' +
+        'If it is a real scene, use a generative model (ship routes there automatically, or glbforge gen). ' +
+        'An explicit mode/threshold overrides the silhouette test entirely.',
       );
     }
   }
@@ -229,9 +231,10 @@ export async function extrudeFromRgba(
   if (loops.length > 150) {
     throw new Error(
       `Traced ${loops.length} contours — this looks like a photograph or a noisy mask, ` +
-      'not flat artwork. Extrusion is for logos/graphics with clean silhouettes; ' +
-      'for photos of objects use Meshy image-to-3D instead, or pass an explicit ' +
-      '--mode/--threshold to isolate the shape.',
+      'not flat artwork. Extrusion is for logos/graphics with clean silhouettes. ' +
+      'If this is an object on a plain background, matte lifts it out for free, here, now ' +
+      '(`matte: "auto"` / `--matte`); for a real scene use image-to-3D; ' +
+      'an explicit mode/threshold overrides the trace.',
     );
   }
   if (loops.filter((l) => l.depth % 2 === 0).length === 0) {
