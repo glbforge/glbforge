@@ -42,7 +42,7 @@ Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a tes
 | `TOPO_FLOATING_FRAGMENTS` | `topo/floating-fragments` | warning | Tiny disconnected pieces beside the real parts: debris from booleans, cuts or duplicated faces. | Delete loose geometry, or join a fragment that is a real detail to its body. |
 | `NORMALS_MISSING` | `geo/missing-normals` | warning | No authored normals; viewers compute their own (smooth or flat depending on the viewer), so shading differs between apps. | optimize_glb writes smooth normals; export_usdz generates them at export time (reported as NORMALS_GENERATED). |
 | `NORMALS_INVERTED` |  | warning | Authored vertex normals point against the face winding on many faces — the mesh shades dark or inside-out with back-face culling. | Recompute normals or flip the face winding in a DCC; optimize_glb with regenerated normals removes the mismatch. |
-| `UV_MISSING` | `geo/missing-uvs` | info | No texture coordinates; the mesh cannot be textured. | Unwrap in a DCC, or run the generator's texture stage. |
+| `UV_MISSING` | `geo/missing-uvs` | info | A primitive has no texture coordinates. What that costs depends on the material: an error when it samples a texture it now cannot apply, a warning when there is no material yet, information when the colour is a flat factor and nothing reads UVs at all. | Unwrap only when something needs to sample a texture; run the generator's texture stage for a pre-texture export. |
 | `UV_OUT_OF_RANGE` |  | info | UVs fall outside 0..1; fine with REPEAT wrapping, wrong with CLAMP or atlases. | Check wrap modes on the material; re-bake if an atlas was intended. |
 | `MESH_UNINDEXED` | `geo/unindexed` | info | Primitive has no index buffer (~3x vertex data, no GPU vertex cache reuse). | optimize_glb welds and indexes. |
 | `MESH_UNWELDED` | `topo/unwelded` | info | A large share of vertices are exact duplicates across all attributes. | optimize_glb welds them. |
@@ -120,6 +120,7 @@ Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a tes
 | `MESH_WELDED` |  | info | Duplicate vertices were welded. | Nothing to do. |
 | `MESH_SIMPLIFIED` |  | info | Geometry was simplified to the triangle target (requested). | Check `fidelity`; raise targetTriangles if detail was lost. |
 | `TEXTURES_REENCODED` |  | info | Textures were resized/re-encoded (requested). | Nothing to do. |
+| `TEXTURES_FOLDED` |  | info | A texture carrying a single colour was folded into the material factor and dropped; any UV set that existed only to sample it went with it. | Nothing to do — the render is unchanged. Re-texturing later needs an unwrap. |
 | `DEGENERATE_PRUNED` |  | info | Degenerate triangles were pruned. | Nothing to do. |
 | `UV_FLIPPED` |  | info | Texture V coordinates were flipped for the target convention (glTF top-down → USD bottom-up). | Nothing to do. |
 | `AXIS_CONVERTED` |  | info | The asset was rotated to the target up-axis (e.g. Z-up for STL). | Nothing to do. |

@@ -281,6 +281,20 @@ function optimizeDiagnostics(summary: OptimizeSummary, before: SceneIR, after: S
     else if ((m = /^simplify\(error=([\d.]+)\) -> ([\d,]+)/.exec(step))) out.push(diag('MESH_SIMPLIFIED', after.meshes.reduce((b, x) => (x.triangleCount > (b?.triangleCount ?? -1) ? x : b), after.meshes[0])?.path ?? '/Asset', `Simplified to ${m[2]} triangles (meshopt error tolerance ${m[1]}).`, { data: { error: +m[1] } }));
     else if (step.startsWith('textures ->')) out.push(diag('TEXTURES_REENCODED', after.textures[0]?.path ?? '/Asset', `Textures ${step.replace('textures -> ', '')}.`));
   }
+  // prune folds a single-colour base-color texture into the material factor,
+  // which is free and invisible — and takes the UV set that existed only to
+  // sample it. Every other thing the pipeline does on its own is reported with
+  // a code; this was not, so the only trace was a UV finding on the output that
+  // read like a defect in the asset rather than a decision we made.
+  const dropped = before.textures.filter((t) => !after.textures.some((a) => a.name === t.name));
+  if (dropped.length) {
+    const uvsLost = before.meshes.some((m) => m.uvs.length > 0)
+      && after.meshes.every((m) => m.uvs.length === 0);
+    out.push(diag('TEXTURES_FOLDED', dropped[0].path,
+      `${dropped.length} texture(s) carried a single colour and were folded into the material factor: ${dropped.map((t) => t.name).join(', ')}.`
+      + (uvsLost ? ' The UV set that fed them went too — nothing samples a texture now.' : ''),
+      { data: { textures: dropped.map((t) => t.name), uv_sets_dropped: uvsLost } }));
+  }
   if (before.nodes.filter((n) => !n.isJoint).length > after.nodes.filter((n) => !n.isJoint).length && summary.steps.some((s) => s.startsWith('join'))) {
     out.push(diag('HIERARCHY_FLATTENED', '/Asset', `Node hierarchy flattened: ${before.nodes.length} → ${after.nodes.length} nodes.`, { data: { before: before.nodes.length, after: after.nodes.length } }));
   }

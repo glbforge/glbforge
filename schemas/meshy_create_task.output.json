@@ -136,6 +136,7 @@
               "MESH_WELDED",
               "MESH_SIMPLIFIED",
               "TEXTURES_REENCODED",
+              "TEXTURES_FOLDED",
               "DEGENERATE_PRUNED",
               "UV_FLIPPED",
               "AXIS_CONVERTED",

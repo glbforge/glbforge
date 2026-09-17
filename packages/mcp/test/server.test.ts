@@ -196,6 +196,25 @@ describe('agent-friendly MCP surface', () => {
     expect(parse(usdz).textures).toBeGreaterThan(0);
   }, 60_000);
 
+  it('says it folded a solid texture, and stops calling the result a defect', async () => {
+    // prune folds a single-colour base-color texture into the material factor
+    // and the UV set goes with it — free and invisible (SSIM ~1.0). Every other
+    // thing the pipeline does on its own carries a code; this one carried none,
+    // and the only trace was a UV_MISSING *warning* on our own output telling
+    // the reader it "cannot be textured as-is" and to go run a texture stage.
+    const out = join(dir, 'folded.web.glb');
+    const r = (await client.callTool({
+      name: 'optimize_glb', arguments: { path: glb, out, preview: 'none' },
+    })) as Result;
+    const errors = envelope(r).errors as Array<{ code: string; severity: string }>;
+    const folded = errors.find((e) => e.code === 'TEXTURES_FOLDED');
+    expect(folded, 'the fold is reported with a code').toBeDefined();
+    expect(folded!.severity).toBe('info');
+    for (const uv of errors.filter((e) => e.code === 'UV_MISSING')) {
+      expect(uv.severity).toBe('info');
+    }
+  }, 60_000);
+
   it('matte_preview answers with the cut, not a forge', async () => {
     // It writes no file, so it has no out/diff/post_validation: a data shape the
     // forge schema does not describe. Validated clients reject the whole reply
