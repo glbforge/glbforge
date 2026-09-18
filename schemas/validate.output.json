@@ -150,6 +150,7 @@
               "DRY_RUN",
               "ROUTED_TO_GENERATION",
               "SUBJECT_LIFTED",
+              "OUTPUT_NOT_WRITABLE",
               "TOOL_ERROR"
             ],
             "description": "Stable, enumerable code — branch on this, not on message text"
@@ -374,6 +375,7 @@
                       "DRY_RUN",
                       "ROUTED_TO_GENERATION",
                       "SUBJECT_LIFTED",
+                      "OUTPUT_NOT_WRITABLE",
                       "TOOL_ERROR"
                     ],
                     "description": "Stable, enumerable code — branch on this, not on message text"
@@ -576,6 +578,7 @@
                       "DRY_RUN",
                       "ROUTED_TO_GENERATION",
                       "SUBJECT_LIFTED",
+                      "OUTPUT_NOT_WRITABLE",
                       "TOOL_ERROR"
                     ],
                     "description": "Stable, enumerable code — branch on this, not on message text"

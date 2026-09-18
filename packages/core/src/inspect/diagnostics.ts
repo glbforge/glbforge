@@ -174,6 +174,7 @@ export const ERROR_CODES = {
   DRY_RUN: spec('info', 'dry_run=true: nothing was written; `diff` shows what would change.', 'Re-run with dry_run=false to apply.'),
   ROUTED_TO_GENERATION: spec('info', 'The input looks photographic; deterministic extrusion was skipped in favor of a generation route.', 'Call generate_image_to_3d as listed in nextActions.'),
   SUBJECT_LIFTED: spec('info', 'The silhouette was not read from the image: it was inferred by lifting the subject off its background (matte/border@1). The entry carries the mask\'s coverage, piece and hole counts, and a confidence.', 'Check the confidence and the thumbnail before building on the result; a low-confidence cut is refused outright, not returned.'),
+  OUTPUT_NOT_WRITABLE: spec('error', 'The `out` path cannot be written: it is a directory, its parent is a file, or the directory is not writable. Checked before any work runs, so nothing was computed.', 'Pass `out` as a full file path under a writable directory; missing directories are created for you.'),
   TOOL_ERROR: spec('error', 'The tool failed before producing a result; the message carries the underlying error.', 'Fix the input (path, arguments) and retry.'),
 } as const satisfies Record<string, CodeSpec>;
 

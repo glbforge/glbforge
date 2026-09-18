@@ -87,6 +87,21 @@
 
 ### Fixed
 
+- **A missing output directory cost a whole pipeline run.** Every mutating MCP
+  tool writes its `out` last, so `out` pointing into a folder that did not
+  exist yet — exactly what "optimize it and save it to `public/`" produces —
+  raised a bare `ENOENT` *after* the work was done: 40 seconds of optimizing a
+  77 MB, 2M-triangle asset thrown away to learn the path was wrong, reported
+  as a generic `TOOL_ERROR`. Output paths are now settled up front, before
+  anything is read or rendered: the directory is created (the tool owns the
+  path it was handed), and what a `mkdir` cannot fix — an `out` that is itself
+  a directory, a file standing where a directory should be, a parent this
+  process cannot write — fails in milliseconds with the new
+  `OUTPUT_NOT_WRITABLE` code and the path it could not use. `dry_run` writes
+  nothing and so creates nothing. Covers `optimize_glb` (and its `lods`
+  siblings), `ship_asset`, `extrude_image`, `export_stl`, `export_usdz`,
+  `meshy_download`, `generation_status`, `render` and `render_preview`.
+
 - **The shadow rule could eat the whole subject** (`matte/border@2`, found in
   testing before release). A neutral object *darker* than a neutral ground is
   chromatically identical to a shadow of that ground — a grey laptop on a

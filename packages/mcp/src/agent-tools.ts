@@ -16,6 +16,7 @@ import {
   type Diagnostic, type LoadedScene, type RawView, type RenderCamera, type SceneIR, type PerformanceProfile,
 } from '@glbforge/core';
 import { note, noteAll, plural, reply, severityTail, withContext } from './envelope.js';
+import { prepareOut } from './outputs.js';
 import { renderContactSheet, renderGif, type Preview } from './preview.js';
 import { envelopeShape, ExpectationSchema, ToolDataSchemas, type ToolName } from './schemas.js';
 
@@ -259,6 +260,7 @@ export function registerAgentTools(server: McpServer): void {
       out: z.string().optional().describe('Absolute path to also save the PNG'),
     },
   }, async ({ path, view, angles, camera, size, time, frame, fps, animation, textures, out }) => {
+    await prepareOut(out);
     const loaded = await loadScene(path);
     const ir = loaded.ir;
     const rate = ir.format.startsWith('usd') ? ir.fps ?? fps : fps;
@@ -303,6 +305,7 @@ export function registerAgentTools(server: McpServer): void {
       out: z.string().optional().describe('Absolute path to save the contact sheet PNG'),
     },
   }, async ({ path, frames, times, fps, animation, view, camera, size, columns, textures, include_clip, out }) => {
+    await prepareOut(out);
     const loaded = await loadScene(path);
     const ir = loaded.ir;
     const clip = ir.animations[animation] ?? null;
