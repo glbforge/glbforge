@@ -123,6 +123,7 @@ export const ERROR_CODES = {
   CLIPS_DROPPED: spec('warning', 'Only the first animation clip is exported; the others are dropped.', 'Export one GLB per clip, or merge clips before export.'),
   INFLUENCES_TRUNCATED: spec('warning', 'Joint influences beyond 4 per vertex were dropped on export.', 'Limit influences to 4 before export to control which are kept.'),
   // --- materials / textures ------------------------------------------------
+  TEXTURE_UNDECODABLE: spec('error', 'A texture\'s bytes are present but cannot be read: the image is truncated or corrupt, so its dimensions and memory cost are unknown and it will not upload.', 'Re-export or replace the image; optimize_glb cannot re-encode what it cannot decode.'),
   TEXTURE_UNRESOLVED: spec('error', 'A texture file referenced by a material could not be found (missing external file, or a usdz entry that does not exist).', 'Fix the path or pack the image; export_usdz/optimize_glb embed textures.'),
   MATERIAL_UNBOUND: spec('info', 'A material is not bound to any mesh.', 'Remove it (optimize_glb prunes unused materials) or bind it.'),
   MESH_NO_MATERIAL: spec('warning', 'A mesh has no material binding; viewers show a default white/grey (or magenta) surface.', 'Bind a material; export_usdz binds a neutral default and reports DEFAULT_MATERIAL_BOUND.'),
@@ -219,6 +220,7 @@ export const RULE_TO_CODE: Record<string, DiagnosticCode> = {
   'perf/triangle-budget': 'TRIANGLE_BUDGET_EXCEEDED',
   'perf/draw-calls': 'DRAW_CALL_BUDGET_EXCEEDED',
   'perf/file-size': 'FILE_SIZE_BUDGET_EXCEEDED',
+  'tex/undecodable': 'TEXTURE_UNDECODABLE',
   'tex/oversized': 'TEXTURE_SIZE_BUDGET_EXCEEDED',
   'tex/total-weight': 'TEXTURE_BYTES_BUDGET_EXCEEDED',
   'tex/vram-estimate': 'GPU_MEMORY_BUDGET_EXCEEDED',

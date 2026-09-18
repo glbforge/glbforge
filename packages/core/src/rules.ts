@@ -1,3 +1,4 @@
+import { undecodableTexture } from './analyze/materials.js';
 import type { AnalysisResult, Finding } from './types.js';
 
 type Rule = (r: AnalysisResult) => Finding | Finding[] | null;
@@ -100,6 +101,24 @@ const RULES: Record<string, Rule> = {
    * a material that samples a texture and has no UVs to sample it with WILL
    * render wrong, which is worth an error, not the warning it used to get.
    */
+  /**
+   * Bytes present, format known, no size readable: the image is truncated or
+   * corrupt. It used to escape as a raw "Offset is outside the bounds of the
+   * DataView" from the header reader, killing the whole report rather than
+   * appearing in it.
+   */
+  'tex/undecodable': (r) => {
+    const bad = r.textures.filter(undecodableTexture);
+    if (bad.length === 0) return null;
+    return {
+      ruleId: 'tex/undecodable',
+      severity: 'error',
+      message: `${bad.length} texture(s) cannot be decoded — ${bad.map((t) => `"${t.name}" (${t.mimeType}, ${t.bytes} bytes)`).join(', ')}. The bytes are there but the image header does not read, so the size and GPU cost are unknown and the texture will not upload.`,
+      suggestion: 'Re-export or replace the image. optimize_glb cannot re-encode what it cannot decode.',
+      data: { textures: bad.map((t) => t.name) },
+    };
+  },
+
   'geo/missing-uvs': (r) => {
     const missing = r.geometry.primitives.filter((p) => !p.attributes.some((a) => a.startsWith('TEXCOORD')));
     if (missing.length === 0) return null;

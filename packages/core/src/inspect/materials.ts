@@ -4,6 +4,7 @@
  * estimate, non-power-of-two and oversized textures.
  */
 import { diag, type Diagnostic } from './diagnostics.js';
+import { undecodableTexture } from '../analyze/materials.js';
 import type { SceneIR } from './ir.js';
 
 export interface MaterialsInspectOptions {
@@ -127,6 +128,11 @@ export function inspectMaterials(ir: SceneIR, opts: MaterialsInspectOptions = {}
         diagnostics.push(diag('TEXTURE_UNRESOLVED', u.material, `Texture "${t.uri ?? t.name}" referenced by ${u.material} (${u.input}) could not be resolved.`, { property: `inputs:${u.input}`, data: { texture: t.path, path: t.uri } }));
       }
       continue;
+    }
+    // Resolved — the bytes arrived — but the header will not read. Distinct
+    // from UNRESOLVED, which is about bytes that never arrived at all.
+    if (undecodableTexture({ bytes: t.bytes, mimeType: t.mimeType, width: t.width })) {
+      diagnostics.push(diag('TEXTURE_UNDECODABLE', t.path, `Texture "${t.name}" (${t.mimeType}, ${t.bytes} bytes) is present but its image header does not read — the file is truncated or corrupt.`, { property: 'inputs:file', data: { mime_type: t.mimeType, bytes: t.bytes } }));
     }
     if (users.length === 0) diagnostics.push(diag('TEXTURE_UNUSED', t.path, `Texture "${t.name}" is not used by any material.`));
     if (pot === false) {

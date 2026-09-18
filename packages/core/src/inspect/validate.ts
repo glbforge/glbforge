@@ -4,6 +4,7 @@
  * runs no renders and no topology passes.
  */
 import { diag, sortDiagnostics, type Diagnostic } from './diagnostics.js';
+import { undecodableTexture } from '../analyze/materials.js';
 import type { SceneIR } from './ir.js';
 import type { UsdzContainer } from '../usd-read/usdz-read.js';
 import type { UsdLayerData } from '../usd-read/types.js';
@@ -73,6 +74,16 @@ export function validateScene(ir: SceneIR, extra: { container?: UsdzContainer | 
     if (d.code === 'SUBDIVISION_UNSUPPORTED' || d.code === 'UP_AXIS_Z' || d.code === 'METERS_PER_UNIT_NONSTANDARD' || d.code === 'TEXTURE_UNRESOLVED') arkit.push(d);
   }
   for (const t of ir.textures) if (!t.resolved && !arkit.some((d) => d.code === 'TEXTURE_UNRESOLVED' && d.prim_path === t.path)) arkit.push(diag('TEXTURE_UNRESOLVED', t.path, `Texture "${t.uri ?? t.name}" could not be resolved.`, { property: 'inputs:file' }));
+  // Bytes that arrived but will not read. Deliberately NOT a SCHEMA_CODE: the
+  // container parses fine, so `opens` stays true and says so; it is one broken
+  // texture, not an unreadable file. It is an ARKit issue, though — nothing
+  // uploads an image whose header does not decode.
+  for (const t of ir.textures) {
+    if (t.resolved && undecodableTexture({ bytes: t.bytes, mimeType: t.mimeType, width: t.width })
+      && !arkit.some((d) => d.code === 'TEXTURE_UNDECODABLE' && d.prim_path === t.path)) {
+      arkit.push(diag('TEXTURE_UNDECODABLE', t.path, `Texture "${t.uri ?? t.name}" (${t.mimeType}, ${t.bytes} bytes) is present but its image header does not read — the file is truncated or corrupt.`, { property: 'inputs:file', data: { mime_type: t.mimeType, bytes: t.bytes } }));
+    }
+  }
   for (const d of arkit) if (!diagnostics.includes(d)) diagnostics.push(d);
 
   const schema = diagnostics.filter((d) => SCHEMA_CODES.has(d.code) && d.severity !== 'info');

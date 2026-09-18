@@ -87,6 +87,73 @@
 
 ### Fixed
 
+- **A texture that could not be decoded killed the tools that explain
+  assets.** `ImageUtils.getSize` reads a DataView straight off an image
+  header, so a truncated or corrupt embedded PNG threw `Offset is outside the
+  bounds of the DataView` — and nothing caught it. That escaped from
+  `analyze_glb` *and* from `validate`, naming no file, no texture and no
+  reason, from the two tools whose whole job is saying why an asset is broken.
+  All three glTF/USD read paths now go through one guarded `imageSize`, and
+  bytes-present-but-unreadable is reported as the new `TEXTURE_UNDECODABLE`
+  error, naming the texture, its mime type and its byte count. `validate`
+  still says the file `opens` — the container parses; one texture is broken,
+  and those are different claims — while marking it not AR Quick Look
+  compatible. A format we simply cannot measure is not reported as damage.
+
+- **`UV_MISSING` called our own optimizer's output a defect.** `prune` folds a
+  single-colour base-color texture into the material factor and drops the UV
+  set that existed only to sample it — free, and measured at SSIM 0.9998 on a
+  forged logo. The linter then warned that the asset "cannot be textured
+  as-is" and advised running a texture stage or unwrapping in a DCC: undoing a
+  lossless win to fix a non-problem, with a warning counted against the score
+  that gates CI. Missing UVs are only a defect when something wants to read
+  them, so the rule asks the material now — **error** when it samples a
+  texture it cannot apply (that really does render wrong, and used to be a
+  mere warning), **warning** when there is no material yet (a pre-texture
+  export, unchanged), **information** when the colour is a flat factor and
+  nothing reads UVs at all. Folding a texture into a factor was also the one
+  thing the pipeline did to an asset without reporting a code for it; it now
+  says so with `TEXTURES_FOLDED`, naming the UV set that went with it.
+
+- **`matte_preview` never worked over MCP.** The preview deliberately returns a
+  different shape from a forge — it writes no file, so it has no `out`, no
+  `diff` and nothing to validate — but the tool's output schema described only
+  the forge. Every preview call failed structured-output validation, so the
+  feature could not be reached by any client that checks.
+
+- **A matte forge shipped the mask itself.** `stats.matte` carries one alpha
+  byte per traced pixel: a quarter of a million numbers at the default trace
+  size, ~1.5 MB of JSON per call, burying the answer and an agent's context
+  under a silhouette it cannot read. The numbers that decide anything travel;
+  the pixels stay home, and `matte_preview` already returns the mask as a
+  picture. A forge reply is 4 KB now. The forged bytes are unchanged.
+
+- **A hairline became the heaviest thing in the mesh.** A stroke narrower than
+  the simplify tolerance collapses both halves of its split contour to their
+  own endpoints, and the fallback answered that by keeping the raw per-pixel
+  contour — abandoning simplification for exactly the mark that needed it. A
+  1px line came back at 13,108 triangles and 788 KB where the same line 2px
+  wide came back at 12 and 3 KB, and it was not even monotonic in the knob:
+  `simplify` 0.5 gave 12, while 1.2, 3 and 10 all gave 13,108. The tolerance
+  now backs off by halving until the loop survives. `simplify: 0` still means
+  what it says.
+
+- **A mistyped colour was written into the file as `null`.** The CLI and the
+  MCP server each padded a hex string to six digits and ran `parseInt` over
+  the pieces, which rejected nothing: `color: "zzz"` became `NaN` and reached
+  the GLB as `baseColorFactor: [null, null, 0, 1]`, which no strict loader
+  will open and which our own `post_validation` passed. The same padding read
+  `#abc` as `#abc000` rather than the `#aabbcc` every other tool means by it.
+  One strict parser in core now, refusing what it cannot read.
+
+- **The forge's refusals pointed at the paid path before the free one.** Both
+  refusals — full-bleed canvas, too many contours — recommended a generative
+  model and offered only `mode`/`threshold` locally. Neither mentioned matte,
+  which is the actual answer for the most common input that lands there: an
+  object on a plain background. Measured on a JPEG of a disc on a flat ground,
+  the default call refuses and recommends generation, while `matte: "auto"`
+  forges it at 100% confidence in half a second, for nothing.
+
 - **A missing output directory cost a whole pipeline run.** Every mutating MCP
   tool writes its `out` last, so `out` pointing into a folder that did not
   exist yet — exactly what "optimize it and save it to `public/`" produces —
