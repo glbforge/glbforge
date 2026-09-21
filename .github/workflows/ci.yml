@@ -32,6 +32,17 @@ jobs:
 
       - run: pnpm -r test
 
+      # The advice gate. `pnpm -r test` proves each tool answers correctly;
+      # this proves that an agent which FOLLOWS the answer gets a better
+      # asset. It executes every nextActions entry against the fixture that
+      # produced it and fails when a suggestion stops resolving what it
+      # claims, when following advice introduces a new error, when a
+      # suggested_fix names a tool that does not exist, or when a response
+      # drifts from its published schema. --no-live keeps it off the network;
+      # latency is recorded but not gated, because a runner is not a laptop.
+      - name: Agent probe (advice + contract gate)
+        run: pnpm probe -- --gate --no-live
+
       # Dogfood the CLI end to end: extrude a committed test image, then
       # hold the output to the mobile-hero budget (non-zero exit = fail).
       - name: CLI dogfood (extrude -> analyze)

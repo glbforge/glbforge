@@ -8,7 +8,11 @@ examples/viewer/node_modules/
 # generated example outputs (reproducible via the CLI; keep the repo light)
 examples/*.glb
 examples/viewer/public/*.glb
-.claude/
+# .claude/ holds worktrees and local launch config, but the agent-loop skill
+# has to be committed: a scheduled cloud pass checks the repo out and finds
+# its instructions there, not on this machine.
+.claude/*
+!.claude/skills/
 training/
 
 # macOS metadata — never ship these as site assets

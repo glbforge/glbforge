@@ -1,0 +1,96 @@
+{
+  "recorded": "2026-09-21T07:46:52.491Z",
+  "commit": "5adca00",
+  "host": "darwin-arm64-node22",
+  "surface": {
+    "tools": 27
+  },
+  "advice": {
+    "resolutionRate": 0.667,
+    "claimedActions": 3,
+    "collateralRegressions": 0,
+    "danglingAdvice": 0,
+    "failedToRun": 0
+  },
+  "vocab": {
+    "codesObserved": 33,
+    "codesDeclared": 128
+  },
+  "latency": {
+    "inspect": {
+      "p50": 6,
+      "p90": 78,
+      "n": 20
+    },
+    "diff": {
+      "p50": 6,
+      "p90": 108,
+      "n": 20
+    },
+    "validate": {
+      "p50": 3,
+      "p90": 9,
+      "n": 20
+    },
+    "inspect_geometry": {
+      "p50": 4,
+      "p90": 27,
+      "n": 20
+    },
+    "inspect_animation": {
+      "p50": 3,
+      "p90": 7,
+      "n": 20
+    },
+    "inspect_materials": {
+      "p50": 3,
+      "p90": 9,
+      "n": 20
+    },
+    "analyze_performance": {
+      "p50": 3,
+      "p90": 10,
+      "n": 20
+    },
+    "inspect_all": {
+      "p50": 7,
+      "p90": 29,
+      "n": 20
+    },
+    "capabilities": {
+      "p50": 169,
+      "p90": 218,
+      "n": 4
+    },
+    "compare_glb": {
+      "p50": 305,
+      "p90": 736,
+      "n": 20
+    },
+    "list_profiles": {
+      "p50": 1,
+      "p90": 1,
+      "n": 4
+    },
+    "analyze_glb": {
+      "p50": 31,
+      "p90": 337,
+      "n": 23
+    },
+    "inspect_report": {
+      "p50": 1,
+      "p90": 319,
+      "n": 20
+    },
+    "audit_directory": {
+      "p50": 99,
+      "p90": 103,
+      "n": 4
+    },
+    "optimize_glb": {
+      "p50": 1524,
+      "p90": 2994,
+      "n": 3
+    }
+  }
+}
