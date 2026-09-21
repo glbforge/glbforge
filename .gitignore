@@ -15,5 +15,8 @@ examples/viewer/public/*.glb
 !.claude/skills/
 training/
 
+# live-check history + launchd log (machine-local, regenerated hourly)
+.agent-loop/
+
 # macOS metadata — never ship these as site assets
 .DS_Store

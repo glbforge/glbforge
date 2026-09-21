@@ -21,6 +21,7 @@ following the loop had no exit from it.
 | `docs/agent-loop/baseline.json` | Frozen numbers. A pass that moves them moves them on purpose |
 | `docs/agent-loop/ledger.md` | Every finding, with its state. Read first, so a pass never rediscovers a known thing |
 | `.claude/skills/glbforge-pass/SKILL.md` | What a pass does, start to finish |
+| `scripts/live-check.mjs` | glbforge.dev from outside, on a machine that can reach it |
 
 ## Running it
 
@@ -62,7 +63,45 @@ one the server exposes. Coverage is reported too: a code no fixture can
 produce is a row in a table an agent will never be able to act on.
 
 **live** — glbforge.dev, and whether the deployed `llms.txt` is the one in
-this checkout.
+this checkout. **This section does not run on a schedule**: the cloud
+sandbox's proxy allowlists npmjs.org and fails CONNECT on everything else, so
+a scheduled pass would report a false outage. It runs locally instead — see
+below.
+
+## The live check runs locally, on a timer
+
+```bash
+node scripts/live-check.mjs            # check, print, append history
+node scripts/live-check.mjs --notify   # + macOS notification ON CHANGE only
+node scripts/live-check.mjs --json
+```
+
+Plain Node — no build, no pnpm, no workspace resolution — so it still answers
+"is the site up" against a checkout that is mid-rebuild or broken. Installed
+as a launchd agent (`~/Library/LaunchAgents/dev.glbforge.live-check.plist`),
+hourly plus once at load, writing `.agent-loop/live-history.jsonl`.
+
+It checks the six static routes; the two free unauthenticated Worker routes
+(the same Worker serves the site, so the assets can be fine while `/api/*`
+throws); **every script and style the deployed Studio page references**,
+because a hashed bundle has raced the build into a deploy whose `index.html`
+pointed at files that were not there — invisible to a 200 on the page itself;
+deployed `llms.txt` against **`origin/main`**, not the working tree, since a
+feature branch is ahead of the deploy by definition and comparing the tree
+would hold it red for the life of every PR; and npm `latest` against the
+packages here.
+
+Quiet by design: it notifies only when the state *changes*. A site down for
+six hours earns one notification, and so does the recovery. Nothing paid is
+ever touched — `/api/gen/*` and `/api/billing/checkout` are excluded.
+
+Manage it:
+
+```bash
+launchctl print gui/$UID/dev.glbforge.live-check | grep -E 'state|last exit'
+launchctl bootout gui/$UID/dev.glbforge.live-check      # stop
+launchctl bootstrap gui/$UID ~/Library/LaunchAgents/dev.glbforge.live-check.plist
+```
 
 ## Fixtures
 

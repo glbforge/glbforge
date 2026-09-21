@@ -32,7 +32,17 @@ surface section: every tool the server exposes must appear *literally* in
 llms.txt, the same bar the README is held to. Verified by reintroducing the
 shorthand and watching the check fire.
 
-### L6 · `open` · the scheduled sandbox cannot push, so a pass cannot open its PR
+### L6 · `fixed` · the scheduled sandbox cannot push, so a pass cannot open its PR
+
+**Resolved 2026-09-21**: the Claude GitHub App was never installed on the
+`glbforge` org — `gh api /orgs/glbforge/installations` listed only
+`cloudflare-workers-and-pages`. It is now installed with `contents: write`
+and `pull_requests: write`. The confusing part was that the pass's *reads*
+succeeded: the repo is public, so `list_branches` works with any token or
+none, and `create_branch` was the first call that actually needed an
+installation. Original finding below.
+
+### L6 (original) · the scheduled sandbox cannot push
 
 The pass did the work and then could not deliver it. `git push` returns 403
 ("Claude doesn't have GitHub access to glbforge/glbforge for your
@@ -45,7 +55,17 @@ pass strands its work in a sandbox that is torn down afterwards. L5 above was
 recovered by hand from the run log; that does not scale, and it is the one
 thing that makes the loop a treadmill rather than a ratchet.
 
-### L7 · `watching` · the scheduled sandbox cannot reach glbforge.dev
+### L7 · `fixed` · the scheduled sandbox cannot reach glbforge.dev
+
+**Addressed 2026-09-21** by moving the check rather than the sandbox:
+`scripts/live-check.mjs` runs hourly under launchd on a machine that can
+reach the site. It covers more than the probe's `live` section did — the two
+free Worker routes, and every asset the deployed Studio page references,
+which is the shape of a failure this project has actually shipped. Drift is
+measured against `origin/main` rather than the working tree, so an open PR
+does not hold it red. Original finding below.
+
+### L7 (original) · the scheduled sandbox cannot reach glbforge.dev
 
 The proxy allowlist permits npmjs.org and little else; `glbforge.dev` and even
 `example.com` fail CONNECT with 403. The pass correctly ran `--no-live` rather
