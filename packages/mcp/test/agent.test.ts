@@ -260,47 +260,63 @@ describe('render', () => {
 });
 
 describe('nextActions only promises what the optimizer can deliver', () => {
-  /**
-   * `resolves` is machine-readable: an agent runs the action and branches on
-   * whether the rule cleared. Promising a rule optimize has no step for turns
-   * "optimize then re-analyze" into a loop with no exit — the same card, the
-   * same promise, forever. Ten identical meshes are the case that exposes it:
-   * dedup collapses them into one mesh placed by ten nodes, which is still
-   * ten draw calls, and join has nothing left to merge.
-   */
-  it('drops the draw-call promise once the calls are repeat placements of a shared mesh', async () => {
+  const instancedFixture = async (name: string, count: number) => {
     const doc = new Document();
     const scene = doc.createScene();
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < count; i++) {
       const mesh = makeGrid(doc, 8, 0.3, { uvs: true, normals: true, name: `part${i}` });
       mesh.listPrimitives()[0].setMaterial(doc.createMaterial(`mat${i}`).setBaseColorFactor([0.8, 0.3, 0.4, 1]));
       scene.addChild(doc.createNode(`part${i}`).setMesh(mesh).setTranslation([i * 0.4, 0, 0]));
     }
-    const src = join(dir, 'instanced-drawcalls.glb');
+    const src = join(dir, name);
     await writeFile(src, await (await createNodeIO()).writeBinary(doc));
+    return src;
+  };
 
-    // Before: ten separate meshes, so join genuinely applies and the promise
-    // is fair to make.
+  /**
+   * `resolves` is machine-readable: an agent runs the action and branches on
+   * whether the rule cleared. Ten identical meshes over mobile-hero's
+   * maxDrawCalls (4): dedup collapses them into one mesh placed by ten
+   * nodes, which is still ten draw calls. join() can bake those placements
+   * into one primitive — it only has nothing to merge when the nodes are
+   * left as separate meshes, which dedup does not do here — so the budget
+   * clears and the promise is kept.
+   */
+  it('resolves draw-calls by baking repeat placements of a shared mesh when the budget needs it', async () => {
+    const src = await instancedFixture('instanced-drawcalls-over.glb', 10);
+
     const before = await call('analyze_glb', { path: src, profile: 'mobile-hero', preview: 'none' });
     expect(before.data.passed).toBe(false);
     expect((before.data.nextActions as Array<{ resolves?: string[] }>)[0].resolves).toContain('perf/draw-calls');
 
-    const out = join(dir, 'instanced-drawcalls.web.glb');
+    const out = join(dir, 'instanced-drawcalls-over.web.glb');
     const opt = await call('optimize_glb', { path: src, out, profile: 'mobile-hero', preview: 'none', verify: false });
     expect(opt.ok).toBe(true);
 
-    // After: one mesh, ten nodes. The count has not moved and cannot be moved
-    // by running the same tool again, so nothing is offered.
+    // After: baked into one primitive under one node — the draw-call budget
+    // is met and the instancing that stood in the way is gone with it.
     const after = await call('analyze_glb', { path: out, profile: 'mobile-hero', preview: 'none' });
-    expect(after.data.passed).toBe(false);
-    expect(after.data.nextActions).toEqual([]);
+    expect(has(after, 'DRAW_CALL_BUDGET_EXCEEDED')).toBe(false);
+    expect(after.data.passed).toBe(true);
+  }, 60_000);
 
-    // And the finding says what would actually work instead.
-    const dc = find(after, 'DRAW_CALL_BUDGET_EXCEEDED')!;
-    expect(dc.data).toMatchObject({ instancedNodes: 9 });
-    expect(dc.suggested_fix).toMatch(/EXT_mesh_gpu_instancing/);
-    // join is named only to rule it out, never as the thing to try next.
-    expect(dc.suggested_fix).toMatch(/nothing for join to merge/);
+  /**
+   * The other half of the trade-off: when the instanced placements are
+   * already within the draw-call budget, baking them would only spend the
+   * memory dedup saved for nothing. optimize_glb leaves them instanced.
+   */
+  it('keeps instancing when the repeat placements are already within the draw-call budget', async () => {
+    const src = await instancedFixture('instanced-drawcalls-under.glb', 3);
+    const out = join(dir, 'instanced-drawcalls-under.web.glb');
+    const opt = await call('optimize_glb', { path: src, out, profile: 'mobile-hero', preview: 'none', verify: false });
+    expect(opt.ok).toBe(true);
+
+    const after = await call('analyze_glb', { path: out, profile: 'mobile-hero', preview: 'none' });
+    expect(has(after, 'DRAW_CALL_BUDGET_EXCEEDED')).toBe(false);
+    // Still three separate draw calls placing one shared mesh — join never
+    // ran, so dedup's memory win survived because nothing forced it to be
+    // spent. (A bake would have collapsed this to one.)
+    expect(after.data.drawCalls).toBe(3);
   }, 60_000);
 });
 

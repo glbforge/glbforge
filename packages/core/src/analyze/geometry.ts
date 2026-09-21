@@ -12,6 +12,16 @@ export function sceneTriangles(doc: Document): number {
 }
 
 /**
+ * Draw calls the scene actually issues: one per primitive, per node that
+ * places it. A mesh list count misses the case dedup() creates on purpose —
+ * one shared mesh placed by several nodes — so anything deciding whether
+ * join() has work to do has to measure this, not the mesh list.
+ */
+export function sceneDrawCalls(doc: Document): number {
+  return analyzeGeometry(doc, { topology: false }).drawCallEstimate;
+}
+
+/**
  * How many copies of its mesh a node draws. EXT_mesh_gpu_instancing puts the
  * per-instance transforms in an attribute; without the extension a node draws
  * its mesh once. Unreadable or unregistered extension data counts as one

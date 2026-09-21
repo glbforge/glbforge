@@ -17,7 +17,7 @@ import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from '.
 import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
 import { computeSmoothNormals, canonicalByPosition } from './normals.js';
 import { readFloat } from './accessors.js';
-import { sceneTriangles } from './analyze/geometry.js';
+import { sceneTriangles, sceneDrawCalls } from './analyze/geometry.js';
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
@@ -240,13 +240,28 @@ export async function optimize(
   // Multi-primitive assets (one material per submesh is a common AI-export
   // pattern) cost one draw call per primitive. Palette solid-color materials,
   // flatten the node hierarchy, then join primitives that share a material.
+  //
+  // dedup() above can also turn several identical meshes into ONE mesh placed
+  // by several nodes — real instancing, and a legitimate memory win with no
+  // draw-call cost of its own. `primCount()` (the mesh list) goes to 1 in
+  // that case and used to skip this block entirely, so an asset instanced
+  // past the draw-call budget got the memory win silently and stayed over
+  // budget: join() was never even asked to look at it. Giving up the
+  // instancing is only worth it when the budget is actually failing on draw
+  // calls, so that — not primCount() — is the second trigger; an instanced
+  // asset that still clears maxDrawCalls keeps its instancing untouched.
   const primCount = () =>
     doc.getRoot().listMeshes().reduce((n, m) => n + m.listPrimitives().length, 0);
   const primsBefore = primCount();
-  if (primsBefore > 1) {
+  const drawCallsBefore = sceneDrawCalls(doc);
+  if (primsBefore > 1 || drawCallsBefore > opts.profile.maxDrawCalls) {
     await doc.transform(palette({ min: 5 }), flatten(), join());
     const primsAfter = primCount();
-    if (primsAfter < primsBefore) {
+    const drawCallsAfter = sceneDrawCalls(doc);
+    if (drawCallsAfter < drawCallsBefore) {
+      steps.push(`join ${drawCallsBefore}->${drawCallsAfter} draw calls`);
+      log(`joined: ${drawCallsBefore} -> ${drawCallsAfter} draw calls`);
+    } else if (primsAfter < primsBefore) {
       steps.push(`join ${primsBefore}->${primsAfter} prims`);
       log(`joined: ${primsBefore} -> ${primsAfter} draw calls`);
     }

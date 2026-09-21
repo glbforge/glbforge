@@ -1,95 +1,95 @@
 {
-  "recorded": "2026-09-21T07:46:52.491Z",
-  "commit": "5adca00",
-  "host": "darwin-arm64-node22",
+  "recorded": "2026-09-21T20:28:55.488Z",
+  "commit": "97ee78c",
+  "host": "linux-x64-node22",
   "surface": {
     "tools": 27
   },
   "advice": {
-    "resolutionRate": 0.667,
+    "resolutionRate": 1,
     "claimedActions": 3,
     "collateralRegressions": 0,
     "danglingAdvice": 0,
     "failedToRun": 0
   },
   "vocab": {
-    "codesObserved": 33,
+    "codesObserved": 34,
     "codesDeclared": 128
   },
   "latency": {
+    "list_profiles": {
+      "p50": 2,
+      "p90": 8,
+      "n": 5
+    },
     "inspect": {
-      "p50": 6,
-      "p90": 78,
+      "p50": 9,
+      "p90": 77,
       "n": 20
     },
     "diff": {
-      "p50": 6,
-      "p90": 108,
+      "p50": 5,
+      "p90": 79,
       "n": 20
     },
     "validate": {
-      "p50": 3,
-      "p90": 9,
+      "p50": 4,
+      "p90": 14,
       "n": 20
     },
     "inspect_geometry": {
       "p50": 4,
-      "p90": 27,
+      "p90": 47,
       "n": 20
     },
     "inspect_animation": {
       "p50": 3,
-      "p90": 7,
+      "p90": 13,
       "n": 20
     },
     "inspect_materials": {
       "p50": 3,
-      "p90": 9,
+      "p90": 16,
       "n": 20
     },
     "analyze_performance": {
       "p50": 3,
-      "p90": 10,
+      "p90": 12,
       "n": 20
     },
     "inspect_all": {
-      "p50": 7,
-      "p90": 29,
+      "p50": 5,
+      "p90": 50,
       "n": 20
     },
     "capabilities": {
-      "p50": 169,
-      "p90": 218,
+      "p50": 16,
+      "p90": 24,
       "n": 4
     },
     "compare_glb": {
-      "p50": 305,
-      "p90": 736,
+      "p50": 404,
+      "p90": 818,
       "n": 20
     },
-    "list_profiles": {
-      "p50": 1,
-      "p90": 1,
-      "n": 4
-    },
     "analyze_glb": {
-      "p50": 31,
-      "p90": 337,
+      "p50": 46,
+      "p90": 370,
       "n": 23
     },
     "inspect_report": {
-      "p50": 1,
-      "p90": 319,
+      "p50": 3,
+      "p90": 281,
       "n": 20
     },
     "audit_directory": {
-      "p50": 99,
-      "p90": 103,
+      "p50": 119,
+      "p90": 151,
       "n": 4
     },
     "optimize_glb": {
-      "p50": 1524,
-      "p90": 2994,
+      "p50": 2159,
+      "p90": 3253,
       "n": 3
     }
   }

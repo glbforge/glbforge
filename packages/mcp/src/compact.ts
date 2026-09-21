@@ -23,7 +23,7 @@ const SEVERITY_RANK: Record<Severity, number> = { error: 0, warn: 1, info: 2 };
 const OPTIMIZER_RESOLVES = new Set([
   'perf/triangle-budget',   // meshopt simplification
   'perf/file-size',         // quantize + meshopt + texture re-encode
-  'perf/draw-calls',        // join(), but only when there is something to join
+  'perf/draw-calls',        // join(); bakes repeat placements of a shared mesh when the budget needs it
   'tex/oversized',          // resize to the profile cap
   'tex/total-weight',       // re-encode
   'tex/vram-estimate',      // resize / KTX2
@@ -37,9 +37,6 @@ const OPTIMIZER_RESOLVES = new Set([
 function optimizerResolves(errors: Finding[]): string[] {
   return errors
     .filter((f) => OPTIMIZER_RESOLVES.has(f.ruleId))
-    // Draw calls from repeat placements of a shared mesh are already deduped;
-    // join has nothing to merge and the count will not move.
-    .filter((f) => !(f.ruleId === 'perf/draw-calls' && ((f.data as { instancedNodes?: number } | undefined)?.instancedNodes ?? 0) > 0))
     .map((f) => f.ruleId);
 }
 
