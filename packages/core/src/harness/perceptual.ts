@@ -250,7 +250,12 @@ export const PERCEPTUAL_RULE = 'fidelity/perceptual';
  * one is recorded as an info finding so the measured number ships with the
  * report everywhere reports are shown.
  */
-export function applyPerceptualVerdict(report: AnalysisResult, verdict: PerceptualVerdict): AnalysisResult {
+export function applyPerceptualVerdict(
+  report: AnalysisResult,
+  verdict: PerceptualVerdict,
+  /** Which stage spent the fidelity, when the optimizer measured it separately. */
+  attribution?: { lostAt: 'geometry' | 'textures' | null; geometrySsimMin: number | null },
+): AnalysisResult {
   const pct = (n: number) => (n * 100).toFixed(1) + '%';
   const data = {
     ssimMean: verdict.ssimMean, ssimMin: verdict.ssimMin, worstView: verdict.worstView,
@@ -269,8 +274,14 @@ export function applyPerceptualVerdict(report: AnalysisResult, verdict: Perceptu
     ruleId: PERCEPTUAL_RULE,
     severity: 'error',
     message: `Visual fidelity SSIM ${pct(verdict.ssimMean)} (weakest view ${pct(verdict.ssimMin)} @ ${verdict.worstView}) is below the profile floor of ${pct(verdict.threshold)}: optimization is visibly lossy.`,
-    suggestion: 'Raise the triangle target (--target) or pick a roomier profile; if textures dominate the loss, try --ktx2 or a larger maxTextureSize profile. Skip the check with --no-verify only when the loss is acceptable.',
-    data,
+    // When the optimizer measured geometry on its own and it cleared the
+    // floor, "raise the triangle target" is the wrong advice: the texture
+    // re-encode is what spent the margin, and simplifying less cannot buy it
+    // back. Say which stage it was, on every surface that renders findings.
+    suggestion: attribution?.lostAt === 'textures'
+      ? `The texture re-encode spent it, not the simplification: geometry alone measured ${pct(attribution.geometrySsimMin ?? 0)}, above the floor. Raise texture quality (--texture-format ktx2, or a profile with a larger maxTextureSize) — raising the triangle target will not help.`
+      : 'Raise the triangle target (--target) or pick a roomier profile; if textures dominate the loss, try --ktx2 or a larger maxTextureSize profile. Skip the check with --no-verify only when the loss is acceptable.',
+    data: attribution?.lostAt ? { ...data, fidelityLostAt: attribution.lostAt, geometrySsimMin: attribution.geometrySsimMin } : data,
   });
   report.score = Math.max(0, report.score - 15);
   report.passed = false;

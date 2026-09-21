@@ -25,6 +25,39 @@ function makeDirtyQuad(): Document {
   return doc;
 }
 
+/** A closed, displaced UV sphere: enough detail that meshopt needs several
+ *  rungs of the error ladder to reach a small triangle target, and enough
+ *  curvature that simplifying it is visible. */
+function makeBumpySphere(rings = 48, segments = 64): Document {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const positions = new Float32Array(rings * segments * 3);
+  for (let r = 0; r < rings; r++) {
+    const phi = (r / (rings - 1)) * Math.PI;
+    for (let sg = 0; sg < segments; sg++) {
+      const theta = (sg / segments) * Math.PI * 2;
+      // Deterministic displacement — no Math.random anywhere in this repo.
+      const radius = 1 + 0.18 * Math.sin(6 * phi) * Math.cos(7 * theta);
+      const i = (r * segments + sg) * 3;
+      positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+      positions[i + 1] = radius * Math.cos(phi);
+      positions[i + 2] = radius * Math.sin(phi) * Math.sin(theta);
+    }
+  }
+  const indices: number[] = [];
+  for (let r = 0; r < rings - 1; r++) for (let sg = 0; sg < segments; sg++) {
+    const a = r * segments + sg, b = r * segments + (sg + 1) % segments;
+    indices.push(a, a + segments, b, b, a + segments, b + segments);
+  }
+  const prim = doc.createPrimitive()
+    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(positions).setBuffer(buffer))
+    .setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint32Array(indices)).setBuffer(buffer))
+    .setMaterial(doc.createMaterial('shell').setBaseColorFactor([0.7, 0.5, 0.3, 1]));
+  const mesh = doc.createMesh('sphere').addPrimitive(prim);
+  doc.createScene().addChild(doc.createNode('sphere').setMesh(mesh));
+  return doc;
+}
+
 describe('analyze', () => {
   const profile = getProfile('mobile-hero');
 
@@ -129,6 +162,47 @@ describe('optimize', () => {
     expect(after.geometry.topology!.redundantVertices).toBe(0);
     expect(after.geometry.primsMissingNormals).toBe(0);
   });
+
+  it('leaves its own output welded and free of the zero-area triangles simplification makes', async () => {
+    const doc = makeBumpySphere(48, 64);
+    const profile = { ...getProfile('mobile-hero'), maxTriangles: 2_000 };
+    const summary = await optimize(doc, { profile, compress: false, textures: false, verify: false });
+
+    const after = analyze(doc, { profile });
+    // The contract is that the optimizer does not ship an asset which trips
+    // the linter that produced it. (A handful of redundant vertices can
+    // survive at the poles, where x = -0 and x = +0 are the same point to the
+    // rule but different bits to weld; the rule's 5% threshold is the line
+    // that matters.)
+    expect(after.geometry.topology!.degenerateTriangles).toBe(0);
+    expect(after.geometry.topology!.redundantVertices / after.geometry.vertices).toBeLessThan(0.05);
+    expect(after.findings.map((f) => f.ruleId)).not.toContain('topo/unwelded');
+    expect(after.findings.map((f) => f.ruleId)).not.toContain('topo/degenerate');
+    expect(summary.trianglesAfter).toBeLessThanOrEqual(2_000);
+  }, 60_000);
+
+  it('stops short of the triangle budget rather than dropping below the SSIM floor', async () => {
+    const doc = makeBumpySphere(48, 64);
+    // An unreachable floor: any simplification at all loses more than this,
+    // so the fidelity guarantee must win over the triangle target.
+    const profile = { ...getProfile('mobile-hero'), maxTriangles: 200, minSsim: 0.999 };
+    const summary = await optimize(doc, { profile, compress: false, textures: false, verify: true });
+
+    expect(summary.boundBy).toBe('fidelity');
+    expect(summary.trianglesAfter).toBeGreaterThan(profile.maxTriangles);
+    expect(summary.steps.some((s) => s.startsWith('back off'))).toBe(true);
+  }, 120_000);
+
+  it('reaches the triangle budget when fidelity allows, and says so', async () => {
+    const doc = makeBumpySphere(48, 64);
+    // A mild reduction from ~6,000: well inside what the floor allows, so the
+    // budget is what stops it.
+    const profile = { ...getProfile('mobile-hero'), maxTriangles: 5_000 };
+    const summary = await optimize(doc, { profile, compress: false, textures: false, verify: true });
+
+    expect(summary.boundBy).toBe('budget');
+    expect(summary.trianglesAfter).toBeLessThanOrEqual(5_000);
+  }, 120_000);
 });
 
 describe('extrudeImage', () => {

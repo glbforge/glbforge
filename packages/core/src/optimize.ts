@@ -1,4 +1,4 @@
-import { Document } from '@gltf-transform/core';
+import { Document, Primitive } from '@gltf-transform/core';
 import {
   dedup,
   flatten,
@@ -17,6 +17,7 @@ import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from '.
 import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
 import { computeSmoothNormals, canonicalByPosition } from './normals.js';
 import { readFloat } from './accessors.js';
+import { sceneTriangles } from './analyze/geometry.js';
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
@@ -67,22 +68,135 @@ export interface OptimizeSummary {
   /** Measured visual fidelity (SSIM before vs after on a fixed 4-camera
    *  rig), or null when verification was skipped. */
   perceptual: PerceptualVerdict | null;
+  /**
+   * Which constraint decided where simplification stopped. 'budget' — the
+   * triangle target was reached. 'fidelity' — going further would have
+   * dropped below the profile's SSIM floor, so the asset stays over budget
+   * on purpose. null — no simplification was needed, or it ran out of rungs.
+   */
+  boundBy: 'budget' | 'fidelity' | null;
+  /**
+   * Which stage spent the fidelity when the floor was missed: 'geometry'
+   * (simplification), or 'textures' (the re-encode — geometry was still above
+   * the floor when it was measured on its own). null when the floor held or
+   * was never measured.
+   */
+  fidelityLostAt: 'geometry' | 'textures' | null;
+  /** SSIM after simplification but before the texture re-encode, when measured. */
+  geometrySsimMin: number | null;
 }
 
 const isNode = typeof process !== 'undefined' && !!(process as { versions?: { node?: string } }).versions?.node;
 
-function countTriangles(doc: Document): number {
-  let tris = 0;
+const LADDER = [0.001, 0.01, 0.05, 0.1] as const;
+
+const mbLabel = (bytes: number): string => `${(bytes / 1048576).toFixed(1)}MB`;
+
+/**
+ * A copy of every triangle primitive's index and attribute arrays, so one
+ * rung of the simplify ladder can be undone when the measured fidelity says
+ * it went too far. Morph targets are copied too; a primitive that
+ * simplification disposed makes the snapshot unusable, which the restore
+ * reports rather than papering over.
+ */
+interface GeometrySnapshot {
+  entries: Array<{
+    prim: Primitive;
+    indices: ArrayLike<number> | null;
+    attrs: Array<[string, ArrayLike<number>]>;
+    targets: Array<Array<[string, ArrayLike<number>]>>;
+  }>;
+}
+
+function snapshotGeometry(doc: Document): GeometrySnapshot {
+  const entries: GeometrySnapshot['entries'] = [];
   for (const mesh of doc.getRoot().listMeshes()) {
     for (const prim of mesh.listPrimitives()) {
-      const indices = prim.getIndices();
-      const count = indices
-        ? indices.getCount()
-        : prim.getAttribute('POSITION')?.getCount() ?? 0;
-      tris += Math.floor(count / 3);
+      if (prim.getMode() !== 4) continue;
+      const idx = prim.getIndices()?.getArray() ?? null;
+      entries.push({
+        prim,
+        indices: idx ? idx.slice() : null,
+        attrs: prim.listSemantics().map((sem) => [sem, prim.getAttribute(sem)!.getArray()!.slice()] as [string, ArrayLike<number>]),
+        targets: prim.listTargets().map((t) =>
+          t.listSemantics().map((sem) => [sem, t.getAttribute(sem)!.getArray()!.slice()] as [string, ArrayLike<number>])),
+      });
     }
   }
-  return tris;
+  return { entries };
+}
+
+/** Put a snapshot back. Returns false (changing nothing) if it no longer fits. */
+function restoreGeometry(snap: GeometrySnapshot): boolean {
+  for (const e of snap.entries) {
+    if (e.prim.isDisposed()) return false;
+    for (const [sem] of e.attrs) if (!e.prim.getAttribute(sem)) return false;
+    if (e.indices && !e.prim.getIndices()) return false;
+    if (e.prim.listTargets().length !== e.targets.length) return false;
+  }
+  for (const e of snap.entries) {
+    for (const [sem, array] of e.attrs) e.prim.getAttribute(sem)!.setArray(array as never);
+    if (e.indices) e.prim.getIndices()!.setArray(e.indices as never);
+    e.prim.listTargets().forEach((t, i) => {
+      for (const [sem, array] of e.targets[i]) t.getAttribute(sem)?.setArray(array as never);
+    });
+  }
+  return true;
+}
+
+function countVertices(doc: Document): number {
+  let n = 0;
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) n += prim.getAttribute('POSITION')?.getCount() ?? 0;
+  }
+  return n;
+}
+
+/**
+ * Remove triangles whose corners collapse to fewer than three distinct
+ * positions. Measured in the same canonical-position space the report card
+ * uses (`topo/degenerate`), so what we drop is exactly what it counts —
+ * vertices split for a UV seam stay distinct, a collapsed edge does not.
+ * Attributes and morph targets are untouched; only the index list shrinks.
+ */
+function dropDegenerateTriangles(doc: Document): number {
+  let dropped = 0;
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) {
+      if (prim.getMode() !== 4) continue;
+      const indices = prim.getIndices();
+      const position = prim.getAttribute('POSITION');
+      if (!indices || !position) continue;
+      const idx = indices.getArray();
+      if (!idx) continue;
+      const canonical = canonicalByPosition(readFloat(position), position.getCount());
+      const keep: number[] = [];
+      for (let t = 0; t + 2 < idx.length; t += 3) {
+        const a = canonical[idx[t]], b = canonical[idx[t + 1]], c = canonical[idx[t + 2]];
+        if (a === b || b === c || a === c) { dropped++; continue; }
+        keep.push(idx[t], idx[t + 1], idx[t + 2]);
+      }
+      if (keep.length === idx.length) continue;
+      if (keep.length === 0) { prim.dispose(); continue; }
+      const Ctor = idx.constructor as Uint8ArrayConstructor | Uint16ArrayConstructor | Uint32ArrayConstructor;
+      const out = new Ctor(keep.length);
+      out.set(keep);
+      indices.setArray(out);
+    }
+    if (mesh.listPrimitives().length === 0) mesh.dispose();
+  }
+  return dropped;
+}
+
+/**
+ * Counted over the scene, not the mesh list: the ladder targets
+ * `profile.maxTriangles`, and that cap is checked against what the scene
+ * draws. Counting the mesh list here let an instanced asset "reach" a budget
+ * it still exceeded — the optimizer reported 149,170 while the report card
+ * that ran a second later measured 166,978.
+ */
+function countTriangles(doc: Document): number {
+  return sceneTriangles(doc);
 }
 
 /**
@@ -143,14 +257,31 @@ export async function optimize(
   log(`welded: ${countTriangles(doc).toLocaleString()} triangles`);
 
   // Error ladder: retry with looser geometric error until we reach the
-  // budget (within 10%) or run out of tolerance. The last rung used is the
-  // upper bound on how far the surface moved (fidelityBound).
+  // budget or run out of tolerance. The last rung used is the upper bound on
+  // how far the surface moved (fidelityBound).
+  //
+  // This used to stop within 10% of the target, which put the simplifier and
+  // the budget rule in disagreement about the same asset: `optimize
+  // --profile mobile-hero` would finish 7% over the cap and hand straight
+  // back a perf/triangle-budget error telling the user to simplify. The
+  // measured SSIM gate below is what protects fidelity here, not slop in the
+  // stop condition.
   let fidelityBound = 0;
   let deformingPrims = 0;
+  let degenerateDropped = 0;
+  let lastRung: GeometrySnapshot | null = null;
+  let rungsApplied = 0;
+  let boundBy: 'budget' | 'fidelity' | null = null;
+  let geometrySsimMin: number | null = null;
   await MeshoptSimplifier.ready;
-  for (const error of [0.001, 0.01, 0.05, 0.1]) {
+  for (const error of LADDER) {
     const current = countTriangles(doc);
-    if (current <= target * 1.1) break;
+    if (current <= target) break;
+    // Keep the state this rung starts from. If the measured fidelity below
+    // says the rung went too far, this is what we go back to — the budget is
+    // a target, the SSIM floor is the guarantee.
+    lastRung = snapshot ? snapshotGeometry(doc) : null;
+    rungsApplied++;
     const ratio = target / current;
     deformingPrims = 0;
     for (const mesh of doc.getRoot().listMeshes()) {
@@ -196,9 +327,51 @@ export async function optimize(
       addedNormals = true;
     }
   }
-  if (addedNormals) {
-    await doc.transform(weld());
-    steps.push('smooth-normals');
+  // Fidelity check while the geometry can still be put back: textures and
+  // meshopt have not run yet, so `snapshot` (taken before any mutation) and
+  // the current doc differ by simplification alone. Only worth paying for
+  // when the ladder had to escalate — an asset that met its target on the
+  // gentlest rung has nothing to back off from.
+  if (snapshot && lastRung && rungsApplied > 1) {
+    const check = await perceptualCompare(snapshot, doc, false);
+    geometrySsimMin = check.ssimMin;
+    if (check.ssimMin < opts.profile.minSsim) {
+      const restored = restoreGeometry(lastRung);
+      if (restored) {
+        boundBy = 'fidelity';
+        fidelityBound = LADDER[rungsApplied - 2] ?? fidelityBound;
+        // Re-measure what we backed off TO. Without this, the attribution
+        // below still carries the score of the rung we rejected, and blames
+        // the geometry for a floor the texture stage went on to cross.
+        geometrySsimMin = (await perceptualCompare(snapshot, doc, false)).ssimMin;
+        const back = countTriangles(doc);
+        steps.push(`back off 1 rung -> ${back.toLocaleString()} (ssim ${(check.ssimMin * 100).toFixed(1)}% < floor)`);
+        log(`backed off one rung: reaching ${target.toLocaleString()} triangles cost SSIM ${(check.ssimMin * 100).toFixed(1)}%, below the ${(opts.profile.minSsim * 100).toFixed(0)}% floor — stopped at ${back.toLocaleString()}`);
+      }
+    }
+  }
+  lastRung = null;
+  if (boundBy === null && countTriangles(doc) <= target) boundBy = 'budget';
+
+  if (addedNormals) steps.push('smooth-normals');
+
+  // Simplification collapses vertices onto one another, so what comes out of
+  // the ladder is a mesh full of bitwise-identical duplicates with zero-area
+  // triangles between them. weld() ran before the ladder, nothing ran after
+  // it, and both states are rules on our own report card (topo/unwelded,
+  // topo/degenerate) — the optimizer was shipping an asset that failed the
+  // linter that produced it, and paying for the duplicates in file size.
+  degenerateDropped += dropDegenerateTriangles(doc);
+  if (degenerateDropped) {
+    steps.push(`drop-degenerate x${degenerateDropped.toLocaleString()}`);
+    log(`dropped ${degenerateDropped.toLocaleString()} zero-area triangles`);
+  }
+  const verticesBeforeWeld = countVertices(doc);
+  await doc.transform(weld());
+  const weldedAway = verticesBeforeWeld - countVertices(doc);
+  if (weldedAway > 0) {
+    steps.push(`re-weld -${weldedAway.toLocaleString()} verts`);
+    log(`re-welded: ${weldedAway.toLocaleString()} duplicate vertices merged`);
   }
 
   if (opts.textures !== false && doc.getRoot().listTextures().length > 0 && opts.textureFormat === 'ktx2') {
@@ -226,8 +399,16 @@ export async function optimize(
   } else if (opts.textures !== false && doc.getRoot().listTextures().length > 0) {
     const cap = opts.profile.maxTextureSize;
     const sharp = (await import('sharp')).default;
-    // Normal maps get near-lossless encoding: lossy artifacts in a normal
-    // map show up as shading noise, not subtle color shifts.
+    const sizeOf = () => doc.getRoot().listTextures()
+      .reduce((n, t) => n + (t.getImage()?.byteLength ?? 0), 0);
+    const before = new Map(doc.getRoot().listTextures().map((t) => [t, { image: t.getImage(), mime: t.getMimeType() }]));
+    const bytesBefore = sizeOf();
+    // Normal maps carry geometry, not colour: lossy artifacts there show up
+    // as shading noise rather than a subtle colour shift, so they get a high
+    // quality rather than the default. They used to get `nearLossless`, which
+    // on a detailed 2K normal map encodes LARGER than the source JPEG — the
+    // whole texture payload of a chess set grew 18.1MB -> 24.2MB while the
+    // command was reporting itself as an optimization.
     await doc.transform(
       textureCompress({
         encoder: sharp,
@@ -240,11 +421,24 @@ export async function optimize(
         encoder: sharp,
         targetFormat: 'webp',
         resize: [cap, cap],
-        nearLossless: true,
+        quality: 95,
         slots: /^normalTexture$/,
       }),
     );
-    steps.push(`textures -> webp @ ${cap}px`);
+    // A re-encode is only an optimization if it is smaller. Nothing in
+    // gltf-transform guarantees that, so check rather than assume: an
+    // already-well-compressed source survives untouched.
+    let reverted = 0;
+    for (const [texture, original] of before) {
+      const now = texture.getImage();
+      if (!original.image || !now || now.byteLength <= original.image.byteLength) continue;
+      texture.setImage(original.image);
+      if (original.mime) texture.setMimeType(original.mime);
+      reverted++;
+    }
+    const bytesAfter = sizeOf();
+    steps.push(`textures -> webp @ ${cap}px (${mbLabel(bytesBefore)} -> ${mbLabel(bytesAfter)}${reverted ? `, ${reverted} kept as-is` : ''})`);
+    if (reverted) log(`kept ${reverted} texture(s) in their original encoding — the re-encode was larger`);
   }
 
   await doc.transform(prune());
@@ -252,6 +446,28 @@ export async function optimize(
   if (opts.compress !== false) {
     await doc.transform(meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
     steps.push('meshopt');
+    // meshopt quantizes positions/UVs/normals to int16/uint16, and
+    // quantization merges values that were distinct in float space: about
+    // half the vertices of a simplified asset become bitwise identical only
+    // at this point. Every earlier weld ran before quantization and could not
+    // see them. The compression extension is already registered and encodes
+    // at write time, so this still ships compressed — with half as many
+    // vertices to compress.
+    const beforeQuantWeld = countVertices(doc);
+    await doc.transform(weld());
+    const merged = beforeQuantWeld - countVertices(doc);
+    if (merged > 0) {
+      steps.push(`post-quantize weld -${merged.toLocaleString()} verts`);
+      log(`post-quantize weld: ${merged.toLocaleString()} vertices merged that only quantization made identical`);
+    }
+    // Same cause, other symptom: corners that quantize onto each other leave
+    // zero-area triangles behind.
+    const quantDegenerate = dropDegenerateTriangles(doc);
+    if (quantDegenerate > 0) {
+      degenerateDropped += quantDegenerate;
+      steps.push(`post-quantize drop-degenerate x${quantDegenerate.toLocaleString()}`);
+      log(`post-quantize: dropped ${quantDegenerate.toLocaleString()} zero-area triangles`);
+    }
   }
 
   let perceptual: PerceptualVerdict | null = null;
@@ -263,7 +479,15 @@ export async function optimize(
     log(`visual fidelity: SSIM ${(result.ssimMean * 100).toFixed(1)}% mean, ${(result.ssimMin * 100).toFixed(1)}% min @ ${result.worstView} (floor ${(threshold * 100).toFixed(0)}%)`);
   }
 
-  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc), fidelityBound, perceptual };
+  // Attribute a failed floor to the stage that crossed it. The geometry
+  // check ran on the same asset with its ORIGINAL textures, so if that
+  // cleared the floor and the finished asset does not, the texture re-encode
+  // is what spent the difference — and simplifying less would not help.
+  const fidelityLostAt: OptimizeSummary['fidelityLostAt'] =
+    perceptual && !perceptual.passed
+      ? (geometrySsimMin !== null && geometrySsimMin >= opts.profile.minSsim ? 'textures' : 'geometry')
+      : null;
+  return { steps, trianglesBefore, trianglesAfter: countTriangles(doc), fidelityBound, perceptual, boundBy, fidelityLostAt, geometrySsimMin };
 }
 
 /**
