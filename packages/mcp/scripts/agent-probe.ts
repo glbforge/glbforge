@@ -235,11 +235,18 @@ async function surface() {
   const staleInIndex = indexed.filter((n) => !names.includes(n));
   const missingSchemaFiles = names.flatMap((n) => ['input', 'output'].filter((k) => !existsSync(join(schemasDir, `${n}.${k}.json`))).map((k) => `${n}.${k}.json`));
   const undocumentedInReadme = names.filter((n) => !readme.includes(n));
+  // llms.txt's tool list has collapsed shared prefixes before
+  // ("meshy_create_task/status/download"), which reads as a tool named
+  // meshy_status — there is no such tool, and an agent taking the list at
+  // face value calls a name that does not exist. Every tool has to appear
+  // literally, the same bar the README is held to.
+  const undocumentedInLlms = names.filter((n) => !llms.includes(n));
 
   if (missingFromIndex.length) findings.push(`tools on the server but not in schemas/index.json: ${missingFromIndex.join(', ')}`);
   if (staleInIndex.length) findings.push(`tools in schemas/index.json the server does not expose: ${staleInIndex.join(', ')}`);
   if (missingSchemaFiles.length) findings.push(`missing schema files: ${missingSchemaFiles.join(', ')}`);
   if (undocumentedInReadme.length) findings.push(`tools absent from packages/mcp/README.md: ${undocumentedInReadme.join(', ')}`);
+  if (undocumentedInLlms.length) findings.push(`tool names not spelled out in site/llms.txt (a collapsed shorthand names a tool that does not exist): ${undocumentedInLlms.join(', ')}`);
   if (new Set(Object.values(versions)).size !== 1) findings.push(`package versions disagree: ${JSON.stringify(versions)}`);
   if (index.version !== repoVersion) findings.push(`schemas/index.json says ${index.version}, packages say ${repoVersion}`);
   if (serverJson.version && serverJson.version !== repoVersion) findings.push(`server.json says ${serverJson.version}, packages say ${repoVersion}`);

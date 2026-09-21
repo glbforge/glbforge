@@ -132,7 +132,7 @@ updated with the code: anything not listed here is not shipped):
   analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,
   ship_asset, audit_directory, extrude_image, export_stl, export_usdz,
   list_profiles, generate_image_to_3d, generation_status,
-  meshy_create_task/status/download.
+  meshy_create_task, meshy_task_status, meshy_download.
 - GitHub Action: `uses: glbforge/glbforge@main` runs only on GLB/glTF files
   changed in the PR, posts a sticky report card, gates on the budget, and with
   `optimize: true` opens a PR with the optimized, SSIM-verified files
