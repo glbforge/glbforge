@@ -12,6 +12,71 @@ Newest first.
 
 ---
 
+## Pass 3 — 2026-09-21 — scheduled run — `725ce63`
+
+Build clean, suite green (231 core+cli+mcp+meshy tests), probe matched the
+committed baseline exactly before any change. Spent the pass on L2, the
+single open item the previous pass flagged as highest-value.
+
+### L2 · `fixed` · `optimize_glb` dedups instanced meshes it then couldn't join
+
+Root cause was narrower than the three options the ledger listed: the join
+step's gate (`primsBefore = doc.getRoot().listMeshes().reduce(...)`) counts
+primitives on the *mesh list*. `dedup()` collapsing ten identical meshes into
+one mesh placed by ten nodes takes that count to 1, so the
+`palette+flatten+join` block's `if (primsBefore > 1)` guard never fired —
+`join()` was never even asked to look at the instanced case. It wasn't that
+join couldn't merge repeat placements of a shared mesh; nobody had told it
+to try. Confirmed by instrumenting `optimize()` directly on the probe's
+`over-drawcalls.glb` fixture: after `dedup+prune`, `steps` read
+`['dedup+prune', 'weld', 'meshopt']` — no join step at all — with draw calls
+still at 10 against mobile-hero's cap of 4.
+
+Fixed by gating the join step on the scene's actual draw-call count
+(`sceneDrawCalls`, new export in `analyze/geometry.ts`, mirroring the
+existing `sceneTriangles`) in addition to the mesh-list count, and only
+running it for the instanced case when draw calls exceed
+`profile.maxDrawCalls`. `join()` itself already knows how to bake a
+shared-mesh's repeat placements into one primitive (it clones and
+world-transforms each placement before merging) — this was purely a
+detection gap, not a missing capability. The asymmetric trade-off the
+ledger worried about turned out not to need a triangle-count check: scene
+triangle counting already charges every drawn copy whether the mesh is
+instanced or joined, so baking never changes that number, and an asset that
+already clears the triangle budget keeps clearing it either way. The actual
+trade-off is memory/file-size, which is why the fix only pays it when the
+draw-call budget is failing — an instanced asset already within budget
+(e.g. 3 copies under a cap of 4) is left alone; verified as its own test.
+
+Also corrected two places that had encoded the old (wrong) limitation as
+fact: `rules.ts`'s `perf/draw-calls` suggestion told an agent "there is
+nothing for join to merge" for the instanced case — false now, so it
+directs the agent to run `optimize_glb` instead. `compact.ts`'s
+`optimizerResolves` unconditionally stripped `perf/draw-calls` out of
+`nextActions.resolves` whenever `instancedNodes > 0`; removed, since
+`optimize_glb` can now actually deliver on that promise.
+
+A test in `packages/mcp/test/agent.test.ts` had pinned the old behavior as
+correct (asserting the draw-call count "has not moved and cannot be moved");
+replaced with two tests — one over budget (resolves, `passed: true`), one
+under budget (stays instanced, `drawCalls` unchanged) — so a regression in
+either direction fails the suite.
+
+Verified: `pnpm -r build && pnpm -r test` green (231 tests, +1 net — one
+test split into two). `pnpm probe -- --no-live` now reads `3/3 (1)` instead
+of `2/3 (0.667)`; `over-drawcalls.glb` no longer appears in the advice
+table. `codesObserved` moved 33 → 34 (a code the fixture no longer
+triggers post-optimize freed the probe to observe a different one on a
+later run in the same pass — not a regression, checked against the full
+before/after finding lists). Baseline re-frozen with
+`pnpm probe -- --baseline-out docs/agent-loop/baseline.json` (`--no-live`
+omitted by mistake on the freeze run; harmless — the live section is not
+persisted to `baseline.json`, only printed, and it 403'd as expected for
+this sandbox).
+
+L4 (`site/llms.txt` claims 0.9.0, packages are 0.8.0) is unchanged and still
+a release decision left to the maintainer; the probe reports it every pass.
+
 ## Pass 2 — 2026-09-21 — scheduled run `cse_01NFyKU3`
 
 First scheduled pass. Build clean, suite green, probe matched the committed
