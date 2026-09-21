@@ -22,6 +22,24 @@ every decision is: **would an agent following this advice get a better asset?**
 - **A pass that finds nothing worth changing closes with no PR** and a ledger
   line saying so. That is a success. Do not manufacture a change.
 
+## 0. Check nothing else is already on it
+
+Two passes once picked the same ledger entry and wrote the same fix twice —
+one triggered manually, one scheduled 25 minutes later. Both were good; one
+was waste. Nothing about the ledger prevents it, because an `open` entry
+looks identical whether or not somebody is mid-way through closing it.
+
+```bash
+gh pr list --state open --json number,title,headRefName \
+  --jq '.[] | select(.headRefName | startswith("agent-loop/"))'
+```
+
+Anything already open is **claimed**. Do not work on what it covers, even if
+you would do it differently — if you think it is wrong, say so in a review
+comment on that PR rather than opening a rival. Pick the next thing, or, if
+everything open is already claimed and nothing else rises to the bar, close
+the pass with a ledger line saying exactly that.
+
 ## 1. Read what is already known
 
 Read `docs/agent-loop/ledger.md` first, all of it. Then `ROADMAP.md`, and
