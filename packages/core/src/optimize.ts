@@ -17,7 +17,7 @@ import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from '.
 import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
 import { computeSmoothNormals, canonicalByPosition } from './normals.js';
 import { readFloat } from './accessors.js';
-import { sceneTriangles } from './analyze/geometry.js';
+import { analyzeGeometry, sceneTriangles } from './analyze/geometry.js';
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
@@ -354,6 +354,34 @@ export async function optimize(
   if (boundBy === null && countTriangles(doc) <= target) boundBy = 'budget';
 
   if (addedNormals) steps.push('smooth-normals');
+
+  // dedup() above can turn ten identical meshes into one mesh placed by ten
+  // nodes — correct, and it is most of the file-size win, but ten nodes
+  // drawing one mesh is still ten draw calls, and join() has nothing left to
+  // merge without re-duplicating the very geometry dedup just shared. Baking
+  // those placements into one primitive does not change the triangle count
+  // the scene draws (each placement was already counted once, instanced or
+  // not) — it only re-spends the memory dedup saved, in exchange for fewer
+  // draw calls. So only take that trade when the triangle budget already has
+  // room for it; an asset still over budget gets no help from baking either,
+  // and stays honestly instanced with EXT_mesh_gpu_instancing as the
+  // remaining option (see perf/draw-calls' suggestion).
+  {
+    const instancedStats = analyzeGeometry(doc, { topology: false });
+    if (
+      instancedStats.instancedNodes > 0 &&
+      instancedStats.drawCallEstimate > opts.profile.maxDrawCalls &&
+      instancedStats.triangles <= opts.profile.maxTriangles
+    ) {
+      const callsBefore = instancedStats.drawCallEstimate;
+      await doc.transform(flatten(), join());
+      const callsAfter = analyzeGeometry(doc, { topology: false }).drawCallEstimate;
+      if (callsAfter < callsBefore) {
+        steps.push(`bake-instances ${callsBefore}->${callsAfter} draw calls`);
+        log(`baked instanced placements: ${callsBefore} -> ${callsAfter} draw calls (triangle budget had headroom)`);
+      }
+    }
+  }
 
   // Simplification collapses vertices onto one another, so what comes out of
   // the ladder is a mesh full of bitwise-identical duplicates with zero-area

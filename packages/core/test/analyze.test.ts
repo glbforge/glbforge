@@ -403,6 +403,53 @@ describe('multi-material optimize', () => {
   });
 });
 
+describe('instanced draw calls (L2)', () => {
+  /**
+   * Ten identical meshes dedup into one mesh placed by ten nodes — still ten
+   * draw calls, and join() has nothing left to merge without re-duplicating
+   * the geometry dedup just shared. Baking the placements into one primitive
+   * fixes it without moving the triangle count (each placement was already
+   * counted once, instanced or not) — it only spends the memory dedup saved.
+   * mobile-hero's 150k triangle cap has plenty of room for 1,280.
+   */
+  it('bakes instanced placements into one primitive when the triangle budget has room', async () => {
+    const { instancedDrawCalls } = await import('./agent-fixtures.js');
+    const doc = instancedDrawCalls(10);
+    const profile = getProfile('mobile-hero');
+
+    const before = analyze(doc, { profile, topology: false });
+    expect(before.geometry.drawCallEstimate).toBe(10);
+    expect(before.geometry.instancedNodes).toBe(0); // not yet deduped
+
+    const summary = await optimize(doc, { profile, compress: false, textures: false, verify: false });
+    expect(summary.steps.some((s) => s.startsWith('bake-instances'))).toBe(true);
+
+    const after = analyze(doc, { profile, topology: false });
+    expect(after.geometry.drawCallEstimate).toBeLessThanOrEqual(profile.maxDrawCalls);
+    expect(after.geometry.triangles).toBe(before.geometry.triangles); // baking is triangle-neutral
+    expect(after.findings.map((f) => f.ruleId)).not.toContain('perf/draw-calls');
+  });
+
+  it('leaves placements instanced when the triangle budget has no room to spend on baking', async () => {
+    const { instancedDrawCalls } = await import('./agent-fixtures.js');
+    const doc = instancedDrawCalls(10);
+    // 10 instances float to a ~20-triangle floor under simplification; a cap
+    // below that leaves the scene over budget no matter what optimize does,
+    // so baking would only spend memory for no draw-call-compliant outcome.
+    const profile = { ...getProfile('mobile-hero'), maxTriangles: 15 };
+
+    const summary = await optimize(doc, { profile, compress: false, textures: false, verify: false });
+    expect(summary.steps.some((s) => s.startsWith('bake-instances'))).toBe(false);
+
+    const after = analyze(doc, { profile, topology: false });
+    expect(after.geometry.instancedNodes).toBeGreaterThan(0);
+    expect(after.geometry.drawCallEstimate).toBe(10);
+    const drawCalls = after.findings.find((f) => f.ruleId === 'perf/draw-calls');
+    expect(drawCalls?.suggestion).toMatch(/EXT_mesh_gpu_instancing/);
+    expect(drawCalls?.suggestion).toMatch(/no headroom/);
+  });
+});
+
 describe('alpha sniffing', () => {
   it('detects missing alpha channels and flags pointless BLEND', async () => {
     const sharp = (await import('sharp')).default;

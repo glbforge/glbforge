@@ -14,9 +14,8 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { Document } from '@gltf-transform/core';
 import { createNodeIO } from '@glbforge/core';
-import { writeAgentFixtures, makeGrid } from '../../core/test/agent-fixtures.js';
+import { writeAgentFixtures, instancedDrawCalls } from '../../core/test/agent-fixtures.js';
 import { createServer } from '../src/server.js';
 
 type Diagnostic = { code: string; severity: string; prim_path: string; property?: string; message: string; suggested_fix?: string };
@@ -262,20 +261,16 @@ describe('render', () => {
 describe('nextActions only promises what the optimizer can deliver', () => {
   /**
    * `resolves` is machine-readable: an agent runs the action and branches on
-   * whether the rule cleared. Promising a rule optimize has no step for turns
-   * "optimize then re-analyze" into a loop with no exit — the same card, the
-   * same promise, forever. Ten identical meshes are the case that exposes it:
-   * dedup collapses them into one mesh placed by ten nodes, which is still
-   * ten draw calls, and join has nothing left to merge.
+   * whether the rule cleared. Ten identical meshes used to be the case that
+   * broke it: dedup collapses them into one mesh placed by ten nodes, still
+   * ten draw calls, and join had nothing left to merge — "optimize then
+   * re-analyze" was a loop with no exit (agent-loop ledger L2). optimize_glb
+   * now bakes those placements into one primitive to actually clear it,
+   * whenever the triangle budget has room for the memory that costs — here,
+   * 1,280 triangles against mobile-hero's 150k cap, so the promise holds.
    */
-  it('drops the draw-call promise once the calls are repeat placements of a shared mesh', async () => {
-    const doc = new Document();
-    const scene = doc.createScene();
-    for (let i = 0; i < 10; i++) {
-      const mesh = makeGrid(doc, 8, 0.3, { uvs: true, normals: true, name: `part${i}` });
-      mesh.listPrimitives()[0].setMaterial(doc.createMaterial(`mat${i}`).setBaseColorFactor([0.8, 0.3, 0.4, 1]));
-      scene.addChild(doc.createNode(`part${i}`).setMesh(mesh).setTranslation([i * 0.4, 0, 0]));
-    }
+  it('resolves the draw-call promise by baking instanced placements when the triangle budget allows', async () => {
+    const doc = instancedDrawCalls(10);
     const src = join(dir, 'instanced-drawcalls.glb');
     await writeFile(src, await (await createNodeIO()).writeBinary(doc));
 
@@ -289,18 +284,12 @@ describe('nextActions only promises what the optimizer can deliver', () => {
     const opt = await call('optimize_glb', { path: src, out, profile: 'mobile-hero', preview: 'none', verify: false });
     expect(opt.ok).toBe(true);
 
-    // After: one mesh, ten nodes. The count has not moved and cannot be moved
-    // by running the same tool again, so nothing is offered.
+    // After: baked into one primitive, one draw call. The promise held, and
+    // re-analyzing the optimizer's own output finds nothing left to fix.
     const after = await call('analyze_glb', { path: out, profile: 'mobile-hero', preview: 'none' });
-    expect(after.data.passed).toBe(false);
+    expect(after.data.passed).toBe(true);
+    expect(find(after, 'DRAW_CALL_BUDGET_EXCEEDED')).toBeUndefined();
     expect(after.data.nextActions).toEqual([]);
-
-    // And the finding says what would actually work instead.
-    const dc = find(after, 'DRAW_CALL_BUDGET_EXCEEDED')!;
-    expect(dc.data).toMatchObject({ instancedNodes: 9 });
-    expect(dc.suggested_fix).toMatch(/EXT_mesh_gpu_instancing/);
-    // join is named only to rule it out, never as the thing to try next.
-    expect(dc.suggested_fix).toMatch(/nothing for join to merge/);
   }, 60_000);
 });
 

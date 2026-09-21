@@ -104,6 +104,24 @@ export function fiftyKTriangles(): Document {
   return doc;
 }
 
+/**
+ * `count` identical meshes, each its own material by name only (same
+ * properties), placed by `count` nodes: over a small maxDrawCalls before
+ * optimization, and — since dedup() merges bit-identical geometry regardless
+ * of node placement — collapsed by optimize_glb into one mesh placed by
+ * `count` nodes, still `count` draw calls until something bakes them.
+ */
+export function instancedDrawCalls(count = 10): Document {
+  const doc = new Document();
+  const scene = doc.createScene();
+  for (let i = 0; i < count; i++) {
+    const mesh = makeGrid(doc, 8, 0.3, { uvs: true, normals: true, name: `part${i}` });
+    mesh.listPrimitives()[0].setMaterial(basicMaterial(doc, `mat${i}`));
+    scene.addChild(doc.createNode(`part${i}`).setMesh(mesh).setTranslation([i * 0.4, 0, 0]));
+  }
+  return doc;
+}
+
 /** glTF (JSON + external files) whose texture file is missing. */
 export function textureBrokenPathGltf(): { json: string; bin: Uint8Array } {
   const positions = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0]);

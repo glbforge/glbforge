@@ -38,20 +38,35 @@ const RULES: Record<string, Rule> = {
     if (calls <= r.profile.maxDrawCalls) return null;
     // Where the calls come from decides whether merging can do anything at
     // all. Joining primitives is the fix when one mesh holds many of them;
-    // when the calls are separate NODES placing a shared mesh, dedup has
-    // already done its work and join has nothing left to merge — telling an
-    // agent to join again sends it round the same loop forever. Same split
-    // perf/triangle-budget already makes.
+    // when the calls are separate NODES placing a shared mesh, plain join()
+    // has nothing left to merge — it needs the placements baked into one
+    // primitive first, which optimize_glb now does automatically, but only
+    // when the triangle budget already has room for the memory that costs
+    // (baking does not change the drawn triangle count, only how it is
+    // stored). Same split perf/triangle-budget already makes.
     const instanced = r.geometry.instancedNodes > 0;
+    const bakeable = instanced && r.geometry.triangles <= r.profile.maxTriangles;
     return {
       ruleId: 'perf/draw-calls',
       severity: 'error',
       message: `~${calls} draw calls (one per primitive, per node that places it) exceeds budget of ${r.profile.maxDrawCalls}.`
         + (instanced ? ` ${r.geometry.instancedNodes} of them are repeat placements of a shared mesh.` : ''),
-      suggestion: instanced
-        ? 'These are separate nodes drawing the same mesh, so there is nothing for join to merge: place fewer copies, bake the copies into one mesh (giving up instancing), or add EXT_mesh_gpu_instancing, which draws every copy in one call.'
+      suggestion: bakeable
+        ? 'These are separate nodes drawing the same mesh: optimize_glb will bake them into one primitive automatically to clear this (the triangle count is unaffected; it spends the memory dedup saved on fewer draw calls). To keep the memory savings instead, add EXT_mesh_gpu_instancing by hand, which draws every copy in one call without duplicating geometry.'
+        : instanced
+        ? 'These are separate nodes drawing the same mesh, and the triangle budget has no headroom left to spend on baking them into one primitive: get triangles under budget first (or place fewer copies), then re-run optimize_glb, or add EXT_mesh_gpu_instancing by hand, which draws every copy in one call without duplicating geometry.'
         : 'Merge primitives sharing a material (join), or palette/atlas materials to enable merging.',
-      data: { calls, max: r.profile.maxDrawCalls, instancedNodes: r.geometry.instancedNodes },
+      data: {
+        calls,
+        max: r.profile.maxDrawCalls,
+        instancedNodes: r.geometry.instancedNodes,
+        // What optimize_glb checks before it will bake instanced placements
+        // into one primitive to clear this: baking never changes the drawn
+        // triangle count, so it only helps when the triangle budget already
+        // has room for the memory it costs.
+        triangles: r.geometry.triangles,
+        maxTriangles: r.profile.maxTriangles,
+      },
     };
   },
 

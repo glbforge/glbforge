@@ -37,9 +37,17 @@ const OPTIMIZER_RESOLVES = new Set([
 function optimizerResolves(errors: Finding[]): string[] {
   return errors
     .filter((f) => OPTIMIZER_RESOLVES.has(f.ruleId))
-    // Draw calls from repeat placements of a shared mesh are already deduped;
-    // join has nothing to merge and the count will not move.
-    .filter((f) => !(f.ruleId === 'perf/draw-calls' && ((f.data as { instancedNodes?: number } | undefined)?.instancedNodes ?? 0) > 0))
+    // Draw calls from repeat placements of a shared mesh only move if
+    // optimize_glb bakes the placements into one primitive, and it only does
+    // that when the triangle budget already has room for the memory that
+    // costs (baking never changes the drawn triangle count). No headroom ->
+    // no bake -> the count will not move, so the promise is dropped.
+    .filter((f) => {
+      if (f.ruleId !== 'perf/draw-calls') return true;
+      const d = f.data as { instancedNodes?: number; triangles?: number; maxTriangles?: number } | undefined;
+      if ((d?.instancedNodes ?? 0) === 0) return true;
+      return (d?.triangles ?? Infinity) <= (d?.maxTriangles ?? -Infinity);
+    })
     .map((f) => f.ruleId);
 }
 
