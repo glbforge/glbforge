@@ -36,12 +36,22 @@ const RULES: Record<string, Rule> = {
   'perf/draw-calls': (r) => {
     const calls = r.geometry.drawCallEstimate;
     if (calls <= r.profile.maxDrawCalls) return null;
+    // Where the calls come from decides whether merging can do anything at
+    // all. Joining primitives is the fix when one mesh holds many of them;
+    // when the calls are separate NODES placing a shared mesh, dedup has
+    // already done its work and join has nothing left to merge — telling an
+    // agent to join again sends it round the same loop forever. Same split
+    // perf/triangle-budget already makes.
+    const instanced = r.geometry.instancedNodes > 0;
     return {
       ruleId: 'perf/draw-calls',
       severity: 'error',
-      message: `~${calls} draw calls (one per primitive, per node that places it) exceeds budget of ${r.profile.maxDrawCalls}.`,
-      suggestion: 'Merge primitives sharing a material (join), or palette/atlas materials to enable merging.',
-      data: { calls, max: r.profile.maxDrawCalls },
+      message: `~${calls} draw calls (one per primitive, per node that places it) exceeds budget of ${r.profile.maxDrawCalls}.`
+        + (instanced ? ` ${r.geometry.instancedNodes} of them are repeat placements of a shared mesh.` : ''),
+      suggestion: instanced
+        ? 'These are separate nodes drawing the same mesh, so there is nothing for join to merge: place fewer copies, bake the copies into one mesh (giving up instancing), or add EXT_mesh_gpu_instancing, which draws every copy in one call.'
+        : 'Merge primitives sharing a material (join), or palette/atlas materials to enable merging.',
+      data: { calls, max: r.profile.maxDrawCalls, instancedNodes: r.geometry.instancedNodes },
     };
   },
 

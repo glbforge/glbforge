@@ -20,8 +20,9 @@ updated with the code: anything not listed here is not shipped):
   when an asset exceeds its profile (mobile-hero / desktop-hero /
   product-configurator), so it drops into CI like a linter. Profiles are
   VERSIONED (`mobile-hero@1` pins; bare name = latest; a cap never changes in
-  place — `@2` is current, republished with the 0.9.0 colour-space
-  re-measurement, no cap moved) and every cap has a published rationale:
+  place — `@3` is current, republished when instanced assets turned out to
+  be measured over the mesh list rather than over what the scene draws; no
+  cap moved) and every cap has a published rationale:
   https://glbforge.dev/budgets/
 - Inspect (`glbforge inspect`, MCP `inspect`): the after-every-edit read for
   agents authoring meshes (~0.1 s on a 150k-triangle asset, ~0.8 s on a raw

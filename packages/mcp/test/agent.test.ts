@@ -5,7 +5,7 @@
  * published schemas; time validate(quick) on a 50k-triangle asset.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -14,7 +14,9 @@ import Ajv from 'ajv';
 import addFormats from 'ajv-formats';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { writeAgentFixtures } from '../../core/test/agent-fixtures.js';
+import { Document } from '@gltf-transform/core';
+import { createNodeIO } from '@glbforge/core';
+import { writeAgentFixtures, makeGrid } from '../../core/test/agent-fixtures.js';
 import { createServer } from '../src/server.js';
 
 type Diagnostic = { code: string; severity: string; prim_path: string; property?: string; message: string; suggested_fix?: string };
@@ -255,6 +257,51 @@ describe('render', () => {
     const clamped = await call('render', { path: fx['skeleton-unbound.glb'], time: 9, size: 64 });
     expect(has(clamped, 'FRAME_OUT_OF_RANGE')).toBe(true);
   }, 30_000);
+});
+
+describe('nextActions only promises what the optimizer can deliver', () => {
+  /**
+   * `resolves` is machine-readable: an agent runs the action and branches on
+   * whether the rule cleared. Promising a rule optimize has no step for turns
+   * "optimize then re-analyze" into a loop with no exit — the same card, the
+   * same promise, forever. Ten identical meshes are the case that exposes it:
+   * dedup collapses them into one mesh placed by ten nodes, which is still
+   * ten draw calls, and join has nothing left to merge.
+   */
+  it('drops the draw-call promise once the calls are repeat placements of a shared mesh', async () => {
+    const doc = new Document();
+    const scene = doc.createScene();
+    for (let i = 0; i < 10; i++) {
+      const mesh = makeGrid(doc, 8, 0.3, { uvs: true, normals: true, name: `part${i}` });
+      mesh.listPrimitives()[0].setMaterial(doc.createMaterial(`mat${i}`).setBaseColorFactor([0.8, 0.3, 0.4, 1]));
+      scene.addChild(doc.createNode(`part${i}`).setMesh(mesh).setTranslation([i * 0.4, 0, 0]));
+    }
+    const src = join(dir, 'instanced-drawcalls.glb');
+    await writeFile(src, await (await createNodeIO()).writeBinary(doc));
+
+    // Before: ten separate meshes, so join genuinely applies and the promise
+    // is fair to make.
+    const before = await call('analyze_glb', { path: src, profile: 'mobile-hero', preview: 'none' });
+    expect(before.data.passed).toBe(false);
+    expect((before.data.nextActions as Array<{ resolves?: string[] }>)[0].resolves).toContain('perf/draw-calls');
+
+    const out = join(dir, 'instanced-drawcalls.web.glb');
+    const opt = await call('optimize_glb', { path: src, out, profile: 'mobile-hero', preview: 'none', verify: false });
+    expect(opt.ok).toBe(true);
+
+    // After: one mesh, ten nodes. The count has not moved and cannot be moved
+    // by running the same tool again, so nothing is offered.
+    const after = await call('analyze_glb', { path: out, profile: 'mobile-hero', preview: 'none' });
+    expect(after.data.passed).toBe(false);
+    expect(after.data.nextActions).toEqual([]);
+
+    // And the finding says what would actually work instead.
+    const dc = find(after, 'DRAW_CALL_BUDGET_EXCEEDED')!;
+    expect(dc.data).toMatchObject({ instancedNodes: 9 });
+    expect(dc.suggested_fix).toMatch(/EXT_mesh_gpu_instancing/);
+    // join is named only to rule it out, never as the thing to try next.
+    expect(dc.suggested_fix).toMatch(/nothing for join to merge/);
+  }, 60_000);
 });
 
 describe('mutating tools', () => {

@@ -8,6 +8,41 @@ import type { ImageBlock } from './preview.js';
 
 const SEVERITY_RANK: Record<Severity, number> = { error: 0, warn: 1, info: 2 };
 
+/**
+ * The rules `optimize_glb` actually has a step for.
+ *
+ * `resolves` is a machine-readable promise: an agent runs the action, re-runs
+ * analyze, and branches on whether the rule cleared. Listing every error —
+ * which is what this did — promises repairs the optimizer has no step for, so
+ * the agent re-runs optimize on its own output, gets the identical card back
+ * with the identical suggestion, and has nowhere to go. An empty nextActions
+ * is not a worse answer than a false one; the findings still carry their own
+ * suggestions, and topology or authoring problems are not the optimizer's to
+ * fix. Add an id here only when a step in optimize() can clear it.
+ */
+const OPTIMIZER_RESOLVES = new Set([
+  'perf/triangle-budget',   // meshopt simplification
+  'perf/file-size',         // quantize + meshopt + texture re-encode
+  'perf/draw-calls',        // join(), but only when there is something to join
+  'tex/oversized',          // resize to the profile cap
+  'tex/total-weight',       // re-encode
+  'tex/vram-estimate',      // resize / KTX2
+  'mat/duplicate-materials',// dedup + palette
+  'geo/missing-normals',    // computeSmoothNormals
+  'geo/unindexed',          // weld
+  'topo/unwelded',          // weld
+]);
+
+/** What optimize can promise about THIS asset, as opposed to in general. */
+function optimizerResolves(errors: Finding[]): string[] {
+  return errors
+    .filter((f) => OPTIMIZER_RESOLVES.has(f.ruleId))
+    // Draw calls from repeat placements of a shared mesh are already deduped;
+    // join has nothing to merge and the count will not move.
+    .filter((f) => !(f.ruleId === 'perf/draw-calls' && ((f.data as { instancedNodes?: number } | undefined)?.instancedNodes ?? 0) > 0))
+    .map((f) => f.ruleId);
+}
+
 export interface VisualFidelity {
   ssimMin: number;
   ssimMean: number;
@@ -29,6 +64,7 @@ export function compact(r: AnalysisResult) {
   const count = (s: Severity) => r.findings.filter((f) => f.severity === s).length;
   const fidelity = visualFidelityOf(r);
   const errors = r.findings.filter((f) => f.severity === 'error');
+  const resolves = optimizerResolves(errors);
   return {
     file: r.file.path,
     profile: r.profile.name,
@@ -59,10 +95,10 @@ export function compact(r: AnalysisResult) {
       .map((f) => ({ ruleId: f.ruleId, severity: f.severity, message: f.message })),
     ...(fidelity ? { visualFidelity: fidelity } : {}),
     // Machine-actionable: the tool calls that would resolve the findings.
-    nextActions: r.passed ? [] : [{
+    nextActions: r.passed || resolves.length === 0 ? [] : [{
       tool: 'optimize_glb',
       args: { path: r.file.path, profile: r.profile.name },
-      resolves: errors.map((f) => f.ruleId),
+      resolves,
     }],
     drillDown: {
       tool: 'inspect_report',
