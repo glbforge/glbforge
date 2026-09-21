@@ -60,7 +60,7 @@ Score = 100 − penalties, floored at 0.
 
 ## Profiles (current versions)
 
-### mobile-hero@2 — single hero asset on a mobile landing page (4G, mid-range GPU)
+### mobile-hero@3 — single hero asset on a mobile landing page (4G, mid-range GPU)
 
 | cap | value | why |
 |---|---|---|
@@ -73,7 +73,7 @@ Score = 100 − penalties, floored at 0.
 | maxMaterials | 2 | Materials multiply shader variants and texture sets. A hero is one material, two when a glass or emissive part is unavoidable. |
 | minSsim | 0.94 | Calibrated on the Meshy 7 fixture: budget pass 0.964 (4K textures; 0.979 at 2K), 40k-triangle version 0.913 with visibly merged hair. The floor sits between them. |
 
-### desktop-hero@2 — hero asset on a desktop-first marketing page
+### desktop-hero@3 — hero asset on a desktop-first marketing page
 
 | cap | value | why |
 |---|---|---|
@@ -86,7 +86,7 @@ Score = 100 − penalties, floored at 0.
 | maxMaterials | 4 | Body, glass, metal trim, screen — a typical product hero without a material zoo. |
 | minSsim | 0.96 | Viewed larger, so stricter than mobile; the budget pass to 500k measures 0.986–0.993 on our fixtures. |
 
-### product-configurator@2 — interactive product viewer; many assets coexist
+### product-configurator@3 — interactive product viewer; many assets coexist
 
 | cap | value | why |
 |---|---|---|
@@ -109,6 +109,33 @@ Score = 100 − penalties, floored at 0.
    unaffected until they opt in.
 
 ## Changelog
+
+- **v3 — 2026-09-21. No cap moved; the measurement was corrected.**
+  Triangles and draw calls were counted over the mesh *list* — each mesh
+  once, however many times the scene placed it. A renderer does the
+  opposite: it draws a mesh once per node that references it. Any instanced
+  asset was therefore measured at a fraction of its real cost and could pass
+  a cap it exceeded several times over.
+
+  Measured on the Khronos `ABeautifulGame` chess set (15 meshes placed by 49
+  nodes), against `mobile-hero`:
+
+  | measure | @2 (mesh list) | @3 (scene) | real |
+  |---|---|---|---|
+  | triangles | 573,952 | 1,499,072 | 1,499,072 |
+  | draw calls | ~15 | ~49 | 49 |
+  | verdict vs 150,000 cap | 3.8x over | 10.0x over | 10.0x over |
+
+  Nothing changes for an asset that places each mesh once — every fixture in
+  this repository and most generator output, where the two counts are
+  identical. Instanced assets score lower than they did under `@2` because
+  the `@2` score was wrong. `EXT_mesh_gpu_instancing` multiplies triangles
+  but not draw calls, which is how the GPU bills it.
+
+  The simplifier was targeting the mesh-list count too, so `optimize
+  --profile mobile-hero` could report reaching 149,170 triangles while the
+  report card that ran a second later measured 166,978 and failed. Both now
+  read the same number.
 
 - **v2 — 2026-09-11. No cap moved; the measurement was corrected.** The
   verification renderer sampled base-color *textures* as if their bytes were

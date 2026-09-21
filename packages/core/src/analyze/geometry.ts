@@ -1,5 +1,29 @@
-import { Document, Primitive, getBounds } from '@gltf-transform/core';
+import { Document, Mesh, Node, Primitive, getBounds } from '@gltf-transform/core';
 import type { GeometryStats, PrimitiveStats, TopologyStats } from '../types.js';
+
+/**
+ * Triangles the scene draws, counting a mesh once per node that places it.
+ * The budget rule measures this, so anything aiming AT the budget — the
+ * simplify ladder above all — has to measure the same thing, or it optimizes
+ * to a number nothing checks.
+ */
+export function sceneTriangles(doc: Document): number {
+  return analyzeGeometry(doc, { topology: false }).triangles;
+}
+
+/**
+ * How many copies of its mesh a node draws. EXT_mesh_gpu_instancing puts the
+ * per-instance transforms in an attribute; without the extension a node draws
+ * its mesh once. Unreadable or unregistered extension data counts as one
+ * rather than guessing.
+ */
+function gpuInstanceCount(node: Node): number {
+  const ext = node.getExtension('EXT_mesh_gpu_instancing') as
+    { listAttributes?: () => Array<{ getCount: () => number }> } | null;
+  const attrs = ext?.listAttributes?.();
+  const n = attrs && attrs.length > 0 ? attrs[0].getCount() : 1;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
 
 /**
  * Topology is computed in *welded* index space: vertices are first unified by
@@ -22,13 +46,20 @@ function computeTopology(prims: Primitive[]): TopologyStats {
 
     const vertexCount = position.getCount();
     const pos = position.getArray()!;
-    const uv = prim.getAttribute('TEXCOORD_0')?.getArray() ?? null;
-    const nrm = prim.getAttribute('NORMAL')?.getArray() ?? null;
+    // EVERY attribute, not a chosen few. The redundancy count drives
+    // `topo/unwelded`, whose fix is "weld during optimization" — so it has to
+    // mean what weld means by a duplicate. Keying on position/UV/normal alone
+    // counted vertices that differ in TANGENT (or any other semantic) as
+    // "identical across ALL attributes": a tangent-bearing asset reported 60%
+    // of its vertices as pure waste that welding could never remove.
+    const attrs = prim.listSemantics().map((sem) => {
+      const acc = prim.getAttribute(sem)!;
+      return { array: acc.getArray()!, size: acc.getElementSize() };
+    });
 
     // Weld map: exact-position key -> canonical index. Position-only
     // duplicates are often *legitimate* (UV-seam splits), so truly
-    // redundant vertices — identical across ALL attributes — are counted
-    // separately via a second key.
+    // redundant vertices are counted separately via the all-attribute key.
     const canonical = new Uint32Array(vertexCount);
     const seen = new Map<string, number>();
     const seenFull = new Set<string>();
@@ -42,9 +73,12 @@ function computeTopology(prims: Primitive[]): TopologyStats {
         canonical[i] = existing;
         duplicateVertexPositions++;
       }
-      let fullKey = key;
-      if (uv) fullKey += '|' + uv[i * 2] + '|' + uv[i * 2 + 1];
-      if (nrm) fullKey += '|' + nrm[i * 3] + '|' + nrm[i * 3 + 1] + '|' + nrm[i * 3 + 2];
+      let fullKey = '';
+      for (const a of attrs) {
+        const o = i * a.size;
+        for (let c = 0; c < a.size; c++) fullKey += a.array[o + c] + ',';
+        fullKey += '|';
+      }
       if (seenFull.has(fullKey)) redundantVertices++;
       else seenFull.add(fullKey);
     }
@@ -129,6 +163,50 @@ export function analyzeGeometry(
     }
   }
 
+  // What the SCENE draws. A mesh referenced by five nodes is drawn five
+  // times; counting the mesh list once each under-reports an instanced asset
+  // and lets it pass a budget it does not actually meet.
+  const triOfMesh = new Map<Mesh, { triangles: number; vertices: number; prims: number }>();
+  for (const mesh of meshes) {
+    let t = 0, v = 0;
+    for (const prim of mesh.listPrimitives()) {
+      const p = prim.getAttribute('POSITION');
+      const i = prim.getIndices();
+      t += Math.floor(((i ? i.getCount() : p?.getCount() ?? 0)) / 3);
+      v += p?.getCount() ?? 0;
+    }
+    triOfMesh.set(mesh, { triangles: t, vertices: v, prims: mesh.listPrimitives().length });
+  }
+
+  let drawnTriangles = 0, drawnVertices = 0, drawCalls = 0, instancedNodes = 0;
+  const meshUseCount = new Map<Mesh, number>();
+  const walk = (node: Node): void => {
+    const mesh = node.getMesh();
+    if (mesh) {
+      const m = triOfMesh.get(mesh);
+      if (m) {
+        // EXT_mesh_gpu_instancing draws N copies in ONE call: the geometry
+        // multiplies, the draw calls do not.
+        const gpu = gpuInstanceCount(node);
+        drawnTriangles += m.triangles * gpu;
+        drawnVertices += m.vertices * gpu;
+        drawCalls += m.prims;
+        meshUseCount.set(mesh, (meshUseCount.get(mesh) ?? 0) + 1);
+      }
+    }
+    for (const child of node.listChildren()) walk(child);
+  };
+  const scenes = root.listScenes();
+  for (const sc of scenes) for (const child of sc.listChildren()) walk(child);
+  for (const used of meshUseCount.values()) if (used > 1) instancedNodes += used - 1;
+  // A document with meshes but no scene still deserves a number.
+  const noSceneGeometry = drawCalls === 0 && allPrims.length > 0;
+  if (noSceneGeometry) {
+    drawnTriangles = triangles;
+    drawnVertices = vertices;
+    drawCalls = allPrims.length;
+  }
+
   let bounds: GeometryStats['bounds'] = null;
   const scene = root.getDefaultScene() ?? root.listScenes()[0];
   if (scene) {
@@ -145,9 +223,12 @@ export function analyzeGeometry(
   return {
     meshCount: meshes.length,
     primitiveCount: allPrims.length,
-    drawCallEstimate: allPrims.length,
-    triangles,
-    vertices,
+    drawCallEstimate: drawCalls,
+    triangles: drawnTriangles,
+    vertices: drawnVertices,
+    uniqueTriangles: triangles,
+    uniqueVertices: vertices,
+    instancedNodes,
     primitives,
     primsMissingNormals,
     primsMissingUVs,

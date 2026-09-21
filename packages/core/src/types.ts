@@ -83,10 +83,26 @@ export interface PrimitiveStats {
 export interface GeometryStats {
   meshCount: number;
   primitiveCount: number;
-  /** One draw call per primitive is the floor for real renderers. */
+  /**
+   * One draw call per primitive PER NODE that references it. A mesh placed
+   * by five nodes is five draw calls, not one.
+   */
   drawCallEstimate: number;
+  /**
+   * What the scene actually draws, counting a mesh once per node that
+   * places it. This is the number budgets are measured against: an instanced
+   * chess set with 15 meshes across 49 nodes draws 1,499,072 triangles, not
+   * the 573,952 its mesh list holds.
+   */
   triangles: number;
   vertices: number;
+  /** Triangles in the mesh list, counted once each — the authoring view, and
+   *  what file size and topology track. Equal to `triangles` when nothing is
+   *  instanced. */
+  uniqueTriangles: number;
+  uniqueVertices: number;
+  /** Nodes that place a mesh some other node also places. 0 = no instancing. */
+  instancedNodes: number;
   primitives: PrimitiveStats[];
   primsMissingNormals: number;
   primsMissingUVs: number;
@@ -132,7 +148,14 @@ export interface AnalysisResult {
   generator: { guess: string; confidence: string; notes: string[] };
   profile: Profile;
   findings: Finding[];
-  /** 0-100. Errors -15, warnings -5. */
+  /**
+   * Rules that were not evaluated in this run, so a partial analysis can
+   * never be mistaken for a full one. A skipped rule cannot produce a
+   * finding, so it silently inflates `score` — every renderer of the report
+   * card must say when this is non-empty.
+   */
+  skipped: Array<{ rule: string; reason: string }>;
+  /** 0-100. Errors -15, warnings -5. Only comparable across runs that skipped the same rules. */
   score: number;
   /** True when no error-severity findings. */
   passed: boolean;

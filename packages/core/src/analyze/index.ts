@@ -2,7 +2,7 @@ import { Document } from '@gltf-transform/core';
 import type { AnalysisResult, Profile } from '../types.js';
 import { analyzeGeometry } from './geometry.js';
 import { analyzeMaterials } from './materials.js';
-import { runRules } from '../rules.js';
+import { runRules, TOPOLOGY_RULE_IDS } from '../rules.js';
 import { detectGenerator } from '../detect.js';
 
 export interface AnalyzeOptions {
@@ -15,7 +15,8 @@ export interface AnalyzeOptions {
 
 export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
   const root = doc.getRoot();
-  const geometry = analyzeGeometry(doc, { topology: opts.topology !== false });
+  const topology = opts.topology !== false;
+  const geometry = analyzeGeometry(doc, { topology });
   const { materials, duplicateMaterialGroups, textures, textureBytesTotal, textureVramTotal } =
     analyzeMaterials(doc);
 
@@ -40,6 +41,9 @@ export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
     generator: detectGenerator(doc),
     profile: opts.profile,
     findings: [],
+    skipped: topology
+      ? []
+      : TOPOLOGY_RULE_IDS.map((rule) => ({ rule, reason: 'topology pass disabled' })),
     score: 100,
     passed: true,
   };

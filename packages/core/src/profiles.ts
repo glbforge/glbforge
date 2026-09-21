@@ -153,11 +153,57 @@ const productConfiguratorV2: Profile = {
   },
 };
 
+/**
+ * v3: the second deliberate re-measurement, and again no cap moved.
+ *
+ * Triangles and draw calls used to be counted over the mesh LIST — once per
+ * mesh, however many times the scene placed it. An instanced asset therefore
+ * reported a fraction of what it draws: the Khronos chess set measured
+ * 573,952 triangles and ~15 draw calls while its 49 nodes actually draw
+ * 1,499,072 triangles in 49 calls, so it passed a cap it exceeded 2.6x. Both
+ * numbers are now counted over the SCENE, which is what a renderer does.
+ *
+ * Nothing changes for an asset with no instancing — one node per mesh counts
+ * the same either way, which is every fixture in this repo and most generator
+ * output. Instanced assets score lower than they did under `@2`, because the
+ * old score was wrong. `@1` and `@2` still read as what CI recorded then.
+ * See the 0.9.1 entry in docs/BUDGETS.md.
+ */
+const mobileHeroV3: Profile = {
+  ...mobileHeroV2,
+  version: 3,
+  rationale: {
+    ...mobileHeroV2.rationale,
+    maxTriangles: 'A mid-range phone GPU (2019+ Adreno 6xx / Mali-G7x / Apple A12 class) rasterizes 150k triangles in well under a millisecond; the binding constraint is payload. 150k welded, quantized, meshopt-compressed triangles land around 1-2MB, which is what leaves room for textures inside the file cap. Counted over the scene: a mesh placed by five nodes costs its triangles five times, because that is what is drawn.',
+    maxDrawCalls: 'Counted as one call per primitive per node that places it — the floor a renderer without instancing support pays. Four keeps the per-frame state changes inside the budget of a mid-range mobile GPU driver; merging primitives that share a material is the cheapest way down.',
+  },
+};
+
+const desktopHeroV3: Profile = {
+  ...desktopHeroV2,
+  version: 3,
+  rationale: {
+    ...desktopHeroV2.rationale,
+    maxTriangles: `${desktopHeroV2.rationale.maxTriangles} Counted over the scene, so instanced placements each cost their triangles.`,
+    maxDrawCalls: `${desktopHeroV2.rationale.maxDrawCalls} Counted as one call per primitive per node that places it.`,
+  },
+};
+
+const productConfiguratorV3: Profile = {
+  ...productConfiguratorV2,
+  version: 3,
+  rationale: {
+    ...productConfiguratorV2.rationale,
+    maxTriangles: `${productConfiguratorV2.rationale.maxTriangles} Counted over the scene, so instanced placements each cost their triangles.`,
+    maxDrawCalls: `${productConfiguratorV2.rationale.maxDrawCalls} Counted as one call per primitive per node that places it.`,
+  },
+};
+
 /** Every published version of every profile, oldest first. Never edit a published entry. */
 export const PROFILE_VERSIONS: Record<string, Profile[]> = {
-  'mobile-hero': [mobileHeroV1, mobileHeroV2],
-  'desktop-hero': [desktopHeroV1, desktopHeroV2],
-  'product-configurator': [productConfiguratorV1, productConfiguratorV2],
+  'mobile-hero': [mobileHeroV1, mobileHeroV2, mobileHeroV3],
+  'desktop-hero': [desktopHeroV1, desktopHeroV2, desktopHeroV3],
+  'product-configurator': [productConfiguratorV1, productConfiguratorV2, productConfiguratorV3],
 };
 
 /** Latest version of each profile. */

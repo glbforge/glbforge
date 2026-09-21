@@ -53,4 +53,20 @@ describe('versioned budget profiles', () => {
       expect(v2.rationale.minSsim, name).not.toBe(v1.rationale.minSsim);
     }
   });
+
+  /**
+   * v3 exists because triangles and draw calls are now counted over the
+   * scene rather than the mesh list. Same reason as v2: the measurement was
+   * corrected, no cap moved.
+   */
+  it('v3 changed only the rationale — every cap is still v1 to the byte', () => {
+    for (const [name, versions] of Object.entries(PROFILE_VERSIONS)) {
+      const [v1, , v3] = versions;
+      expect(v3.version, name).toBe(3);
+      for (const key of CAP_KEYS) expect(v3[key], `${name}.${key}`).toBe(v1[key]);
+      expect(v3.rules, name).toEqual(v1.rules);
+      expect(v3.rationale.maxTriangles, name).not.toBe(v1.rationale.maxTriangles);
+      expect(v3.rationale.maxDrawCalls, name).not.toBe(v1.rationale.maxDrawCalls);
+    }
+  });
 });

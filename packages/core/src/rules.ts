@@ -13,15 +13,23 @@ const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1) + 'MB';
  */
 const RULES: Record<string, Rule> = {
   'perf/triangle-budget': (r) => {
-    const { triangles } = r.geometry;
+    const { triangles, uniqueTriangles, instancedNodes } = r.geometry;
     const max = r.profile.maxTriangles;
     if (triangles <= max) return null;
+    // Naming the instancing matters: the mesh list can sit comfortably under
+    // the cap while the scene draws several times over it, and the fix is to
+    // place fewer copies, not to simplify the mesh.
+    const instanced = instancedNodes > 0 && triangles > uniqueTriangles
+      ? ` The mesh list holds ${fmt(uniqueTriangles)}; the scene places them across ${fmt(instancedNodes + 1)} nodes, and every copy is drawn.`
+      : '';
     return {
       ruleId: 'perf/triangle-budget',
       severity: 'error',
-      message: `${fmt(triangles)} triangles exceeds the ${r.profile.name} budget of ${fmt(max)} (${(triangles / max).toFixed(1)}x over).`,
-      suggestion: `Simplify to ~${fmt(max)} triangles (glbforge optimize applies meshopt simplification), or switch to a profile with more headroom.`,
-      data: { triangles, max },
+      message: `${fmt(triangles)} triangles exceeds the ${r.profile.name} budget of ${fmt(max)} (${(triangles / max).toFixed(1)}x over).${instanced}`,
+      suggestion: instanced
+        ? `Place fewer copies, or simplify the shared meshes — each one costs its triangle count every time it is drawn.`
+        : `Simplify to ~${fmt(max)} triangles (glbforge optimize applies meshopt simplification), or switch to a profile with more headroom.`,
+      data: { triangles, uniqueTriangles, max },
     };
   },
 
@@ -31,7 +39,7 @@ const RULES: Record<string, Rule> = {
     return {
       ruleId: 'perf/draw-calls',
       severity: 'error',
-      message: `~${calls} draw calls (one per primitive) exceeds budget of ${r.profile.maxDrawCalls}.`,
+      message: `~${calls} draw calls (one per primitive, per node that places it) exceeds budget of ${r.profile.maxDrawCalls}.`,
       suggestion: 'Merge primitives sharing a material (join), or palette/atlas materials to enable merging.',
       data: { calls, max: r.profile.maxDrawCalls },
     };
@@ -249,7 +257,9 @@ const RULES: Record<string, Rule> = {
     if (!t) return null;
     // Position-only duplicates are usually UV-seam splits (required by the
     // format); only fully-identical vertices are actual waste.
-    const ratio = t.redundantVertices / Math.max(1, r.geometry.vertices);
+    // Topology is measured on the mesh list, so the ratio must be against
+    // unique vertices — not the instanced count the budget uses.
+    const ratio = t.redundantVertices / Math.max(1, r.geometry.uniqueVertices);
     if (ratio < 0.05) return null;
     return {
       ruleId: 'topo/unwelded',
@@ -336,3 +346,11 @@ export function runRules(result: AnalysisResult): Finding[] {
 }
 
 export const RULE_IDS = Object.keys(RULES);
+
+/**
+ * Rules that read `geometry.topology` and therefore cannot run when the
+ * welded topology pass is disabled. `analyze` reports these as skipped so a
+ * cheap run is never confused with a full one — all three are warnings, so
+ * skipping them silently lifts the score by 5 points each.
+ */
+export const TOPOLOGY_RULE_IDS = ['topo/unwelded', 'topo/non-manifold', 'topo/degenerate'] as const;
