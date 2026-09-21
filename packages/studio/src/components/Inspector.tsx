@@ -96,6 +96,11 @@ export function Inspector(props: {
             {r.passed ? '✓ within budget' : '✗ over budget'}
           </div>
           <div className="profile-name">{r.profile.name} · {num(r.geometry.triangles)} tris · {mb(r.file.bytes)}</div>
+          {r.skipped.length > 0 && (
+            <div className="partial-note" title={r.skipped.map((s) => s.rule).join(', ')}>
+              partial check — {r.skipped.length} topology rules skipped on a file this size, so the score reads high
+            </div>
+          )}
         </div>
       </div>
 

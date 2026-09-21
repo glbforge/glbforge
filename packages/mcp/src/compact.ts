@@ -36,6 +36,9 @@ export function compact(r: AnalysisResult) {
     score: r.score,
     passed: r.passed,
     verdict: r.passed ? 'within budget' : 'over budget',
+    // A partial run cannot fire the rules it skipped, so its score reads high.
+    // Agents compare scores across calls; tell them when one is not comparable.
+    ...(r.skipped.length ? { skippedRules: r.skipped } : {}),
     fileBytes: r.file.bytes,
     triangles: r.geometry.triangles,
     vertices: r.geometry.vertices,

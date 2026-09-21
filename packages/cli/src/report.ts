@@ -26,6 +26,11 @@ export function printReport(r: AnalysisResult): void {
     `   ${pc.bold('Profile')} ${r.profile.name}@${r.profile.version}` +
     `   ${r.passed ? pc.green('✓ within budget') : pc.red('✗ over budget')}`,
   );
+  // A skipped rule cannot fire, so it lifts the score. Say so next to the
+  // number rather than letting a cheap run pass for a full one.
+  if (r.skipped.length) {
+    console.log(pc.yellow(`  partial: ${r.skipped.length} rule(s) not evaluated (${r.skipped[0].reason}) — score is not comparable to a full run`));
+  }
   console.log(line);
 
   console.log(pc.bold('  Geometry'));
@@ -66,6 +71,9 @@ export function printReport(r: AnalysisResult): void {
       if (f.suggestion) console.log(pc.dim(`     → ${f.suggestion}`));
     }
   }
+  if (r.skipped.length) {
+    console.log(pc.dim(`  Skipped: ${r.skipped.map((s) => `${s.rule} (${s.reason})`).join('; ')}`));
+  }
   console.log();
 }
 
@@ -82,6 +90,9 @@ export function printDiff(
   steps: string[],
   perceptual: PerceptualVerdict | null = null,
   fidelityBound = 0,
+  boundBy: 'budget' | 'fidelity' | null = null,
+  fidelityLostAt: 'geometry' | 'textures' | null = null,
+  geometrySsimMin: number | null = null,
 ): void {
   const line = pc.dim('─'.repeat(64));
   console.log();
@@ -108,6 +119,11 @@ export function printDiff(
   } else if (fidelityBound) {
     console.log(pc.dim(`  geometric deviation ≤ ${pct(fidelityBound)} of extent (perceptual check skipped)`));
   }
+  if (fidelityLostAt === 'textures' && geometrySsimMin !== null) {
+    console.log(pc.yellow(
+      `  the texture re-encode spent it, not the simplification: geometry alone measured ${pct(geometrySsimMin)}, above the floor.`,
+    ) + pc.dim('\n    Raise texture quality (--texture-format ktx2, or a roomier profile) — simplifying less will not help.'));
+  }
   const savings = 1 - after.file.bytes / Math.max(1, before.file.bytes);
   // The fidelity floor is not a budget row: an asset can sit inside every cap
   // and still be rejected for being visibly lossy. Say which one failed.
@@ -123,6 +139,12 @@ export function printDiff(
   if (!after.passed) {
     for (const f of after.findings.filter((x) => x.severity === 'error')) {
       console.log(pc.red(`    ${f.ruleId}: `) + f.message);
+      // Without this, a triangle-budget error on a fidelity-bound run reads
+      // as "simplify to 150,000" — advice to re-run the command that just
+      // stopped on purpose.
+      if (boundBy === 'fidelity' && f.ruleId === 'perf/triangle-budget') {
+        console.log(pc.dim(`      stopped here deliberately: reaching ${fmt(after.profile.maxTriangles)} would have dropped below the ${(after.profile.minSsim * 100).toFixed(0)}% SSIM floor. Raise the floor, pick a roomier profile, or accept the visible loss with --target.`));
+      }
     }
   }
   console.log();

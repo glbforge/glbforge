@@ -53,7 +53,9 @@ async function optimizeFile(
   const doc = await io.readBinary(new Uint8Array(bytes));
   doc.setLogger(new Logger(Logger.Verbosity.ERROR));
 
-  const before = analyze(doc, { profile, topology: false, filePath: input, fileBytes: bytes.byteLength });
+  // Topology runs on both sides: the report card this prints must equal what
+  // `glbforge analyze` says about the same bytes, or the score means nothing.
+  const before = analyze(doc, { profile, filePath: input, fileBytes: bytes.byteLength });
 
   const summary = await optimize(doc, {
     profile,
@@ -70,12 +72,12 @@ async function optimizeFile(
 
   // Re-analyze the actual written file so the diff reflects reality.
   const after = analyze(await io.readBinary(outBytes), {
-    profile, topology: false, filePath: output, fileBytes: outBytes.byteLength,
+    profile, filePath: output, fileBytes: outBytes.byteLength,
   });
   // The measured visual verdict is part of the report card: a failing SSIM
   // fails the budget like any perf/* rule.
-  if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
-  if (!extra.json && !extra.silent) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound);
+  if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
+  if (!extra.json && !extra.silent) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound, summary.boundBy, summary.fidelityLostAt, summary.geometrySsimMin);
 
   // Optional LOD chain: simplify further from the already-optimized doc.
   const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number; method: string }> = [];

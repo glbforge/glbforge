@@ -60,6 +60,7 @@ body {
 .verdict { font-weight: 600; }
 .verdict.pass { color: var(--good); } .verdict.fail { color: var(--bad); }
 .profile-name { color: var(--dim); font-size: 12px; }
+.partial-note { color: var(--warn); font-size: 11px; margin-top: 3px; max-width: 30ch; line-height: 1.35; }
 
 .budget { margin: 4px 0 10px; }
 .budget-row { margin-bottom: 7px; }

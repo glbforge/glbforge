@@ -92,6 +92,7 @@ function sheetDataUrl(perceptual: PerceptualVerdict): string | null {
 async function ingest(
   name: string, bytes: Uint8Array, profile: string, parentId?: string,
   perceptual: PerceptualVerdict | null = null,
+  fidelityAttribution: { lostAt: 'geometry' | 'textures' | null; geometrySsimMin: number | null } | null = null,
 ): Promise<LocalAsset> {
   if (CONSTRAINED && bytes.byteLength > 120 * 1024 * 1024) {
     throw new Error('This file is too large to process on a mobile device — use a desktop or `npx glbforge ui`.');
@@ -99,12 +100,18 @@ async function ingest(
   const io = await createIO();
   const doc = await io.readBinary(bytes);
   // The welded-topology pass is O(vertices) with heavy allocation — skip it
-  // on constrained devices for large files (the report notes the skip).
-  const topology = CONSTRAINED ? bytes.byteLength < 8 * 1024 * 1024 : bytes.byteLength < 40 * 1024 * 1024;
+  // on constrained devices for large files. The skip lifts the score (three
+  // warn-level rules cannot fire), so a derived asset INHERITS its parent's
+  // decision: an optimize result must be scored against its source on the
+  // same rule set, or the comparison is meaningless.
+  const parent = parentId ? assets.get(parentId) : undefined;
+  const topology = parent
+    ? parent.report.skipped.length === 0
+    : CONSTRAINED ? bytes.byteLength < 8 * 1024 * 1024 : bytes.byteLength < 40 * 1024 * 1024;
   const report = analyze(doc, {
     profile: getProfile(profile), filePath: name, fileBytes: bytes.byteLength, topology,
   });
-  if (perceptual) applyPerceptualVerdict(report, perceptual);
+  if (perceptual) applyPerceptualVerdict(report, perceptual, fidelityAttribution ?? undefined);
   const fidelitySheet = perceptual ? sheetDataUrl(perceptual) : null;
   const asset: LocalAsset = {
     id: String(nextId++), name, bytes, report, parentId, fidelitySheet,
@@ -319,7 +326,7 @@ export const localEngine = {
       verify, textureDecoder: canvasDecoder, keepViews: true,
     });
     const out = await io.writeBinary(doc);
-    return toDetail(await ingest(asset.name.replace(/\.glb$/i, '') + '.web.glb', out, opts.profile, asset.id, result.perceptual));
+    return toDetail(await ingest(asset.name.replace(/\.glb$/i, '') + '.web.glb', out, opts.profile, asset.id, result.perceptual, { lostAt: result.fidelityLostAt, geometrySsimMin: result.geometrySsimMin }));
   },
 
   reanalyze: async (id: string, profile: string) => {
@@ -327,8 +334,11 @@ export const localEngine = {
     if (!asset) throw new Error('no such asset');
     const io = await createIO();
     const doc = await io.readBinary(asset.bytes);
+    // Re-analysis must not move a score on its own: keep the rule set this
+    // asset was first scored with, whatever the button is clicked for.
     asset.report = analyze(doc, {
       profile: getProfile(profile), filePath: asset.name, fileBytes: asset.bytes.byteLength,
+      topology: asset.report.skipped.length === 0,
     });
     return toDetail(asset);
   },

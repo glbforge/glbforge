@@ -539,8 +539,8 @@ export function createServer(): McpServer {
       const outBytes = await io.writeBinary(doc);
       if (!dry_run) await writeFile(outPath, outBytes);
       const afterDoc = quiet(await io.readBinary(outBytes));
-      const after = analyze(afterDoc, { profile: prof, topology: false, filePath: outPath, fileBytes: outBytes.byteLength });
-      if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
+      const after = analyze(afterDoc, { profile: prof, filePath: outPath, fileBytes: outBytes.byteLength });
+      if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
       const afterIr = fromGltf(afterDoc, { format: 'glb', sourcePath: outPath, fileBytes: outBytes.byteLength });
       const lodFiles = await writeLods(io, outBytes, outPath, prof, lods, true, dry_run);
       const image = await previewOrComparison(afterDoc, previewKind(preview, render), summary);
@@ -645,15 +645,15 @@ export function createServer(): McpServer {
     const { doc, bytes } = await readDoc(path);
     const io = await createNodeIO();
 
-    const before = analyze(doc, { profile: prof, topology: false, fileBytes: bytes.byteLength });
+    const before = analyze(doc, { profile: prof, fileBytes: bytes.byteLength });
     const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
     const beforeSnap = snapshotScene(beforeIr);
     const summary = await optimize(doc, { profile: prof, targetTriangles, textures, compress, textureFormat, verify, keepViews: true });
     const outBytes = await io.writeBinary(doc);
     if (!dry_run) await writeFile(outPath, outBytes);
     const afterDoc = quiet(await io.readBinary(outBytes));
-    const after = analyze(afterDoc, { profile: prof, topology: false, filePath: outPath, fileBytes: outBytes.byteLength });
-    if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual);
+    const after = analyze(afterDoc, { profile: prof, filePath: outPath, fileBytes: outBytes.byteLength });
+    if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
     const afterIr = fromGltf(afterDoc, { format: 'glb', sourcePath: outPath, fileBytes: outBytes.byteLength });
     const lodFiles = await writeLods(io, outBytes, outPath, prof, lods, compress, dry_run);
     const image = await previewOrComparison(afterDoc, previewKind(preview, render), summary);
