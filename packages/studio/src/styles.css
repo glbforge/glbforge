@@ -141,7 +141,8 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
 .acct-signin { color: var(--accent-2); font-size: 12px; border: 1px solid var(--line);
   border-radius: 999px; padding: 3px 10px; }
 
-.signin-row { display: flex; gap: 8px; }
+.signin-row { display: flex; gap: 8px; align-items: center; }
+.signin-why { color: var(--dim); font-size: 11px; }
 
 .notice { color: var(--good); font-size: 13px; border: 1px solid var(--line);
   border-radius: 999px; padding: 3px 12px; cursor: pointer; }
@@ -170,3 +171,25 @@ label.check { display: flex; gap: 6px; align-items: center; color: var(--dim); c
 .fidelity .bar-fill.over { background: var(--bad); }
 .sheet-overlay { position: absolute; left: 12px; right: 12px; bottom: 64px; z-index: 6; display: flex; justify-content: center; pointer-events: none; }
 .sheet-overlay img { max-width: 100%; max-height: 34vh; border: 1px solid var(--line); border-radius: 8px; background: #181a1c; box-shadow: 0 8px 30px rgba(0,0,0,0.45); }
+
+/* Empty-state escape hatch: a first visit with no file to hand is a dead end
+   without it. See EXAMPLE_SVG in components/AssetRail.tsx. */
+.example-btn { display: block; width: 100%; margin-top: 10px; padding: 10px 8px;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--accent);
+  border-radius: 8px; cursor: pointer; font-size: 13px; text-align: center; }
+.example-btn:hover { background: var(--accent); }
+.example-sub { display: block; color: var(--dim); font-size: 11px; margin-top: 3px; }
+.example-btn:hover .example-sub { color: var(--text); }
+
+/* The window takes a drop, so the whole window has to look like it does. */
+.drop-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: rgba(11, 13, 20, 0.72); border: 3px dashed var(--accent); pointer-events: none; }
+.drop-overlay-card { padding: 14px 22px; border-radius: 10px; background: var(--panel);
+  color: var(--text); font-size: 16px; }
+
+.viewport-empty-sub { color: var(--dim); font-size: 12px; margin-top: 6px; }
+.viewport-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: var(--dim); font-size: 13px; pointer-events: none; }
+
+.unreachable { color: var(--warn); font-size: 11px; line-height: 1.4; margin: 6px 0 2px; }
+.unreachable-sub { display: block; color: var(--dim); margin-top: 2px; }

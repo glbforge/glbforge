@@ -1,9 +1,9 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Bounds, Center, ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei';
+import { Bounds, Center, ContactShadows, Environment, Lightformer, OrbitControls, useGLTF, useProgress } from '@react-three/drei';
 import * as THREE from 'three';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
-import { api, type AssetDetail } from '../api';
+import { api, isTouch, type AssetDetail } from '../api';
 import { Mark } from './Mark';
 
 const ktx2Loader = new KTX2Loader().setTranscoderPath(import.meta.env.BASE_URL + 'basis/');
@@ -79,6 +79,21 @@ function Compare({ beforeUrl, afterUrl, split }: { beforeUrl: string; afterUrl: 
   );
 }
 
+/**
+ * The Canvas suspends with a null fallback, so a large asset left the pane
+ * black for several seconds with nothing to say it was working. drei's
+ * progress store lives outside the Canvas, so the veil can be plain DOM.
+ */
+function LoadingVeil() {
+  const { active, progress } = useProgress();
+  if (!active) return null;
+  return (
+    <div className="viewport-loading">
+      loading{progress > 0 && progress < 100 ? ` ${Math.round(progress)}%` : '…'}
+    </div>
+  );
+}
+
 export function Viewport(props: { asset: AssetDetail | null; compareWith: string | null; lowPower?: boolean; sheetUrl?: string | null }) {
   const [split, setSplit] = useState(0.5);
   const [ground, setGround] = useState<{ y: number; radius: number } | null>(null);
@@ -89,7 +104,10 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
       <div className="viewport">
         <div className="viewport-empty">
           <Mark size={40} />
-          <div>Drop an asset to begin</div>
+          <div>{isTouch() ? 'Choose a GLB, or an image to make 3D' : 'Drop a GLB or an image anywhere on this window'}</div>
+          <div className="viewport-empty-sub">
+            {isTouch() ? 'tap the box below' : 'or use the box to pick one'} — nothing is uploaded
+          </div>
         </div>
       </div>
     );
@@ -135,6 +153,7 @@ export function Viewport(props: { asset: AssetDetail | null; compareWith: string
         </Suspense>
         <OrbitControls makeDefault enableDamping />
       </Canvas>
+      <LoadingVeil />
       {props.sheetUrl && (
         <div className="sheet-overlay" title="reference · result · change heatmap (weakest fixed camera, black = same, yellow→red = more change)">
           <img src={props.sheetUrl} alt="reference, result, and change heatmap" />

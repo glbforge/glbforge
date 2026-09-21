@@ -18,6 +18,19 @@ const looksLikeImage = (file: File, kind: FileKind) =>
 
 interface PendingImage { name: string; bytes: ArrayBuffer; mime: string }
 
+/**
+ * The example asset, as three polygons of SVG rather than a GLB in the
+ * bundle. An empty Studio is a dead end for anyone who arrived without a file
+ * to hand, and the cheapest way out of it is to make one: this goes through
+ * the same forge path a dropped logo does, and what lands in the rail is a
+ * real asset to analyze, optimize and export.
+ */
+const EXAMPLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+<polygon points="32,5 55,18.5 32,32 9,18.5" fill="#63b3ff"/>
+<polygon points="55,18.5 55,45.5 32,59 32,32" fill="#7c5cff"/>
+<polygon points="9,18.5 32,32 32,59 9,45.5" fill="#4b31b0"/>
+</svg>`;
+
 
 /**
  * The cut, live, while the slider moves.
@@ -110,6 +123,7 @@ export function AssetRail(props: {
   // convenience with no such cost.
   const acceptTypes = touch ? undefined : '.glb,model/gltf-binary,.png,.jpg,.jpeg,.webp,.svg';
   const [over, setOver] = useState(false);
+  const [windowOver, setWindowOver] = useState(false);
   const [pending, setPending] = useState<PendingImage | null>(null);
   const [photoHint, setPhotoHint] = useState(false);
   const canGenerate = props.meshyAvailable
@@ -194,6 +208,47 @@ export function AssetRail(props: {
     }
   };
 
+  // The whole window takes a drop, not just this 180px box. The viewport
+  // invites one ("Drop an asset to begin") and filled most of the screen while
+  // silently rejecting anything dropped on it — the likeliest way a first
+  // visit fails. A ref keeps the listeners on the current ingest without
+  // re-binding them every render.
+  const ingestRef = useRef(ingest);
+  ingestRef.current = ingest;
+  useEffect(() => {
+    let depth = 0;
+    const carriesFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+    const enter = (e: DragEvent) => { if (carriesFiles(e)) { depth++; setWindowOver(true); } };
+    const over_ = (e: DragEvent) => { if (carriesFiles(e)) e.preventDefault(); };
+    const leave = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setWindowOver(false);
+    };
+    const drop = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setWindowOver(false);
+      if (e.dataTransfer?.files?.length) void ingestRef.current(e.dataTransfer.files);
+    };
+    window.addEventListener('dragenter', enter);
+    window.addEventListener('dragover', over_);
+    window.addEventListener('dragleave', leave);
+    window.addEventListener('drop', drop);
+    return () => {
+      window.removeEventListener('dragenter', enter);
+      window.removeEventListener('dragover', over_);
+      window.removeEventListener('dragleave', leave);
+      window.removeEventListener('drop', drop);
+    };
+  }, []);
+
+  const loadExample = () => {
+    const file = new File([EXAMPLE_SVG], 'glbforge-cube.svg', { type: 'image/svg+xml' });
+    return ingest([file]);
+  };
+
   const roots = props.assets.filter((a) => !a.parentId);
   const childrenOf = (id: string) => props.assets.filter((a) => a.parentId === id);
 
@@ -223,9 +278,23 @@ export function AssetRail(props: {
           : <>Drop a <b>GLB</b> to analyze<br />or an <b>image</b> to make 3D</>}
         <input
           ref={fileInput} type="file" multiple hidden accept={acceptTypes}
+          aria-label="Choose a GLB model or an image to make 3D"
           onChange={(e) => e.target.files && void ingest(e.target.files)}
         />
       </div>
+
+      {props.assets.length === 0 && (
+        <button className="example-btn" onClick={() => void loadExample()}>
+          ✦ Try an example
+          <span className="example-sub">forges a logo into 3D · instant · free</span>
+        </button>
+      )}
+
+      {windowOver && (
+        <div className="drop-overlay">
+          <div className="drop-overlay-card">Drop it anywhere</div>
+        </div>
+      )}
 
       {pending && (
         <div className="choice">

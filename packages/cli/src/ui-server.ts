@@ -335,11 +335,28 @@ export async function startUiServer(opts: {
     staticDir = join(dirname(require.resolve('@glbforge/studio/package.json')), 'dist');
   } catch { /* studio not installed — API-only mode */ }
   if (staticDir) {
+    // The same bundle is served here and statically from glbforge.dev, and it
+    // has to know which one it is. It used to find out by fetching
+    // /api/profiles and treating a 404 as "static" — a red console error on
+    // every visit to the site, and a race, because the bundle assumed
+    // 'remote' until the probe came back. The server that knows the answer
+    // says so in the document instead.
+    const indexHtml = join(staticDir, 'index.html');
+    const markBackend = (html: string) =>
+      html.replace('<head>', '<head>\n    <meta name="glbforge-backend" content="remote" />');
+    const serveIndex = async (res: import('express').Response) => {
+      try {
+        res.type('html').send(markBackend(await readFile(indexHtml, 'utf8')));
+      } catch {
+        res.sendFile(indexHtml);
+      }
+    };
+    app.get(['/', '/index.html'], (_req, res) => void serveIndex(res));
     app.use(express.static(staticDir));
     // SPA fallback (Express 5: no bare '*' routes — use a middleware).
     app.use((req, res, next) => {
       if (req.method === 'GET' && !req.path.startsWith('/api/')) {
-        res.sendFile(join(staticDir!, 'index.html'));
+        void serveIndex(res);
       } else next();
     });
   }

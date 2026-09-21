@@ -185,6 +185,14 @@ export default function App() {
             </div>
           ) : (
             <span className="signin-row">
+              {/*
+                Two bare sign-in links beside a badge reading "private" is the
+                one thing on this page that makes people hesitate. Say what
+                signing in is for: nothing else on the page needs it.
+              */}
+              <span className="signin-why" title="Analyze, forge, optimize, export and inspect all run in this browser and need no account. Only AI generation runs on someone else's GPU.">
+                for AI generation only:
+              </span>
               {providers.github && <a className="acct-signin" href={cloud.loginUrl('github')}>Sign in with GitHub</a>}
               {providers.google && <a className="acct-signin" href={cloud.loginUrl('google')}>Sign in with Google</a>}
             </span>
@@ -235,7 +243,17 @@ export default function App() {
               <button className={mobileTab === 'assets' ? 'tab active' : 'tab'} onClick={() => setMobileTab('assets')}>Assets</button>
               <button className={mobileTab === 'inspect' ? 'tab active' : 'tab'} onClick={() => setMobileTab('inspect')}>Inspect</button>
             </div>
-            <div className="mobile-panel">{mobileTab === 'assets' ? rail : inspector}</div>
+            {/*
+              Both panels stay mounted and the inactive one is hidden, rather
+              than swapping which is rendered. The rail owns the window-wide
+              drop listeners and the ingest state behind them; unmounting it
+              on a tab switch tore those down and quietly stopped accepting
+              dropped files for the rest of the session.
+            */}
+            <div className="mobile-panel">
+              <div hidden={mobileTab !== 'assets'}>{rail}</div>
+              <div hidden={mobileTab !== 'inspect'}>{inspector}</div>
+            </div>
           </div>
         );
       })()}

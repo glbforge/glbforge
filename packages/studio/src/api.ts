@@ -68,16 +68,28 @@ const OCTET = { 'Content-Type': 'application/octet-stream' };
  * the local engine. Resolved once at boot by probing /api/profiles.
  */
 export type Backend = 'remote' | 'local';
-let backend: Backend = 'remote';
+/**
+ * Default to the mode that always works. This used to default to 'remote'
+ * until a probe came back, so any call made during boot took the remote path
+ * and failed against a static host.
+ */
+let backend: Backend = 'local';
 export const getBackend = (): Backend => backend;
 
+/**
+ * `glbforge ui` stamps a meta tag into the document it serves; a static host
+ * has nothing to stamp it with, and its absence is the answer. The CLI and
+ * this bundle ship as one version, so a server that serves the studio always
+ * serves a studio that reads the tag.
+ *
+ * The old probe fetched /api/profiles and read a 404 as "static": a red
+ * console error on every visit to glbforge.dev, a 2.5s worst-case stall
+ * before boot finished, and a race, because `backend` assumed 'remote' until
+ * the answer arrived.
+ */
 export async function detectBackend(): Promise<Backend> {
-  try {
-    const res = await fetch('/api/profiles', { signal: AbortSignal.timeout(2500) });
-    backend = res.ok ? 'remote' : 'local';
-  } catch {
-    backend = 'local';
-  }
+  const declared = document.querySelector('meta[name="glbforge-backend"]')?.getAttribute('content');
+  backend = declared === 'remote' ? 'remote' : 'local';
   return backend;
 }
 

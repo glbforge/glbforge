@@ -87,6 +87,20 @@ export function Inspector(props: {
 
   const r = asset.report;
 
+  // Caps the optimizer has no lever for in THIS environment. GPU memory is
+  // set by texture dimensions once decoded, so only KTX2 (which stays
+  // compressed on the GPU) moves it — and the browser build has no native
+  // encoder. Draw calls only merge across primitives that share a material.
+  const unreachable: string[] = [];
+  if (r.textureVramTotal > r.profile.maxTextureVramBytes && getBackend() === 'local') {
+    unreachable.push(`GPU memory needs KTX2, which needs native encoders (npx glbforge ui)`);
+  }
+  if (r.geometry.drawCallEstimate > r.profile.maxDrawCalls
+      && r.materials.length > r.profile.maxDrawCalls
+      && r.duplicateMaterialGroups.length === 0) {
+    unreachable.push(`${r.materials.length} distinct materials cannot merge below ${r.profile.maxDrawCalls} draw calls`);
+  }
+
   return (
     <div className="inspector">
       <div className="score-row">
@@ -171,6 +185,11 @@ export function Inspector(props: {
         </>
       )}
 
+      {/*
+        Caps this run cannot clear, worked out BEFORE the click rather than
+        after a twenty-second wait and a red cross. Both have the same shape:
+        the optimizer has no lever for them in this environment.
+      */}
       <div className="section-title">Actions</div>
       <div className="actions">
         <div className="row">
@@ -186,6 +205,12 @@ export function Inspector(props: {
         ) : (
           <div style={{ color: 'var(--dim)', fontSize: 11 }}>
             KTX2 (~8× less GPU memory) needs native encoders — <code>npx glbforge ui</code>
+          </div>
+        )}
+        {unreachable.length > 0 && (
+          <div className="unreachable">
+            Optimizing cannot reach {profile}: {unreachable.join('; ')}.
+            <span className="unreachable-sub">It will still shrink the asset — it just will not pass.</span>
           </div>
         )}
         <button onClick={() => void props.onRun(`optimizing ${asset.name}`, () => api.optimize(asset.id, { profile, ktx2 }))}>
