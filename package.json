@@ -7,7 +7,9 @@
     "test": "pnpm -r test",
     "build:icons": "node scripts/build-icons.mjs",
     "build:og": "node scripts/build-og.mjs",
-    "probe": "pnpm --filter @glbforge/mcp probe"
+    "probe": "pnpm --filter @glbforge/mcp probe",
+    "ledger": "node scripts/ledger.mjs",
+    "live-check": "node scripts/live-check.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3"

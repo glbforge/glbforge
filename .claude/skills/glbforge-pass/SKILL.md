@@ -22,9 +22,28 @@ every decision is: **would an agent following this advice get a better asset?**
 - **A pass that finds nothing worth changing closes with no PR** and a ledger
   line saying so. That is a success. Do not manufacture a change.
 
+## 0. Check nothing else is already on it
+
+Two passes once picked the same ledger entry and wrote the same fix twice —
+one triggered manually, one scheduled 25 minutes later. Both were good; one
+was waste. Nothing about the ledger prevents it, because an `open` entry
+looks identical whether or not somebody is mid-way through closing it.
+
+```bash
+gh pr list --state open --json number,title,headRefName \
+  --jq '.[] | select(.headRefName | startswith("agent-loop/"))'
+```
+
+Anything already open is **claimed**. Do not work on what it covers, even if
+you would do it differently — if you think it is wrong, say so in a review
+comment on that PR rather than opening a rival. Pick the next thing, or, if
+everything open is already claimed and nothing else rises to the bar, close
+the pass with a ledger line saying exactly that.
+
 ## 1. Read what is already known
 
-Read `docs/agent-loop/ledger.md` first, all of it. Then `ROADMAP.md`, and
+Read `docs/agent-loop/ledger.md` first — it is the current state of every
+finding. Open the pass files it links for anything you might touch. Then `ROADMAP.md`, and
 `CLAUDE.md` for the invariants you must not break (deterministic core, frozen
 `verifyRig`, versioned profiles and packs, no `normals()`, `readFloat()`, the
 opaque forge plate, the local-only usage counter).
@@ -96,12 +115,43 @@ pnpm probe -- --baseline-out docs/agent-loop/baseline.json
 and say in the ledger why it moved. A baseline edited without a reason in the
 ledger is the one thing that makes this whole apparatus worthless.
 
-## 6. Write the ledger entry
+## 6. Write your pass file
 
-Prepend a `## Pass N — <date> — <commit>` section to
-`docs/agent-loop/ledger.md`. Every finding gets an id (`L<n>`), a state, what
-was measured, and — for anything left open — what closing it would take. Carry
-forward `open` entries you looked at and did not close, with a line on why.
+Create **one new file**, `docs/agent-loop/passes/<YYYY-MM-DD>-<slug>.md`.
+Never edit another pass's file and never edit `ledger.md` by hand — a new file
+cannot conflict with a pass running beside you, which is the whole reason the
+layout is this way.
+
+```markdown
+# Pass — 2026-09-22 — <commit or run id>
+
+One paragraph: what you measured and what the ground looked like.
+
+### L8 · `open` · one-line statement of the finding
+
+What was measured, and for anything left open, what closing it would take.
+```
+
+Rules the generator enforces:
+
+- Heading form is exact: `### L<n> · \`state\` · title`. States are `open`,
+  `fixed`, `wontfix`, `watching`.
+- **A finding id is global and permanent.** To change something's state, write
+  a heading for that same id in *your* file — the newest pass wins. Do not
+  edit the file that first raised it.
+- New findings take the next free id. `pnpm ledger` prints what exists.
+- A pass with no findings is malformed. If you found nothing, that IS the
+  finding — record it with a state, so the next pass knows the ground was
+  walked and when.
+
+Then regenerate the index and commit it with your file:
+
+```bash
+pnpm ledger
+```
+
+If `ledger.md` ever conflicts on a merge, do not resolve it by hand: take
+either side and re-run `pnpm ledger`.
 
 Keep `ROADMAP.md`, `README.md`, `site/llms.txt`, `packages/mcp/README.md` in
 sync when scope changed; `CLAUDE.md` lists these as the docs that must move

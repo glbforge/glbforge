@@ -32,6 +32,13 @@ jobs:
 
       - run: pnpm -r test
 
+      # The ledger index is generated from docs/agent-loop/passes/, so a
+      # stale one means somebody hand-edited the index or forgot to
+      # regenerate — and the whole point of generating it is that concurrent
+      # passes never have to merge it by hand.
+      - name: Agent-loop ledger is in sync
+        run: node scripts/ledger.mjs --check
+
       # The advice gate. `pnpm -r test` proves each tool answers correctly;
       # this proves that an agent which FOLLOWS the answer gets a better
       # asset. It executes every nextActions entry against the fixture that
