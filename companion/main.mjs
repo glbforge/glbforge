@@ -193,6 +193,7 @@ const body = {
     return { png_base64: out ? undefined : png.toString('base64'), out: out ?? null, bytes: png.byteLength, size: img.getSize() };
   },
   state: fullState,
+  modelPath: () => state.model,
 };
 
 // ---------------------------------------------------------------- chat + events → brain
@@ -232,7 +233,7 @@ async function runBrain(prompt, item) {
     if (shown) { await ask('say', { text: shown, seconds: Math.min(20, 3 + shown.length / 10) }).catch(() => {}); state.bubble = shown; }
     answered.add(item.id);
     pushEvent('reply', { text: shown, in_reply_to: item.id, tools: r.tools.map((t) => t.name), duration_ms: r.duration_ms });
-    return { reply: shown, tools: r.tools, session_id: r.session_id, duration_ms: r.duration_ms, mode: 'sdk' };
+    return { reply: shown, tools: r.tools, usage: r.usage, session_id: r.session_id, duration_ms: r.duration_ms, mode: 'sdk' };
   } catch (e) {
     pushEvent('brain_error', { error: e.message, in_reply_to: item.id });
     if (!brain.available) {
@@ -373,4 +374,5 @@ app.whenReady().then(async () => {
   server.on('error', (e) => { console.error(`companion: cannot listen on ${PORT}: ${e.message}`); app.exit(1); });
 });
 app.on('window-all-closed', () => app.quit());
+app.on('before-quit', () => brain?.close?.());
 app.dock?.hide();

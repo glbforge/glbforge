@@ -44,11 +44,20 @@ with the fix, and typed messages queue for an external brain instead of being
 lost. `POST /brain/reset` re-probes after you log in.
 
 Model: whatever Claude Code defaults to (`GLBFORGE_COMPANION_BRAIN_MODEL`
-overrides). Cost accrues on your Claude Code plan and `/state` reports the
-running total the SDK measured. Measured on 2026-09-22 with the Opus default:
-three turns (one with a glbforge inspect call) cost $1.04, 7–10 s each. For a
-character that answers every click, start it with
-`GLBFORGE_COMPANION_BRAIN_MODEL=sonnet`.
+overrides). Usage accrues on your Claude Code plan; `/state` reports measured
+tokens per turn (`brain.last_turn.usage`) and running totals.
+
+What a message costs, measured on 2026-09-22 with the Opus default: the
+prefix every call re-reads is about 6,800 tokens (the persona plus six small
+body tools — glbforge's 28-tool server is *not* attached; one `inspect_self`
+tool reaches it lazily). The process stays alive between messages, so after
+the first message the prefix is a cache read, not a rewrite: a follow-up
+turn with one gesture was about 300 tokens written, 19,600 read from cache
+and 130 generated, roughly 1.5 cents at API list prices. A first message
+that measures the mesh is about 10,000 written and 7,000 read. After 20
+minutes of silence (`GLBFORGE_COMPANION_BRAIN_IDLE_MS`) the process closes
+and the next message resumes the same session, paying the prefix write
+once more.
 
 ## Drive it from a shell
 

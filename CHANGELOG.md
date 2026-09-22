@@ -43,6 +43,11 @@
   from the checkout when built there and through npx otherwise, passes the
   glbforge MCP server so the character can inspect itself, and `--mcp`
   registers the bridge in `.mcp.json`. Six packages release together now.
+- **The brain got cheap.** One persistent Claude Code session (streaming
+  input) instead of a process per message, and one lazy `inspect_self` tool
+  instead of glbforge's whole 28-tool server in the prompt: the prefix every
+  call re-reads went from 23,676 tokens to 6,821, a follow-up turn is ~1.5
+  cents at list instead of ~9, and `/state` reports measured tokens per turn.
 - **Random agent tasks** (`pnpm random-task`, `docs/agent-tasks/`): seeded
   draws of source × goal × constraint × twist, walked as an agent with a
   verdict per step. First walk: `2026-09-22-badge-companion.md`, T1–T7.

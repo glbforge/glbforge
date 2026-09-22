@@ -133,16 +133,34 @@ answered it, the snapshot shows the bubble. After the user logged the CLI in,
 | 2 | "what did I ask a moment ago? then spin" | `body.emote(spin)`; recalled turn 1 (same session id) | 7,126 |
 | event | `ci: 167 passed, 1 skipped` | `body.say`, `body.emote` → "all green!" | 6,900 |
 
-### T11 · `open` · three brain turns cost $1.04
+### T11 · `fixed` · three brain turns cost $1.04
 
 `brain.cost_usd_total` after the three turns above: 1.0388 (from the SDK's
 `total_cost_usd`). The Claude Code default here is `claude-opus-5[1m]` and
 every turn re-sends the persona, the body tools and glbforge's tool
 schemas; a desktop pet that answers every click at $0.35 a turn is not
-"fun". Options, in order: `GLBFORGE_COMPANION_BRAIN_MODEL=sonnet` for the
-character (documented), fewer glbforge tools in the brain's context (it only
-ever used `inspect`), and checking whether the resumed session hits the
-prompt cache. Left open for the maintainer: the default is a cost decision.
+"fun". Measured from the session transcript (Claude Code logs usage per call):
+the first call wrote 23,676 tokens to cache; a bare Claude Code call with no
+tools writes 5,650, so ~18,000 of the prefix was glbforge's 28 tool schemas.
+Each message also started a new process with `resume`, and every tool call
+re-read the whole prefix. Fixed two ways: the brain attaches ONE tool,
+`inspect_self` (scene / animation / materials), which reaches glbforge's
+server lazily over stdio; and the brain is one persistent session in
+streaming-input mode, closed after 20 idle minutes and resumed by session
+id. Same two questions again, per API call:
+
+| call | cache write | cache read | out | tools |
+|---|---|---|---|---|
+| 1 | 6,821 | 0 | 108 | `inspect_self` |
+| 2 | 2,925 | 6,821 | 91 | — |
+| 3 | 132 | 9,746 | 107 | `emote` |
+| 4 | 161 | 9,878 | 19 | — |
+
+Prefix 23,676 → 6,821 tokens; the follow-up turn (calls 3–4) is ~300
+written, ~19,600 read, 126 generated — about 1.5 cents at Opus 5 list
+prices against ~9 cents before. `total_cost_usd` in streaming mode is
+cumulative for the session; the brain now accounts it per turn and reports
+measured tokens in `/state` instead of trusting the estimate.
 
 ### T12 · `fixed` · markdown in the bubble
 
