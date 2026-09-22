@@ -40,8 +40,11 @@ with the fix, and typed messages queue for an external brain instead of being
 lost. `POST /brain/reset` re-probes after you log in.
 
 Model: whatever Claude Code defaults to (`GLBFORGE_COMPANION_BRAIN_MODEL`
-overrides). Cost accrues on your Claude Code plan; `/state` reports the
-running total the SDK measured.
+overrides). Cost accrues on your Claude Code plan and `/state` reports the
+running total the SDK measured. Measured on 2026-09-22 with the Opus default:
+three turns (one with a glbforge inspect call) cost $1.04, 7–10 s each. For a
+character that answers every click, start it with
+`GLBFORGE_COMPANION_BRAIN_MODEL=sonnet`.
 
 ## Drive it from a shell
 

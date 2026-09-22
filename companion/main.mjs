@@ -192,6 +192,15 @@ const body = {
 };
 
 // ---------------------------------------------------------------- chat + events → brain
+/** The bubble shows text verbatim: fold the markdown a model reaches for anyway into plain text. */
+function plain(text) {
+  return String(text)
+    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```\w*\n?/g, ''))
+    .replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1')
+    .replace(/(^|[^*])\*(?!\s)(.+?)\*(?!\*)/g, '$1$2').replace(/`([^`]+)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '').replace(/^\s*[-*•]\s+/gm, '· ')
+    .replace(/\n{2,}/g, '\n').trim();
+}
 async function chat(text, source) {
   text = String(text ?? '').trim();
   if (!text) throw new Error('text required');
@@ -215,7 +224,7 @@ async function runBrain(prompt, item) {
       onText: (delta) => { streamed += delta; win?.webContents.send('companion:stream', { text: streamed, done: false }); },
       onTool: (name, input) => pushEvent('tool', { name, input, in_reply_to: item.id }),
     });
-    const shown = (r.reply || streamed || '').trim();
+    const shown = plain(r.reply || streamed || '');
     if (shown) { await ask('say', { text: shown, seconds: Math.min(20, 3 + shown.length / 10) }).catch(() => {}); state.bubble = shown; }
     answered.add(item.id);
     pushEvent('reply', { text: shown, in_reply_to: item.id, tools: r.tools.map((t) => t.name), duration_ms: r.duration_ms });

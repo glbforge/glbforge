@@ -117,7 +117,34 @@ message that arrives while the brain is unavailable is queued in the inbox
 for an external brain (`companion_listen` / `companion_reply`) and the
 window says so; `POST /brain/reset` re-probes after login. Verified: `/chat`
 → `Queued message #1`, `companion_listen` returned it, `companion_reply`
-answered it, the snapshot shows the bubble.
+answered it, the snapshot shows the bubble. After the user logged the CLI in,
+`POST /brain/reset` returned `auth: ok` and the embedded brain ran for real:
+
+| turn | prompt | tools the brain called | ms |
+|---|---|---|---|
+| 1 | "who are you, how many triangles? check for real" | `body.status`, `body.emote`, `glbforge.inspect` → "149,996 triangles, 94,539 vertices, one material, 1.9 m tall, three clips" | 10,441 |
+| 2 | "what did I ask a moment ago? then spin" | `body.emote(spin)`; recalled turn 1 (same session id) | 7,126 |
+| event | `ci: 167 passed, 1 skipped` | `body.say`, `body.emote` → "all green!" | 6,900 |
+
+### T11 · `open` · three brain turns cost $1.04
+
+`brain.cost_usd_total` after the three turns above: 1.0388 (from the SDK's
+`total_cost_usd`). The Claude Code default here is `claude-opus-5[1m]` and
+every turn re-sends the persona, the body tools and glbforge's tool
+schemas; a desktop pet that answers every click at $0.35 a turn is not
+"fun". Options, in order: `GLBFORGE_COMPANION_BRAIN_MODEL=sonnet` for the
+character (documented), fewer glbforge tools in the brain's context (it only
+ever used `inspect`), and checking whether the resumed session hits the
+prompt cache. Left open for the maintainer: the default is a cost decision.
+
+### T12 · `fixed` · markdown in the bubble
+
+Turn 1 rendered `**149,996 triangles**` with literal asterisks: the bubble
+shows text verbatim. The persona now asks for plain text and the main
+process folds bold, code, headings and bullets to plain text before
+showing a reply (unit-checked; not re-run against the brain to avoid
+another paid turn).
+
 
 ### T9 · `open` · mutating tools used to return only their own result
 
