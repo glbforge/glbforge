@@ -13,8 +13,22 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/** glbforge's MCP server, so the character can inspect its own mesh: GLBFORGE_MCP_SERVER, the monorepo checkout, or an installed @glbforge/mcp. */
+function resolveGlbforgeMcp() {
+  const fromEnv = process.env.GLBFORGE_MCP_SERVER;
+  if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
+  const local = path.join(HERE, '..', 'packages', 'mcp', 'dist', 'index.js');
+  if (fs.existsSync(local)) return local;
+  try { return createRequire(import.meta.url).resolve('@glbforge/mcp/dist/index.js'); } catch { return null; }
+}
+/** How the brain reaches glbforge: a file it can run with node, or npx when nothing is installed (first turn downloads @glbforge/mcp). */
+function glbforgeServerConfig(resolved) {
+  return resolved ? { command: 'node', args: [resolved] } : { command: 'npx', args: ['-y', '@glbforge/mcp'] };
+}
 
 const PERSONA = `You are the character on the user's desktop: a 3D model living in a small always-on-top window. Your reply text is shown verbatim in your speech bubble — plain text only, no markdown, no headings, no bullet lists — so keep replies to one or two short sentences; call say() again for a second thought rather than writing a paragraph. You can move: emote() for a quick gesture, play() for one of your baked clips. You can look() at yourself as the user sees you, and status() tells you what is loaded and playing. When asked about your own mesh (triangles, size, materials, clips), use the glbforge inspect tools on your model path. Be warm, playful and honest: never claim to have done something a tool did not report. You have no shell and no filesystem.`;
 
@@ -50,11 +64,11 @@ export async function createBrain({ body, log = () => {}, model = process.env.GL
     ],
   });
 
-  const glbforgePath = [path.join(HERE, '..', 'packages', 'mcp', 'dist', 'index.js')].find((p) => fs.existsSync(p)) ?? null;
-  const mcpServers = { body: bodyServer, ...(glbforgePath ? { glbforge: { command: 'node', args: [glbforgePath] } } : {}) };
-  const allowedTools = ['mcp__body__*', ...(glbforgePath ? ['mcp__glbforge__inspect', 'mcp__glbforge__inspect_all', 'mcp__glbforge__inspect_animation', 'mcp__glbforge__inspect_geometry', 'mcp__glbforge__inspect_materials', 'mcp__glbforge__render', 'mcp__glbforge__capabilities'] : [])];
+  const glbforgePath = resolveGlbforgeMcp();
+  const mcpServers = { body: bodyServer, glbforge: glbforgeServerConfig(glbforgePath) };
+  const allowedTools = ['mcp__body__*', 'mcp__glbforge__inspect', 'mcp__glbforge__inspect_all', 'mcp__glbforge__inspect_animation', 'mcp__glbforge__inspect_geometry', 'mcp__glbforge__inspect_materials', 'mcp__glbforge__render', 'mcp__glbforge__capabilities'];
 
-  const stats = { mode: 'sdk', available: true, auth: 'unknown', hint: null, busy: false, session_id: null, turns: 0, cost_usd_total: 0, last_error: null, last_duration_ms: null, model: model ?? 'claude-code default', glbforge_tools: !!glbforgePath };
+  const stats = { mode: 'sdk', available: true, auth: 'unknown', hint: glbforgePath ? null : 'glbforge is not installed here: the character reaches it through `npx -y @glbforge/mcp`, so its first self-inspection is slower (set GLBFORGE_MCP_SERVER to a local build to avoid that)', busy: false, session_id: null, turns: 0, cost_usd_total: 0, last_error: null, last_duration_ms: null, model: model ?? 'claude-code default', glbforge_tools: glbforgePath ? 'local' : 'npx', glbforge_server: glbforgePath ?? 'npx -y @glbforge/mcp' };
   const NOT_LOGGED_IN = /not logged in|please run \/login|authentication|api key/i;
   const LOGIN_HINT = 'the Claude CLI is not logged in: run `claude` and `/login` once (or export ANTHROPIC_API_KEY), then POST /brain/reset. Until then typed messages queue for an external brain (companion_listen / companion_reply).';
   function markUnavailable(reason) { stats.available = false; stats.auth = 'not-logged-in'; stats.hint = LOGIN_HINT; stats.last_error = reason; }
@@ -63,7 +77,7 @@ export async function createBrain({ body, log = () => {}, model = process.env.GL
   async function probe() {
     try {
       for await (const m of query({ prompt: 'Reply with exactly: pong', options: { tools: [], settingSources: [], maxTurns: 1, cwd: HERE, ...(model ? { model } : {}) } })) {
-        if (m.type === 'result') { if (m.subtype === 'success' && !NOT_LOGGED_IN.test(m.result ?? '')) { stats.auth = 'ok'; stats.hint = null; } else markUnavailable(m.result ?? m.subtype); }
+        if (m.type === 'result') { if (m.subtype === 'success' && !NOT_LOGGED_IN.test(m.result ?? '')) { stats.auth = 'ok'; stats.hint = glbforgePath ? null : stats.hint; } else markUnavailable(m.result ?? m.subtype); }
       }
     } catch (e) { markUnavailable(e.message); }
     return stats.auth;

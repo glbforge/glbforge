@@ -38,6 +38,11 @@
   plus advisory notes; `/events` is the log of clicks, drags, messages,
   replies and tool calls. The window fidgets when ignored, leans into a
   drag, and shows a thinking indicator while the brain works.
+- **`glbforge companion model.glb`** and **`npx -y @glbforge/companion`**:
+  the companion is a published package with a `bin`; the CLI launches it
+  from the checkout when built there and through npx otherwise, passes the
+  glbforge MCP server so the character can inspect itself, and `--mcp`
+  registers the bridge in `.mcp.json`. Six packages release together now.
 - **Random agent tasks** (`pnpm random-task`, `docs/agent-tasks/`): seeded
   draws of source × goal × constraint × twist, walked as an agent with a
   verdict per step. First walk: `2026-09-22-badge-companion.md`, T1–T7.

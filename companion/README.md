@@ -10,11 +10,15 @@ the agent's face: it speaks in a bubble, gestures, switches clips, and can
 take a snapshot to see what you see.
 
 ```
-glbforge animate model.web.glb          # → model.idle.glb   (looping idle clip, no rig needed)
-glbforge animate model.idle.glb -p hop --name hop -o model.idle.glb     # add a reaction clip
-cd companion && pnpm install            # standalone: electron stays out of the monorepo lockfile
-pnpm start -- /abs/path/model.idle.glb
+npx glbforge animate model.web.glb          # → model.idle.glb   (looping idle clip, no rig needed)
+npx glbforge animate model.idle.glb -p hop --name hop -o model.idle.glb     # add a reaction clip
+npx glbforge companion model.idle.glb       # launches npx -y @glbforge/companion (Electron downloads once, ~100 MB)
 ```
+
+Or directly: `npx -y @glbforge/companion model.idle.glb` (`--port`, `--size`,
+`--brain sdk|external|off`, `--brain-model sonnet`, `--detach`). In this
+checkout: `cd companion && pnpm install && pnpm start -- /abs/model.idle.glb`
+(standalone lockfile, so Electron stays out of the monorepo install).
 
 The window appears bottom-right. Click: it hops and says hi. Drag it
 anywhere. Double-click (or press `/` while it has focus) to type to it; Esc
@@ -74,8 +78,11 @@ job can `POST /event` and the character will say something about it.
 Register it next to glbforge:
 
 ```json
-"companion": { "command": "node", "args": ["companion/mcp.mjs"] }
+"companion": { "command": "npx", "args": ["-y", "@glbforge/companion", "mcp"] }
 ```
+
+`glbforge companion --mcp` writes that entry (pointing at the checkout when
+run from one).
 
 Driving: `companion_state`, `companion_load`, `companion_play`,
 `companion_emote`, `companion_say`, `companion_move`, `companion_snapshot`

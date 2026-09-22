@@ -1,22 +1,55 @@
 {
   "name": "@glbforge/companion",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "version": "0.8.0",
   "description": "A GLB that lives on your desktop and talks: transparent always-on-top window, plays the asset's clips, a Claude agent brain on your Claude Code login, and an HTTP + MCP surface so any agent can drive it or be it.",
+  "private": false,
+  "type": "module",
   "main": "main.mjs",
+  "bin": {
+    "glbforge-companion": "bin.mjs"
+  },
+  "files": [
+    "bin.mjs",
+    "main.mjs",
+    "brain.mjs",
+    "preload.cjs",
+    "mcp.mjs",
+    "renderer/",
+    "README.md"
+  ],
   "scripts": {
-    "start": "electron .",
+    "start": "node bin.mjs",
     "mcp": "node mcp.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.278",
     "@modelcontextprotocol/sdk": "^1.11.0",
+    "electron": "^33.0.0",
     "three": "^0.169.0",
-    "zod": "^3.23.0",
-    "@anthropic-ai/claude-agent-sdk": "^0.3.278"
+    "zod": "^3.23.0"
   },
-  "devDependencies": {
-    "electron": "^33.0.0"
+  "publishConfig": {
+    "access": "public"
   },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "glb",
+    "gltf",
+    "3d",
+    "desktop-pet",
+    "companion",
+    "electron",
+    "mcp",
+    "claude",
+    "agent"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/glbforge/glbforge",
+    "directory": "companion"
+  },
+  "homepage": "https://glbforge.dev",
   "license": "MIT"
 }

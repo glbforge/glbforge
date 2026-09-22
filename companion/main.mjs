@@ -31,9 +31,13 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { createBrain } from './brain.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// three is served to the renderer from wherever it resolves: under companion/ in a checkout, hoisted in an npx cache.
+// three's exports map hides package.json; its main entry is <dir>/build/three.module.js (or three.cjs) — walk up to the package dir.
+const THREE_DIR = path.resolve(path.dirname(createRequire(import.meta.url).resolve('three')), '..');
 const PORT = Number(process.env.GLBFORGE_COMPANION_PORT || 4747);
 const SIZE = Number(process.env.GLBFORGE_COMPANION_SIZE || 320);
 const HEIGHT = Math.round(SIZE * 1.3);   // the extra band on top is where the speech bubble lives
@@ -281,10 +285,13 @@ async function handle(req, res) {
       res.writeHead(200, { 'content-type': 'model/gltf-binary', 'content-length': modelBytes.byteLength });
       return res.end(modelBytes);
     }
-    let rel = url.pathname === '/' ? '/renderer/index.html' : url.pathname;
-    if (!rel.startsWith('/renderer/') && !rel.startsWith('/node_modules/three/')) { res.writeHead(404); return res.end(); }
-    const file = path.join(HERE, rel);
-    if (!file.startsWith(HERE)) { res.writeHead(403); return res.end(); }
+    const rel = url.pathname === '/' ? '/renderer/index.html' : url.pathname;
+    let file;
+    if (rel.startsWith('/renderer/')) file = path.join(HERE, rel);
+    else if (rel.startsWith('/node_modules/three/')) file = path.join(THREE_DIR, rel.slice('/node_modules/three/'.length));
+    else { res.writeHead(404); return res.end(); }
+    const base = rel.startsWith('/renderer/') ? HERE : THREE_DIR;
+    if (!path.resolve(file).startsWith(base)) { res.writeHead(403); return res.end(); }
     try {
       const data = await fs.promises.readFile(file);
       res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' });

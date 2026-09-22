@@ -97,13 +97,20 @@ served). The `.web.glb` is the documented input and the README says so; the
 transcoder is a 300 KB wasm that would have to be served from the companion
 directory. Not worth it for a desktop window until someone asks.
 
-### T7 · `open` · no CLI path to the companion
+### T7 · `fixed` · no CLI path to the companion
 
-`glbforge companion model.glb` would be the obvious verb; it does not exist
-because the CLI must not depend on Electron. The README's `pnpm start --
-model.glb` is a two-directory hop an agent has to know. A `glbforge init
---companion` that writes the `.mcp.json` entry, or a `npx @glbforge/companion
-model.glb` once it is published, would close it.
+`glbforge companion model.glb` would be the obvious verb; it did not exist
+because the CLI must not depend on Electron. Closed the same day: the CLI
+launches `companion/bin.mjs` from the checkout when its Electron is
+installed and `npx -y @glbforge/companion@<cli version>` otherwise, passes
+the glbforge MCP server so the character can inspect itself, and `--mcp`
+writes the bridge into `.mcp.json`. `@glbforge/companion` is publishable
+(bin, files, Electron as a dependency) and in the release loop. Verified by
+packing the tarball, installing it with npm in a scratch directory and
+launching the installed binary: it rendered the cat on port 4949 with
+`three` resolved from the hoisted location. One bug found on the way:
+`three/package.json` is not exported, so the asset server resolves the
+package directory from `three`'s main entry instead.
 
 ### T8 · `fixed` · the embedded brain failed with a bare "Not logged in" and lost the message
 

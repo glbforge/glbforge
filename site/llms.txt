@@ -96,6 +96,12 @@ updated with the code: anything not listed here is not shipped):
   a pivot at the base centre carries the motion, originals untouched,
   deterministic keys; USDZ export bakes it as xform time samples so AR Quick
   Look plays it.
+- Desktop companion (`glbforge companion model.glb`, `npx -y @glbforge/companion`):
+  the asset as a talking always-on-top character on macOS — plays its clips,
+  gazes at the cursor, answers typed messages with a Claude agent on the
+  Claude CLI login (body + glbforge inspect tools only, no shell), or lets
+  any MCP client be the character (`companion_listen` / `companion_reply`);
+  every call returns the body's state after it.
 - USDZ export (`glbforge usdz`, MCP `export_usdz`): iOS AR Quick Look output
   with a binary usdc (crate 0.8.0) layer written in pure TypeScript and
   verified against Pixar's reader, UsdPreviewSurface materials, PNG/JPEG

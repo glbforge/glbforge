@@ -27,6 +27,7 @@ import { printDiff, printDiffReport, printInspect, printReport } from './report.
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
 import { cliVersion, registerInitCommand } from './init.js';
+import { registerCompanionCommand } from './companion-cmd.js';
 import { loadDotEnv } from './env.js';
 
 loadDotEnv();
@@ -829,6 +830,7 @@ program
   });
 
 registerInitCommand(program);
+registerCompanionCommand(program);
 registerMeshyCommands(program, async (input, output, profileName) =>
   (await optimizeFile(input, output, profileName)).passed);
 
