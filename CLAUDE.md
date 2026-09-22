@@ -42,8 +42,10 @@ the same registration into another checkout.
   carries its own confidence because a cause is always an inference. A pack
   declares DEFAULT severities; the PROFILE decides (`Profile.rules` on
   budget profiles, `RULE_PROFILE_VERSIONS` for `authoring@1`): web profiles
-  report topology as info, authoring warns, print will error. The linter
-  runs over the pipeline's own outputs: `test/packs.test.ts` freezes the
+  report topology as info, authoring warns. A print profile (topology as
+  errors) is planned but not yet published — `RULE_PROFILE_VERSIONS` only
+  has `authoring`; see `docs/BUDGETS.md`'s "future print profiles" note. The
+  linter runs over the pipeline's own outputs: `test/packs.test.ts` freezes the
   finding set of every `examples/*.glb` under `authoring@1`; a rule or
   pipeline change that alters it must update the table on purpose. Welded-
   space topology for packs and `inspectGeometry` is `inspect/topology.ts`
