@@ -42,7 +42,8 @@ the pass with a ledger line saying exactly that.
 
 ## 1. Read what is already known
 
-Read `docs/agent-loop/ledger.md` first, all of it. Then `ROADMAP.md`, and
+Read `docs/agent-loop/ledger.md` first — it is the current state of every
+finding. Open the pass files it links for anything you might touch. Then `ROADMAP.md`, and
 `CLAUDE.md` for the invariants you must not break (deterministic core, frozen
 `verifyRig`, versioned profiles and packs, no `normals()`, `readFloat()`, the
 opaque forge plate, the local-only usage counter).
@@ -114,12 +115,48 @@ pnpm probe -- --baseline-out docs/agent-loop/baseline.json
 and say in the ledger why it moved. A baseline edited without a reason in the
 ledger is the one thing that makes this whole apparatus worthless.
 
-## 6. Write the ledger entry
+## 6. Write your pass file
 
-Prepend a `## Pass N — <date> — <commit>` section to
-`docs/agent-loop/ledger.md`. Every finding gets an id (`L<n>`), a state, what
-was measured, and — for anything left open — what closing it would take. Carry
-forward `open` entries you looked at and did not close, with a line on why.
+Create **one new file**, `docs/agent-loop/passes/<YYYY-MM-DD>-<slug>.md`.
+Never edit another pass's file and never edit `ledger.md` by hand — a new file
+cannot conflict with a pass running beside you, which is the whole reason the
+layout is this way.
+
+```markdown
+# Pass — 2026-09-22 — <commit or run id>
+
+One paragraph: what you measured and what the ground looked like.
+
+### L8 · `open` · one-line statement of the finding
+
+What was measured, and for anything left open, what closing it would take.
+```
+
+Rules the generator enforces:
+
+- Heading form is exact: `### L<n> · \`state\` · title`. States are `open`,
+  `fixed`, `wontfix`, `watching`.
+- **A finding id is global and permanent.** To change something's state, write
+  a heading for that same id in *your* file — the newest pass wins. Do not
+  edit the file that first raised it.
+- New findings take the next free id. `pnpm ledger` prints what exists.
+- **Only write a heading for a finding you raise, or whose state you are
+  changing.** Do not restate one you merely looked at and left alone: yours
+  would be the newest mention, so a carried-forward `open` dated after
+  another pass's `fixed` silently reopens it. Carrying findings forward is
+  the index's job — that is why it is generated. Mention them in prose if
+  they shaped your decisions.
+- A pass that changed nothing writes no headings at all. That is a valid
+  outcome and the file itself records that the ground was walked, and when.
+
+Then regenerate the index and commit it with your file:
+
+```bash
+pnpm ledger
+```
+
+If `ledger.md` ever conflicts on a merge, do not resolve it by hand: take
+either side and re-run `pnpm ledger`.
 
 Keep `ROADMAP.md`, `README.md`, `site/llms.txt`, `packages/mcp/README.md` in
 sync when scope changed; `CLAUDE.md` lists these as the docs that must move
