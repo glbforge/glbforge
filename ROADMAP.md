@@ -65,7 +65,9 @@ answers everything in tens of ms).
   plays them; `companion/` puts the result on the desktop with an HTTP + MCP
   surface so an agent can speak, gesture and see through it; `pnpm random-task`
   draws seeded end-to-end tasks and `docs/agent-tasks/` holds the walks
-  (first walk: T1–T7, two fixed)
+  (first walk: T1–T10, three fixed); the companion has an embedded Claude
+  Agent SDK brain and an external-brain channel so any MCP client can be the
+  character
 - [ ] From the first task walk: `inspect` should say an asset moves (T1);
   USDZ node counts include material prims (T4); pinned profiles are silent
   about newer versions (T5); no CLI verb reaches the companion (T7)

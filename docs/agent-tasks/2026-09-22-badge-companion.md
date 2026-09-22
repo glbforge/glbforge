@@ -105,6 +105,39 @@ model.glb` is a two-directory hop an agent has to know. A `glbforge init
 --companion` that writes the `.mcp.json` entry, or a `npx @glbforge/companion
 model.glb` once it is published, would close it.
 
+### T8 · `fixed` · the embedded brain failed with a bare "Not logged in" and lost the message
+
+Second pass, wiring the companion to an agent. The Claude Agent SDK runs on
+the CLI's login; on this machine `claude auth status` reports
+`loggedIn: false` (the desktop app authenticates separately). The first
+`/chat` returned `Claude Code returned an error result: Not logged in ·
+Please run /login` and the typed message was gone. Now: a one-turn probe at
+startup sets `brain.auth` and a `hint` with the exact fix in `/state`; a
+message that arrives while the brain is unavailable is queued in the inbox
+for an external brain (`companion_listen` / `companion_reply`) and the
+window says so; `POST /brain/reset` re-probes after login. Verified: `/chat`
+→ `Queued message #1`, `companion_listen` returned it, `companion_reply`
+answered it, the snapshot shows the bubble.
+
+### T9 · `open` · mutating tools used to return only their own result
+
+`companion_say` returned `{shown, seconds}`; an agent that wanted to know
+what else was on screen had to call `companion_state`. Every mutating call
+now returns `{ok, summary, data, state}` with the body after the call and
+`notes` (an `emote hop` on a model with a baked `hop` clip suggests
+`play`; a 200-character `say` warns it will wrap). Left open: the MCP
+`structuredContent` and the HTTP envelope carry the same shape, but the
+glbforge server's envelope (`ok / summary / duration_ms / errors[] / data`)
+differs in field names; the two should converge on one envelope.
+
+### T10 · `open` · the SDK warns that bare `allowedTools` shadow `canUseTool`
+
+Every brain turn logs `CLAUDE_SDK_CAN_USE_TOOL_SHADOWED` to stderr because
+the body tools are pre-approved by name and `canUseTool` only sees the
+rest. That is the intended policy (allow the body, deny everything else),
+but the warning suggests a `PreToolUse` hook is the SDK's preferred shape.
+Cosmetic; noted so a later pass does not mistake it for a bug.
+
 ## What the walk produced
 
 - `packages/core/src/animate.ts`: `animate(doc, { preset, duration,
@@ -115,5 +148,7 @@ model.glb` once it is published, would close it.
 - `glbforge animate`, MCP `animate` (28 tools now), `ANIMATION_BAKED` /
   `ANIMATE_WARNING` codes, schema, docs.
 - `companion/`: Electron window + localhost HTTP + MCP bridge; verified by
-  snapshot (see the PNGs referenced in the PR).
+  snapshot. Second pass: an embedded Claude Agent SDK brain (body tools +
+  glbforge inspect, no shell), an external-brain channel (`/listen`,
+  `/reply`), events, envelopes with state after every call.
 - `scripts/random-task.mjs` and this directory.

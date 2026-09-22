@@ -24,4 +24,4 @@ task findings use `T` ids and stay here.
 
 | Walk | Seed | Draw | Findings |
 |---|---|---|---|
-| [2026-09-22 badge → companion](2026-09-22-badge-companion.md) | 20260922 | transparent PNG → idle + reaction clip → desktop companion; profile pinned; every number from a tool | T1–T7 |
+| [2026-09-22 badge → companion](2026-09-22-badge-companion.md) | 20260922 | transparent PNG → idle + reaction clip → desktop companion; profile pinned; every number from a tool | T1–T10 |

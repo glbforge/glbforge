@@ -26,6 +26,18 @@
   (`/load /play /emote /say /move /snapshot /quit`) and an MCP bridge
   (`companion_*`, snapshot returned as an image block) let an agent use the
   model on screen as its face. macOS tested; nothing leaves 127.0.0.1.
+- **The companion has a brain.** Double-click the window (or press `/`) and
+  type: an embedded Claude agent on the Claude Agent SDK answers in the
+  bubble, gestures, plays clips, can look at itself and inspect its own mesh
+  with glbforge's tools — and has no shell or filesystem. It runs on the
+  Claude CLI's login; when that is missing, `/state` says so with the fix and
+  typed messages queue for an external brain instead of being lost. Any MCP
+  client can be that brain: `companion_listen` hands it what the user typed
+  (or an event a hook posted with `companion_event`), `companion_reply`
+  answers. Every mutating call now returns the body's state after the call
+  plus advisory notes; `/events` is the log of clicks, drags, messages,
+  replies and tool calls. The window fidgets when ignored, leans into a
+  drag, and shows a thinking indicator while the brain works.
 - **Random agent tasks** (`pnpm random-task`, `docs/agent-tasks/`): seeded
   draws of source × goal × constraint × twist, walked as an agent with a
   verdict per step. First walk: `2026-09-22-badge-companion.md`, T1–T7.

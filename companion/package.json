@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "A GLB that lives on your desktop: transparent always-on-top window, plays the asset's clips, and takes orders from an agent over localhost HTTP or MCP.",
+  "description": "A GLB that lives on your desktop and talks: transparent always-on-top window, plays the asset's clips, a Claude agent brain on your Claude Code login, and an HTTP + MCP surface so any agent can drive it or be it.",
   "main": "main.mjs",
   "scripts": {
     "start": "electron .",
@@ -12,7 +12,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.11.0",
     "three": "^0.169.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.278"
   },
   "devDependencies": {
     "electron": "^33.0.0"

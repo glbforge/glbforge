@@ -1,6 +1,7 @@
 /**
  * Renderer: a GLB in a transparent window that plays its clips, looks at the
- * cursor, and answers the main process's commands (load / play / emote / say).
+ * cursor, leans into a drag, fidgets when ignored, takes a typed message
+ * (double-click or `/`), and answers the main process's commands.
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -9,6 +10,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const canvas = document.getElementById('view');
 const bubble = document.getElementById('bubble');
+const chatBox = document.getElementById('chat');
+const chatInput = document.getElementById('chat-input');
 const statusEl = document.getElementById('status');
 
 const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, premultipliedAlpha: true });
@@ -25,10 +28,11 @@ camera.lookAt(0, 0, 0);
 const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(1.5, 3, 2.5); scene.add(key);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x777788, 0.5));
 
-// look-at (cursor) → gesture (procedural) → model (normalized) hierarchy
-const look = new THREE.Group(); scene.add(look);
+// look-at (cursor / lean) → gesture (procedural) → model (normalized)
+const look = new THREE.Group(); look.position.y = -0.3; scene.add(look);   // model sits low; the top band is for the bubble
 const gesture = new THREE.Group(); look.add(gesture);
-let model = null, mixer = null, clips = [], current = null, idleName = null;
+let model = null, mixer = null, clips = [], current = null, currentClip = null, currentLoop = true, idleName = null;
+let triangles = 0, meshes = 0;
 const clock = new THREE.Clock();
 
 const loader = new GLTFLoader();
@@ -44,6 +48,8 @@ async function load() {
   const gltf = await new Promise((resolve, reject) => loader.parse(buffer, '', resolve, reject));
   if (model) { gesture.remove(model); mixer?.stopAllAction(); }
   model = gltf.scene;
+  triangles = 0; meshes = 0;
+  model.traverse((o) => { if (o.isMesh) { meshes++; const g = o.geometry; triangles += Math.floor((g.index ? g.index.count : g.attributes.position.count) / 3); } });
   // Normalize: height 1, base at y = -0.5, footprint centred — framed on the rest pose so a clip's rise stays in view.
   const box = new THREE.Box3().setFromObject(model);
   const size = new THREE.Vector3(); box.getSize(size);
@@ -56,10 +62,11 @@ async function load() {
   mixer = new THREE.AnimationMixer(model);
   mixer.addEventListener('finished', () => { if (idleName !== null) play({ clip: idleName, loop: true }); });
   idleName = clips.find((c) => /idle/i.test(c.name))?.name ?? clips[0]?.name ?? null;
-  current = null;
-  pushState({ loaded: true, clips: clips.map((c) => ({ name: c.name, duration: Math.round(c.duration * 1e6) / 1e6 })), playing: null, error: null });
+  current = null; currentClip = null;
+  pushState({ loaded: true, clips: clips.map((c) => ({ name: c.name, duration: Math.round(c.duration * 1e6) / 1e6 })), playing: null, error: null, triangles, meshes });
   if (idleName !== null) play({ clip: idleName, loop: true });
-  return { clips: clips.map((c) => c.name), idle: idleName };
+  emote({ gesture: 'wave' });
+  return { clips: clips.map((c) => c.name), idle: idleName, triangles, meshes };
 }
 
 function play({ clip, loop = true, speed = 1 }) {
@@ -71,22 +78,24 @@ function play({ clip, loop = true, speed = 1 }) {
   action.clampWhenFinished = false;
   if (current && current !== action) { current.crossFadeTo(action, 0.25, false); action.play(); }
   else action.play();
-  current = action;
+  current = action; currentClip = c; currentLoop = loop;
   pushState({ playing: c.name });
-  return { playing: c.name, loop, duration: c.duration };
+  return { playing: c.name, loop, duration: Math.round(c.duration * 1e6) / 1e6, speed };
 }
 
 // --- procedural gestures on any GLB (no clip needed) ---
 let tween = null;
+const GESTURES = { hop: 0.6, spin: 1.0, nod: 0.7, shake: 0.6, wave: 1.2 };
 function emote({ gesture: name = 'hop', seconds }) {
-  const dur = seconds ?? { hop: 0.6, spin: 1.0, nod: 0.7, shake: 0.6, wave: 1.2 }[name];
-  if (dur === undefined) throw new Error(`unknown gesture "${name}" (hop | spin | nod | shake | wave)`);
-  const t0 = clock.elapsedTime;
-  tween = { name, t0, dur };
+  const dur = seconds ?? GESTURES[name];
+  if (dur === undefined) throw new Error(`unknown gesture "${name}" (${Object.keys(GESTURES).join(' | ')})`);
+  tween = { name, t0: clock.elapsedTime, dur };
+  lastInteraction = clock.elapsedTime;
   return { gesture: name, seconds: dur };
 }
+let lean = 0;           // drag lean (radians), decays
 function applyGesture(now) {
-  gesture.position.set(0, 0, 0); gesture.rotation.set(0, 0, 0); gesture.scale.setScalar(1);
+  gesture.position.set(0, 0, 0); gesture.rotation.set(0, 0, -lean); gesture.scale.setScalar(1);
   if (!tween) return;
   const u = Math.min(1, (now - tween.t0) / tween.dur);
   const arc = Math.sin(Math.PI * u);
@@ -95,25 +104,46 @@ function applyGesture(now) {
     case 'spin': gesture.rotation.y = 2 * Math.PI * (0.5 - 0.5 * Math.cos(Math.PI * u)); break;
     case 'nod': gesture.rotation.x = 0.28 * Math.sin(2 * Math.PI * u) * (1 - u * 0.3); break;
     case 'shake': gesture.rotation.y = 0.35 * Math.sin(3 * Math.PI * u) * (1 - u); break;
-    case 'wave': gesture.rotation.z = 0.12 * Math.sin(4 * Math.PI * u) * arc; gesture.position.y = 0.03 * arc; break;
+    case 'wave': gesture.rotation.z += 0.12 * Math.sin(4 * Math.PI * u) * arc; gesture.position.y = 0.03 * arc; break;
   }
   if (u >= 1) tween = null;
 }
 
-// --- speech bubble ---
-let bubbleTimer = null;
-function say({ text, seconds = 4 }) {
+// --- speech bubble (with a thinking state and streamed text) ---
+let bubbleTimer = null, bubbleUntil = 0, thinking = false;
+function showBubble(text, seconds) {
   clearTimeout(bubbleTimer);
-  if (!text) { bubble.classList.remove('show'); pushState({ bubble: null }); return { shown: false }; }
+  bubble.classList.remove('thinking');
   bubble.textContent = text;
+  bubble.classList.toggle('long', text.length > 140);
   bubble.classList.add('show');
+  bubbleUntil = seconds ? performance.now() + seconds * 1000 : Infinity;
+  if (seconds) bubbleTimer = setTimeout(() => { bubble.classList.remove('show'); bubbleUntil = 0; pushState({ bubble: null }); }, seconds * 1000);
+}
+function say({ text, seconds = 4 }) {
+  if (!text) { clearTimeout(bubbleTimer); bubble.classList.remove('show', 'thinking'); bubbleUntil = 0; pushState({ bubble: null }); return { shown: false }; }
+  showBubble(text, seconds);
   pushState({ bubble: text });
-  bubbleTimer = setTimeout(() => { bubble.classList.remove('show'); pushState({ bubble: null }); }, seconds * 1000);
   return { shown: true, seconds };
 }
+function setThinking(on, hint) {
+  thinking = on;
+  if (on) {
+    clearTimeout(bubbleTimer);
+    bubble.innerHTML = '<span>•</span><span>•</span><span>•</span>';
+    bubble.classList.add('show', 'thinking'); bubble.classList.remove('long');
+    bubbleUntil = Infinity;
+    if (hint) status(hint, 4000);
+  } else if (bubble.classList.contains('thinking')) {
+    bubble.classList.remove('show', 'thinking'); bubbleUntil = 0;
+  }
+  return { thinking: on };
+}
+window.companion.onStream(({ text, done }) => { if (!done) showBubble(text, 0); });
 
-// --- cursor gaze: the model turns a little toward the pointer ---
+// --- cursor gaze + fidgets when ignored ---
 const gaze = { x: 0, y: 0 };
+let lastInteraction = 0, nextFidget = 20;
 setInterval(async () => {
   const c = await window.companion.cursor();
   if (!c) return;
@@ -121,16 +151,44 @@ setInterval(async () => {
   gaze.x = inRange ? THREE.MathUtils.clamp((c.x - 0.5) * 0.9, -0.45, 0.45) : 0;
   gaze.y = inRange ? THREE.MathUtils.clamp((c.y - 0.5) * 0.35, -0.18, 0.18) : 0;
 }, 120);
+const FIDGETS = ['nod', 'wave', 'shake', 'hop'];
+let fidgetIx = 0;
+function maybeFidget(now) {
+  if (thinking || tween || bubbleUntil > performance.now() || chatBox.classList.contains('show')) return;
+  if (now - lastInteraction < nextFidget) return;
+  emote({ gesture: FIDGETS[fidgetIx++ % FIDGETS.length] });
+  nextFidget = 18 + (fidgetIx * 7) % 25;          // 18–42 s, deterministic cycle
+}
 
-// --- drag to move, click to react ---
-const greetings = ['hi!', 'need anything?', '*stretches*', 'still here.', 'nice cursor.'];
+// --- drag to move (lean into it), click to react, double-click / "/" to talk ---
+const greetings = ['hi!', 'need anything? double-click to talk.', '*stretches*', 'still here.', 'nice cursor.'];
 let greet = 0;
+window.companion.onDrag(({ vx }) => { lean = THREE.MathUtils.clamp(lean + vx * 0.004, -0.35, 0.35); });
 canvas.addEventListener('mousedown', (e) => { if (e.button !== 0) return; canvas.classList.add('dragging'); window.companion.dragStart(); });
 window.addEventListener('mouseup', async () => {
   if (!canvas.classList.contains('dragging')) return;
   canvas.classList.remove('dragging');
   const { moved } = await window.companion.dragEnd();
-  if (!moved) { emote({ gesture: 'hop' }); say({ text: greetings[greet++ % greetings.length], seconds: 2.5 }); }
+  lastInteraction = clock.elapsedTime;
+  if (!moved) { emote({ gesture: 'hop' }); if (!thinking) say({ text: greetings[greet++ % greetings.length], seconds: 2.5 }); window.companion.event({ kind: 'click' }); }
+});
+canvas.addEventListener('dblclick', () => openChat());
+window.addEventListener('keydown', (e) => {
+  if (e.key === '/' && !chatBox.classList.contains('show')) { e.preventDefault(); openChat(); }
+  else if (e.key === 'Escape') closeChat();
+});
+function openChat() { chatBox.classList.add('show'); chatInput.focus(); pushState({ chat_open: true }); }
+function closeChat() { chatBox.classList.remove('show'); chatInput.blur(); pushState({ chat_open: false }); }
+chatInput.addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter') return;
+  const text = chatInput.value.trim();
+  if (!text) return;
+  chatInput.value = '';
+  lastInteraction = clock.elapsedTime;
+  try {
+    const r = await window.companion.chat(text);
+    if (r?.queued) status('waiting for a brain (external mode)', 4000);
+  } catch (err) { status(err.message, 6000); }
 });
 
 // --- commands from main ---
@@ -142,6 +200,13 @@ window.companion.onCommand(async ({ id, cmd, payload }) => {
       case 'play': result = play(payload); break;
       case 'emote': result = emote(payload); break;
       case 'say': result = say(payload); break;
+      case 'thinking': result = setThinking(!!payload.on, payload.hint); break;
+      case 'state': result = {
+        playing: currentClip?.name ?? null, clip_time: current ? Math.round(current.time * 100) / 100 : null, loop: currentClip ? currentLoop : null,
+        gesture: tween ? tween.name : null, bubble: bubble.classList.contains('show') && !thinking ? bubble.textContent : null,
+        bubble_remaining: bubbleUntil === Infinity ? null : Math.max(0, Math.round((bubbleUntil - performance.now()) / 100) / 10) || null,
+        thinking, chat_open: chatBox.classList.contains('show'), gaze: { x: Math.round(gaze.x * 100) / 100, y: Math.round(gaze.y * 100) / 100 },
+      }; break;
       default: throw new Error(`unknown command ${cmd}`);
     }
     window.companion.reply(id, true, result);
@@ -166,10 +231,12 @@ function frame(now = 0) {
   const dt = clock.getDelta();
   mixer?.update(dt);
   look.rotation.y += (gaze.x - look.rotation.y) * 0.08;
-  look.rotation.x += (gaze.y - look.rotation.x) * 0.08;
+  look.rotation.x += ((thinking ? 0.06 * Math.sin(clock.elapsedTime * 2.2) : gaze.y) - look.rotation.x) * 0.08;
+  lean *= 0.9;
   applyGesture(clock.elapsedTime);
+  maybeFidget(clock.elapsedTime);
   renderer.render(scene, camera);
 }
 frame();
 
-load().then((r) => status(`${r.clips.length} clip(s)${r.idle ? `, playing ${r.idle}` : ''}`)).catch((e) => { pushState({ loaded: false, error: e.message }); status(e.message, 8000); });
+load().then((r) => status(`${r.clips.length} clip(s)${r.idle ? `, playing ${r.idle}` : ''} · ${r.triangles.toLocaleString()} tris · double-click to talk`, 5000)).catch((e) => { pushState({ loaded: false, error: e.message }); status(e.message, 8000); });
