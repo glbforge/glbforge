@@ -19,7 +19,9 @@ following the loop had no exit from it.
 |---|---|
 | `packages/mcp/scripts/agent-probe.ts` | The harness. `pnpm probe` |
 | `docs/agent-loop/baseline.json` | Frozen numbers. A pass that moves them moves them on purpose |
-| `docs/agent-loop/ledger.md` | Every finding, with its state. Read first, so a pass never rediscovers a known thing |
+| `docs/agent-loop/passes/` | One file per pass, append-only. The source of truth |
+| `docs/agent-loop/ledger.md` | Generated index of every finding and where it stands. Read first |
+| `scripts/ledger.mjs` | Folds the passes into the index. `pnpm ledger` |
 | `.claude/skills/glbforge-pass/SKILL.md` | What a pass does, start to finish |
 | `scripts/live-check.mjs` | glbforge.dev from outside, on a machine that can reach it |
 
@@ -121,3 +123,27 @@ undeclared or undocumented code, or a schema violation.
 
 `resolutionRate` is below 1.0 today. That is not noise to be tuned away: it is
 ledger entry L2, and the number goes up when the entry is closed.
+
+## The ledger is generated
+
+It used to be one hand-edited file that every pass prepended to, which made it
+the one place concurrent passes were guaranteed to collide — three open PRs,
+three new sections at line 13, three conflicts. It also answered the wrong
+question: a reverse-chronological log makes you reconstruct "what is open
+right now" by reading the whole thing, and a finding's state changes over
+time.
+
+So `passes/` is append-only — one new file per pass, and a new file never
+conflicts — and `pnpm ledger` folds them into `ledger.md`. A later pass
+changes a finding's state by writing a heading for the same id in its own
+file; the newest mention wins. The format is what the loop already wrote, so
+there is nothing extra to remember:
+
+```
+# Pass — YYYY-MM-DD — <commit or run id>
+### L<n> · `state` · <title>
+```
+
+CI runs `node scripts/ledger.mjs --check` and fails if the index is stale.
+On a merge conflict in `ledger.md`, take either side and re-run `pnpm ledger`
+rather than resolving it by hand.
