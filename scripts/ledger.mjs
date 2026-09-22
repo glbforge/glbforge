@@ -14,6 +14,13 @@
  * earlier ones for the same finding id, so closing L2 is just writing
  * `### L2 · `fixed` · …` in your own file.
  *
+ * A pass writes a heading ONLY for a finding it raises or whose state it
+ * changes. Restating one it merely looked at would make it the newest
+ * mention and silently reopen something a concurrent pass had closed — the
+ * index is what carries findings forward, which is the point of generating
+ * it. A pass that changed nothing has no headings at all, and that is a
+ * valid, recorded outcome.
+ *
  * The format is what the loop already wrote, so there is nothing extra to
  * remember:
  *
@@ -59,7 +66,7 @@ for (const file of files) {
     if (seen.has(f.id)) problems.push(`${file}: ${f.id} appears twice — one heading per finding per pass`);
     seen.add(f.id);
   }
-  if (!findings.length) problems.push(`${file}: no findings. A pass that found nothing still records that as a finding, so the next pass knows the ground was walked`);
+
   passes.push({ file, date: head[1], ref: head[2], findings });
 }
 
@@ -122,7 +129,8 @@ L.push('');
 L.push('## Passes');
 L.push('');
 for (const p of [...passes].reverse()) {
-  L.push(`- **${p.date}** — [${p.file.replace(/\.md$/, '')}](${link(p)}) — \`${p.ref}\` — ${p.findings.map((f) => `\`${f.id}\` ${f.state}`).join(', ')}`);
+  const what = p.findings.length ? p.findings.map((f) => `\`${f.id}\` ${f.state}`).join(', ') : 'nothing to fix';
+  L.push(`- **${p.date}** — [${p.file.replace(/\.md$/, '')}](${link(p)}) — \`${p.ref}\` — ${what}`);
 }
 L.push('');
 

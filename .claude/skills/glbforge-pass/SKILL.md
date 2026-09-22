@@ -140,9 +140,14 @@ Rules the generator enforces:
   a heading for that same id in *your* file — the newest pass wins. Do not
   edit the file that first raised it.
 - New findings take the next free id. `pnpm ledger` prints what exists.
-- A pass with no findings is malformed. If you found nothing, that IS the
-  finding — record it with a state, so the next pass knows the ground was
-  walked and when.
+- **Only write a heading for a finding you raise, or whose state you are
+  changing.** Do not restate one you merely looked at and left alone: yours
+  would be the newest mention, so a carried-forward `open` dated after
+  another pass's `fixed` silently reopens it. Carrying findings forward is
+  the index's job — that is why it is generated. Mention them in prose if
+  they shaped your decisions.
+- A pass that changed nothing writes no headings at all. That is a valid
+  outcome and the file itself records that the ground was walked, and when.
 
 Then regenerate the index and commit it with your file:
 
