@@ -17,7 +17,7 @@ import { perceptualSnapshot, perceptualCompare, type PerceptualVerdict } from '.
 import { sharpTextureDecoder, type TextureDecoder } from './harness/render.js';
 import { computeSmoothNormals, canonicalByPosition } from './normals.js';
 import { readFloat } from './accessors.js';
-import { analyzeGeometry, sceneTriangles } from './analyze/geometry.js';
+import { analyzeGeometry, sceneDrawCalls, sceneTriangles } from './analyze/geometry.js';
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
@@ -240,15 +240,33 @@ export async function optimize(
   // Multi-primitive assets (one material per submesh is a common AI-export
   // pattern) cost one draw call per primitive. Palette solid-color materials,
   // flatten the node hierarchy, then join primitives that share a material.
+  //
+  // The trigger counts the MESH LIST on purpose, and that is worth stating
+  // because counting the mesh list is exactly the mistake profiles@3 was
+  // published to correct. Here it is the right question: this block merges
+  // primitives that already sit in the document, which costs nothing and is
+  // always worth doing. The other source of draw calls — one shared mesh
+  // placed by many nodes, which dedup() creates deliberately a few lines up —
+  // cannot be merged without re-duplicating the geometry dedup just shared.
+  // That is a trade, not a free win, so it is not decided here: it happens
+  // after the simplify ladder, where the triangle budget is known and can
+  // decide (see 'bake-instances' below). Joining it here instead would bake
+  // the un-simplified mesh and hand the ladder 20x the geometry to chew
+  // through — measured at 3536 ms against 2153 ms on a 20x-instanced 2M
+  // triangle asset, for the same output.
   const primCount = () =>
     doc.getRoot().listMeshes().reduce((n, m) => n + m.listPrimitives().length, 0);
   const primsBefore = primCount();
   if (primsBefore > 1) {
+    const callsBefore = sceneDrawCalls(doc);
     await doc.transform(palette({ min: 5 }), flatten(), join());
-    const primsAfter = primCount();
-    if (primsAfter < primsBefore) {
-      steps.push(`join ${primsBefore}->${primsAfter} prims`);
-      log(`joined: ${primsBefore} -> ${primsAfter} draw calls`);
+    const callsAfter = sceneDrawCalls(doc);
+    // Report the number the budget measures. The step used to say "prims"
+    // while the log line beside it said "draw calls"; on an instanced asset
+    // those are different numbers and only one of them is the cap.
+    if (callsAfter < callsBefore) {
+      steps.push(`join ${callsBefore}->${callsAfter} draw calls`);
+      log(`joined: ${callsBefore} -> ${callsAfter} draw calls`);
     }
   }
 
@@ -375,7 +393,7 @@ export async function optimize(
     ) {
       const callsBefore = instancedStats.drawCallEstimate;
       await doc.transform(flatten(), join());
-      const callsAfter = analyzeGeometry(doc, { topology: false }).drawCallEstimate;
+      const callsAfter = sceneDrawCalls(doc);
       if (callsAfter < callsBefore) {
         steps.push(`bake-instances ${callsBefore}->${callsAfter} draw calls`);
         log(`baked instanced placements: ${callsBefore} -> ${callsAfter} draw calls (triangle budget had headroom)`);
