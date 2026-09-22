@@ -5,6 +5,12 @@
       "args": [
         "packages/mcp/dist/index.js"
       ]
+    },
+    "companion": {
+      "command": "node",
+      "args": [
+        "companion/mcp.mjs"
+      ]
     }
   }
 }

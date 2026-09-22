@@ -1,0 +1,5 @@
+# Standalone install: keeps electron out of the monorepo's lockfile and CI.
+packages:
+  - '.'
+allowBuilds:
+  electron: true

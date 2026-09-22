@@ -1,0 +1,21 @@
+{
+  "name": "@glbforge/companion",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A GLB that lives on your desktop: transparent always-on-top window, plays the asset's clips, and takes orders from an agent over localhost HTTP or MCP.",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "mcp": "node mcp.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.11.0",
+    "three": "^0.169.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0"
+  },
+  "license": "MIT"
+}
