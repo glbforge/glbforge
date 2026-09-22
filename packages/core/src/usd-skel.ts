@@ -94,7 +94,7 @@ function slerp(a: ArrayLike<number>, b: ArrayLike<number>, t: number): number[] 
 }
 
 /** Evaluate a glTF animation sampler at time `t` (seconds). */
-function sampleChannel(
+export function sampleChannel(
   times: Float32Array, values: Float32Array, width: number, interpolation: string, t: number,
 ): number[] {
   const n = times.length;

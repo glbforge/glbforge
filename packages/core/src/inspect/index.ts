@@ -2,7 +2,7 @@ export * from './diagnostics.js';
 export * from './ir.js';
 export { fromGltf, recomputeWorlds, nodeWorld, type FromGltfOptions } from './from-gltf.js';
 export { inspectGeometry, type GeometryReport, type MeshGeometryReport, type GeometryInspectOptions, type BoundingBox } from './geometry.js';
-export { inspectAnimation, channelMoves, type AnimationReport, type SkeletonReport, type BlendShapeReport, type ClipReport } from './animation.js';
+export { inspectAnimation, channelMoves, netDisplacement, type AnimationReport, type SkeletonReport, type BlendShapeReport, type ClipReport } from './animation.js';
 export { inspectMaterials, textureVramBytes, type MaterialsReport, type MaterialReport, type TextureReport, type MaterialsInspectOptions } from './materials.js';
 export { PERFORMANCE_PROFILES, PERFORMANCE_LIMIT_KEYS, resolvePerformanceProfile, fromBudgetProfile, type PerformanceProfile, type PerformanceLimitKey } from './perf-profiles.js';
 export { analyzePerformance, type PerformanceReport, type Overage } from './performance.js';

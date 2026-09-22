@@ -127,6 +127,8 @@ Generated from `packages/core/src/inspect/diagnostics.ts` (`ERROR_CODES`); a tes
 | `AXIS_CONVERTED` |  | info | The asset was rotated to the target up-axis (e.g. Z-up for STL). | Nothing to do. |
 | `SCALE_CONVERTED` |  | info | The asset was rescaled to the target unit (e.g. millimetres for STL). | Nothing to do. |
 | `MORPH_TARGETS_DROPPED` |  | warning | Morph targets were not carried to the output format. | Bake the desired shape, or use a format that carries them. |
+| `ANIMATION_BAKED` |  | info | A procedural clip was baked onto a pivot inserted above the scene roots (animate); originals untouched. | Nothing to do. inspect_animation reports the clip; export_usdz carries it as xform time samples. |
+| `ANIMATE_WARNING` |  | warning | animate could not bake what was asked (no geometry to measure, or amplitude 0). | Check the message: pass geometry with positions, or an amplitude above 0. |
 | `ANIMATED_ASSET` | `scene/animated-asset` | info | The asset has skins or animation clips; optimization is bone-aware and USDZ export carries the skeleton and first clip. | Budget triangles with deformation cost in mind. |
 | `GENERATOR_FINGERPRINT` | `gen/profile` | info | The producing generator was recognized from the file's structure; suggestions are tailored to its known weak spots. | Nothing to do. |
 | `NO_GEOMETRY_TO_RENDER` |  | warning | The scene has no renderable triangles. | Check MESH_EMPTY / composition arcs. |

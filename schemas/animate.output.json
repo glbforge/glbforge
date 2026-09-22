@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://glbforge.dev/schemas/0.8.0/list_profiles.output.json",
-  "title": "list_profiles.output",
-  "description": "Response envelope of the list_profiles tool.",
+  "$id": "https://glbforge.dev/schemas/0.8.0/animate.output.json",
+  "title": "animate.output",
+  "description": "Response envelope of the animate tool.",
   "type": "object",
   "properties": {
     "ok": {
@@ -203,13 +203,171 @@
         {
           "type": "object",
           "properties": {
-            "profiles": {
+            "out": {
+              "type": "string"
+            },
+            "clip": {
+              "type": "string"
+            },
+            "preset": {
+              "type": "string"
+            },
+            "duration_seconds": {
+              "type": "number"
+            },
+            "fps": {
+              "type": "number"
+            },
+            "keys": {
+              "type": "integer"
+            },
+            "channels": {
+              "type": "integer"
+            },
+            "pivot": {
               "type": "array",
-              "items": {}
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "height": {
+              "type": "number"
+            },
+            "motion": {
+              "type": "object",
+              "properties": {
+                "rise": {
+                  "type": "number"
+                },
+                "yaw_degrees": {
+                  "type": "number"
+                },
+                "tilt_degrees": {
+                  "type": "number"
+                },
+                "scale_change": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "rise",
+                "yaw_degrees",
+                "tilt_degrees",
+                "scale_change"
+              ],
+              "additionalProperties": false
+            },
+            "animation": {
+              "type": "object",
+              "properties": {
+                "has_motion": {
+                  "type": "boolean"
+                },
+                "clips": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "duration_seconds": {
+                        "type": "number"
+                      },
+                      "has_motion": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "name",
+                      "duration_seconds",
+                      "has_motion"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "has_motion",
+                "clips"
+              ],
+              "additionalProperties": false
+            },
+            "dry_run": {
+              "type": "boolean"
+            },
+            "written": {
+              "type": "boolean"
+            },
+            "diff": {
+              "type": "object",
+              "properties": {
+                "added_prims": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "removed_prims": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "changed_properties": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "prim_path": {
+                        "type": "string"
+                      },
+                      "property": {
+                        "type": "string"
+                      },
+                      "before": {},
+                      "after": {}
+                    },
+                    "required": [
+                      "prim_path",
+                      "property"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "summary": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "added_prims",
+                "removed_prims",
+                "changed_properties",
+                "summary"
+              ],
+              "additionalProperties": false
+            },
+            "post_validation": {
+              "description": "validate(mode=quick) of the output (null when the output format cannot be validated)"
             }
           },
           "required": [
-            "profiles"
+            "out",
+            "clip",
+            "preset",
+            "duration_seconds",
+            "fps",
+            "keys",
+            "channels",
+            "pivot",
+            "height",
+            "motion",
+            "animation",
+            "dry_run",
+            "written",
+            "diff"
           ],
           "additionalProperties": true
         },

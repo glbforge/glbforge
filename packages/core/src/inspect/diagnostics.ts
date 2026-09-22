@@ -166,6 +166,8 @@ export const ERROR_CODES = {
   AXIS_CONVERTED: spec('info', 'The asset was rotated to the target up-axis (e.g. Z-up for STL).', 'Nothing to do.'),
   SCALE_CONVERTED: spec('info', 'The asset was rescaled to the target unit (e.g. millimetres for STL).', 'Nothing to do.'),
   MORPH_TARGETS_DROPPED: spec('warning', 'Morph targets were not carried to the output format.', 'Bake the desired shape, or use a format that carries them.'),
+  ANIMATION_BAKED: spec('info', 'A procedural clip was baked onto a pivot inserted above the scene roots (animate); originals untouched.', 'Nothing to do. inspect_animation reports the clip; export_usdz carries it as xform time samples.'),
+  ANIMATE_WARNING: spec('warning', 'animate could not bake what was asked (no geometry to measure, or amplitude 0).', 'Check the message: pass geometry with positions, or an amplitude above 0.'),
   ANIMATED_ASSET: spec('info', 'The asset has skins or animation clips; optimization is bone-aware and USDZ export carries the skeleton and first clip.', 'Budget triangles with deformation cost in mind.'),
   GENERATOR_FINGERPRINT: spec('info', 'The producing generator was recognized from the file\'s structure; suggestions are tailored to its known weak spots.', 'Nothing to do.'),
   // --- rendering ------------------------------------------------------------

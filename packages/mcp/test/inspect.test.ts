@@ -60,7 +60,7 @@ describe('inspect', () => {
     expect(byName.inspect.annotations?.readOnlyHint).toBe(true);
     expect(byName.inspect_geometry.description).toMatch(/call `inspect`/);
     expect(byName.inspect_all.description).toMatch(/call `inspect` instead/);
-    expect(tools.length).toBe(27);
+    expect(tools.length).toBe(28);
   });
 
   it('reads a centimetre-scale sheet: measured facts, a scale/too-small finding with cause + fix, mirrored into errors[]', async () => {

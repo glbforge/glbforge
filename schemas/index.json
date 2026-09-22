@@ -137,6 +137,12 @@
       "output": "export_usdz.output.json",
       "readOnly": false
     },
+    "animate": {
+      "description": "Bake a looping procedural motion into a GLB as an ordinary animation clip — no rig needed: idle (slow rise and settle with a gentle turn), bob, spin (one turn per loop), sway, breathe, hop. The clip drives a pivot inserted at the base centre of the asset; the original nodes, skins and authored clips are untouched, and calling it again with the same clip name replaces the clip rather than stacking pivots. Amplitudes are fractions of the measured height, so the same input and settings give identical bytes. Use it on the optimized .web.glb when an asset has to move in a viewer, a desktop companion or AR Quick Look (export_usdz bakes the clip as xform time samples). Returns the measured motion (rise, yaw, tilt, scale change), the pivot, an inspect_animation of the written file, the diff and a thumbnail. dry_run=true writes nothing.",
+      "input": "animate.input.json",
+      "output": "animate.output.json",
+      "readOnly": false
+    },
     "generate_image_to_3d": {
       "description": "True volumetric 3D from a single image via open models on fal.ai GPU inference (needs FAL_KEY — check capabilities first): hunyuan (Hunyuan3D-2, highest quality), trellis (balanced), triposr (fastest). Cheaper than Meshy for most subjects; use Meshy for the richest PBR texturing. Returns a request id — poll generation_status, then download.",
       "input": "generate_image_to_3d.input.json",

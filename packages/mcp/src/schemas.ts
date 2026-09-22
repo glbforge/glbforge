@@ -332,6 +332,7 @@ export const LegacyDataSchemas = {
   ]).describe('The forged piece, or — with matte_preview — the cut it would make, which writes nothing and so has no out/diff'),
   export_stl: loose({ out: z.string(), ...MutationShape }),
   export_usdz: loose({ out: z.string(), ...MutationShape }),
+  animate: loose({ out: z.string(), clip: z.string(), preset: z.string(), duration_seconds: z.number(), fps: z.number(), keys: z.number().int(), channels: z.number().int(), pivot: z.array(z.number()).length(3), height: z.number(), motion: z.object({ rise: z.number(), yaw_degrees: z.number(), tilt_degrees: z.number(), scale_change: z.number() }), animation: z.object({ has_motion: z.boolean(), clips: z.array(z.object({ name: z.string(), duration_seconds: z.number(), has_motion: z.boolean() })) }), ...MutationShape }),
   generate_image_to_3d: loose({ requestId: z.string(), model: z.string() }),
   generation_status: loose({ status: z.string() }),
   meshy_create_task: loose({ taskId: z.string(), kind: z.string() }),

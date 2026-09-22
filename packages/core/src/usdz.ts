@@ -13,7 +13,7 @@ import { readFloat } from './accessors.js';
 import { computeSmoothNormals } from './normals.js';
 import { writeUsda, type UsdAttribute, type UsdLayer, type UsdPrim, type UsdProperty } from './usd-ir.js';
 import { writeUsdc } from './usdc.js';
-import { buildSkeleton, SKEL_FPS, type BlendShapeSource } from './usd-skel.js';
+import { buildSkeleton, compose, mul, sampleChannel, SKEL_FPS, type BlendShapeSource } from './usd-skel.js';
 import { storeZip, type ZipEntry } from './zip.js';
 
 /** Re-encode a texture for USDZ (PNG or JPEG only). Node's default uses sharp. */
@@ -225,6 +225,39 @@ export function buildUsdLayer(
     warnings.push(...sk.warnings);
   }
 
+  // --- Node (TRS) animation: USD has one timeline, so the first clip that moves a
+  //     node is baked as xformOp:transform time samples on every mesh Xform whose
+  //     chain it touches (the way animate()'s pivot clip reaches AR Quick Look). ---
+  const nodeClips = root.listAnimations().filter((a) => a.listChannels().some((c) => c.getTargetNode() && c.getTargetPath() !== 'weights'));
+  const nodeClip = nodeClips[0] ?? null;
+  const nodeSamplers = nodeClip ? nodeClip.listChannels().filter((c) => c.getTargetNode() && c.getTargetPath() !== 'weights').map((c) => {
+    const s = c.getSampler()!;
+    return { node: c.getTargetNode()!, path: c.getTargetPath(), times: readFloat(s.getInput()!), values: readFloat(s.getOutput()!), interpolation: s.getInterpolation() };
+  }) : [];
+  const nodeDuration = nodeSamplers.reduce((d, s) => Math.max(d, s.times[s.times.length - 1] ?? 0), 0);
+  const nodeFrames = nodeSamplers.length && nodeDuration > 0 ? Math.round(nodeDuration * SKEL_FPS) + 1 : 0;
+  const animatedNodes = new Set(nodeSamplers.map((s) => s.node));
+  const chainAnimated = (n: Node): boolean => {
+    for (let cur: Node | null = n; cur; cur = cur.listParents().find((x): x is Node => x instanceof Node) ?? null) if (animatedNodes.has(cur)) return true;
+    return false;
+  };
+  const nodeTimes = Array.from({ length: nodeFrames }, (_, i) => i);
+  const worldAt = (n: Node, t: number): number[] => {
+    const local = (x: Node): number[] => {
+      let tr = [...x.getTranslation()], rot = [...x.getRotation()], sc = [...x.getScale()];
+      for (const s of nodeSamplers) {
+        if (s.node !== x) continue;
+        const v = sampleChannel(s.times, s.values, s.path === 'rotation' ? 4 : 3, s.interpolation, t);
+        if (s.path === 'translation') tr = v; else if (s.path === 'rotation') rot = v; else if (s.path === 'scale') sc = v;
+      }
+      return compose(tr, rot, sc);
+    };
+    const p = n.listParents().find((x): x is Node => x instanceof Node) ?? null;
+    return p ? mul(worldAt(p, t), local(n)) : local(n);
+  };
+  let bakedNodes = 0;
+  if (nodeClips.length > 1) warnings.push(`${nodeClips.length} clips animate nodes; exported "${nodeClip!.getName() || 'clip 0'}" as xform time samples (USD carries one timeline).`);
+
   // --- Meshes: one Xform per mesh-bearing node, world transform baked ---
   const nodePrims: UsdPrim[] = [];
   let meshCount = 0, triangles = 0, nodeIndex = 0;
@@ -319,10 +352,14 @@ export function buildUsdLayer(
       const children: UsdPrim[] = [];
       mesh.listPrimitives().forEach((prim, pi) => { const p = primBlock(prim, pi, xpath, xformName); if (p) children.push(p); });
       if (children.length) {
+        const animated = nodeFrames > 0 && chainAnimated(node);
+        if (animated) bakedNodes++;
         nodePrims.push({
           name: xformName, path: xpath, typeName: 'Xform', children,
           properties: [
-            attr('xformOp:transform', 'matrix4d', { value: Array.from(m) }),
+            animated
+              ? attr('xformOp:transform', 'matrix4d', { samples: { times: nodeTimes, values: nodeTimes.map((f) => worldAt(node, f / SKEL_FPS)) } })
+              : attr('xformOp:transform', 'matrix4d', { value: Array.from(m) }),
             attr('xformOpOrder', 'token[]', { uniform: true, value: ['xformOp:transform'] }),
           ],
         });
@@ -331,8 +368,11 @@ export function buildUsdLayer(
     for (const child of node.listChildren()) visit(child);
   };
   for (const child of scene.listChildren()) visit(child);
-  if (!skeletons.size && root.listAnimations().length) {
-    warnings.push('Node animations without a skin are not exported (UsdSkel carries joint animation only); the pose is static.');
+  if (bakedNodes) frames = Math.max(frames, nodeFrames);
+  if (nodeClip && !bakedNodes && !skeletons.size) {
+    warnings.push(`Clip "${nodeClip.getName() || 'clip 0'}" moves no mesh-bearing node (skinned meshes follow their skeleton); the pose is static.`);
+  } else if (!nodeClip && !skeletons.size && root.listAnimations().length) {
+    warnings.push('The animation clips carry only morph weights without a skin; the pose is static.');
   }
 
   const allMaterials = defaultMaterial ? [...materialPrims, defaultMaterial] : materialPrims;

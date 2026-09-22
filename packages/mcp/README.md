@@ -89,7 +89,7 @@ Tools: `inspect`, `diff`, `validate`, `inspect_all`, `inspect_geometry`, `inspec
 `inspect_materials`, `analyze_performance`, `render`, `render_animation_strip`,
 `capabilities`, `analyze_glb`, `inspect_report`, `render_preview`,
 `compare_glb`, `optimize_glb`, `ship_asset`, `audit_directory`,
-`extrude_image`, `export_stl`, `export_usdz`, `list_profiles`,
+`extrude_image`, `animate`, `export_stl`, `export_usdz`, `list_profiles`,
 `generate_image_to_3d`, `generation_status`, `meshy_create_task`,
 `meshy_task_status`, `meshy_download`.
 Prompts: `web-ready-mobile-hero`, `logo-keychain`, `audit-and-fix-folder`, `ar-ready-usdz`.
