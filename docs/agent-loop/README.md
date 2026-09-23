@@ -22,6 +22,7 @@ following the loop had no exit from it.
 | `docs/agent-loop/passes/` | One file per pass, append-only. The source of truth |
 | `docs/agent-loop/ledger.md` | Generated index of every finding and where it stands. Read first |
 | `scripts/ledger.mjs` | Folds the passes into the index. `pnpm ledger` |
+| `docs/agent-loop/ROLES.md` | The eight stances a pass can take, and what each counts as success |
 | `.claude/skills/glbforge-pass/SKILL.md` | What a pass does, start to finish |
 | `scripts/live-check.mjs` | glbforge.dev from outside, on a machine that can reach it |
 
@@ -147,3 +148,23 @@ there is nothing extra to remember:
 CI runs `node scripts/ledger.mjs --check` and fails if the index is stale.
 On a merge conflict in `ledger.md`, take either side and re-run `pnpm ledger`
 rather than resolving it by hand.
+
+## Roles, because one stance wears out
+
+The loop ran nine auditor passes and the last four reported "nothing to fix".
+That was honest and nearly useless. An auditor that has audited everything
+keeps succeeding — its success condition is finding nothing — while the
+product's real problems sit in places an auditor does not look.
+
+So a pass now takes a **role** before it picks a task, and each role succeeds
+differently: `saboteur` by finding a crash, `rival` by publishing a table
+where GLBForge sometimes loses, `newcomer` by getting stuck doing a real job
+with only what the tools return. Judging one by another's standard is how a
+loop starts lying to itself.
+
+Selection is mechanical: least recently used, which `pnpm ledger` prints and
+the index tabulates. No two consecutive passes share a stance, coverage evens
+out with nobody tracking it, and "what should I do today" stops being a
+judgement each pass re-makes from scratch.
+
+See [ROLES.md](ROLES.md).

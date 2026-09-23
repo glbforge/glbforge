@@ -1,4 +1,5 @@
 # Pass — 2026-09-23 — 56a5e59 (agent-loop/2026-09-21-bootstrap)
+**Role:** newcomer-to-new-code
 
 ## Step 0 — claim check
 

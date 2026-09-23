@@ -1,4 +1,5 @@
 # Pass — 2026-09-21 — cse_01NFyKU3
+**Role:** auditor
 
 First scheduled pass. Build clean, suite green, probe matched the committed
 baseline exactly (27 tools, 0.667, 33/128) with only L2 and L4 showing. Walked
