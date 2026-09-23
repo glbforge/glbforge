@@ -16,6 +16,11 @@ TypeScript analysis, optimization, extrusion, and export for glTF/GLB assets.
   meshopt-simplify (error ladder) → smooth normals → WebP or KTX2 → meshopt
 - `extrudeImage(bytes, opts)` — raster/SVG silhouette → beveled watertight
   mesh with the source image projected as texture
+- `animate(doc, {preset, duration, amplitude})` — bake a looping procedural
+  clip (idle, bob, spin, sway, breathe, hop) onto a pivot at the base centre,
+  no rig required; amplitudes are fractions of the measured height, so the
+  result is deterministic and re-running replaces the clip rather than
+  stacking another one
 - `toStl(doc, {targetSizeMm})` — binary STL, world transforms baked, z-up
 - `toUsdz(doc, opts)` — iOS AR Quick Look: binary usdc (crate 0.8.0) written
   in pure TS, UsdPreviewSurface materials, UsdSkel skeletons and blend shapes
