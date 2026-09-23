@@ -63,9 +63,20 @@ export function registerCompanionCommand(program: Command): void {
     .option('--brain-model <model>', 'model for the embedded brain, e.g. sonnet (default: Claude Code\'s default)')
     .option('--detach', 'return immediately and leave the window running')
     .option('--mcp', 'also register the companion MCP bridge as "companion" in ./.mcp.json')
+    .option('--hooks', 'install Claude Code hooks (user settings) so every session\'s finish, permission prompt and start shows on the companion; --hooks-project for this repo only')
+    .option('--hooks-project', 'like --hooks, but in ./.claude/settings.json')
+    .option('--no-hooks-install', 'remove the companion hooks from user settings')
     .option('--json', 'emit JSON')
-    .action(async (file: string | undefined, opts: { port?: number; size?: number; brain?: string; brainModel?: string; detach?: boolean; mcp?: boolean; json?: boolean }) => {
+    .action(async (file: string | undefined, opts: { port?: number; size?: number; brain?: string; brainModel?: string; detach?: boolean; mcp?: boolean; hooks?: boolean; hooksProject?: boolean; hooksInstall?: boolean; json?: boolean }) => {
       const cwd = process.cwd();
+      if (opts.hooks || opts.hooksProject || opts.hooksInstall === false) {
+        // Delegate to the companion's own installer so the hook path matches where it actually lives (checkout or npx cache).
+        const sub = opts.hooksInstall === false ? 'remove' : 'install';
+        const launch = companionLaunch(undefined, {});
+        const args = [...launch.args.filter((a) => a !== '--brain' && a !== 'sdk'), 'hooks', sub, ...(opts.hooksProject ? ['--project'] : []), ...(opts.port ? ['--port', String(opts.port)] : [])];
+        const r = spawn(launch.command, args, { env: launch.env, stdio: 'inherit' });
+        await new Promise<void>((done) => r.on('exit', () => done()));
+      }
       if (opts.mcp) {
         const path = join(cwd, '.mcp.json');
         let cfg: Record<string, unknown> = {};
@@ -75,7 +86,7 @@ export function registerCompanionCommand(program: Command): void {
         await writeFile(path, JSON.stringify(cfg, null, 2) + '\n');
         if (!opts.json) console.log(`  .mcp.json: mcpServers.companion → ${(servers.companion as { command: string }).command} ${(servers.companion as { args: string[] }).args.join(' ')}`);
       }
-      if (!file && !opts.mcp) { console.error('  a .glb path is required (or --mcp to only register the bridge)'); process.exitCode = 1; return; }
+      if (!file && !opts.mcp && !opts.hooks && !opts.hooksProject && opts.hooksInstall !== false) { console.error('  a .glb path is required (or --mcp / --hooks to only register)'); process.exitCode = 1; return; }
       if (!file) return;
       const launch = companionLaunch(file, opts);
       const port = opts.port ?? 4747;

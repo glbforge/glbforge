@@ -43,6 +43,15 @@
   from the checkout when built there and through npx otherwise, passes the
   glbforge MCP server so the character can inspect itself, and `--mcp`
   registers the bridge in `.mcp.json`. Six packages release together now.
+- **Claude Code hooks: every session on the machine has a face.**
+  `glbforge companion --hooks` (or `npx -y @glbforge/companion hooks install`)
+  merges five hooks into `~/.claude/settings.json` — Stop, StopFailure,
+  Notification, SessionStart, SessionEnd — that post to the window as body
+  reactions: hop and quote the last line when a session finishes, wave when
+  one is waiting on a permission, shake on an API failure. No brain turn, no
+  cost, exits 0 in under 3 s with or without the companion running.
+  Idempotent, backed up, `hooks remove` undoes it. `POST /event` and
+  `companion_event` gained `react: body | brain` and a `kind`.
 - **The brain got cheap.** One persistent Claude Code session (streaming
   input) instead of a process per message, and one lazy `inspect_self` tool
   instead of glbforge's whole 28-tool server in the prompt: the prefix every
