@@ -31,6 +31,14 @@ npx glbforge stl model.glb --size 80
 # USDZ for iOS AR Quick Look (binary crate, UsdPreviewSurface, UsdSkel)
 npx glbforge usdz model.web.glb
 
+# Looping motion baked in as an ordinary clip — no rig, no bones. Drives a
+# pivot at the base centre; original nodes, skins and clips are untouched
+npx glbforge animate model.glb --preset idle
+
+# Put it on the desktop: a transparent always-on-top character that plays its
+# clips, gazes at the cursor, and answers typed messages through an agent
+npx glbforge companion model.glb
+
 # React Three Fiber viewer with LOD switching + KTX2 decoding
 npx glbforge scaffold model.web.glb -o viewer
 
@@ -53,5 +61,11 @@ after and gates the weakest SSIM on the profile's floor. A ready-made GitHub
 Action posts report cards on PRs, and `npx glbforge init` wires the whole
 thing into a project (npm scripts, MCP server, CLAUDE.md section): see the
 repo.
+
+Everything the CLI does is also an MCP tool
+([`@glbforge/mcp`](https://www.npmjs.com/package/@glbforge/mcp), 28 of them),
+so an agent gets the same pipeline without shelling out — every response
+carries a stable code and a prim path, and validates against a published
+schema.
 
 Docs, GitHub Action, and MCP server: **https://github.com/glbforge/glbforge** · https://glbforge.dev
