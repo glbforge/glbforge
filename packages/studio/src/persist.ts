@@ -12,11 +12,24 @@ export interface PersistedAsset {
   report: unknown;
   ts: number;
   fidelitySheet?: string | null;
+  /** Shape of `report` at write time; see SCHEMA. Absent on pre-versioned rows. */
+  v?: number;
 }
 
 const DB_NAME = 'glbforge-studio';
 const STORE = 'assets';
 const CAP = 40;
+/**
+ * Bump whenever `report`'s shape changes. Rehydration replays a stored report
+ * into the Inspector verbatim — it is never re-analyzed — so a row written by
+ * an older bundle can hand a newer Inspector a report missing fields it reads
+ * unconditionally. That throws during render, which blanks the whole app on
+ * every load and leaves no UI to clear the cache with: the Studio is bricked
+ * for that browser until someone opens devtools. A row whose `v` does not
+ * match is dropped on load instead. Losing a cached asset costs one re-drop;
+ * the alternative cost the whole app.
+ */
+const SCHEMA = 1;
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -32,7 +45,7 @@ export async function persistAsset(asset: PersistedAsset): Promise<void> {
     const db = await open();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(asset);
+      tx.objectStore(STORE).put({ ...asset, v: SCHEMA });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -55,8 +68,13 @@ export async function loadAssets(): Promise<PersistedAsset[]> {
       req.onsuccess = () => resolve(req.result as PersistedAsset[]);
       req.onerror = () => reject(req.error);
     });
+    const usable = rows.filter((r) => r.v === SCHEMA);
+    if (usable.length !== rows.length) {
+      const tx = db.transaction(STORE, 'readwrite');
+      for (const r of rows) if (r.v !== SCHEMA) tx.objectStore(STORE).delete(r.id);
+    }
     db.close();
-    return rows;
+    return usable;
   } catch {
     return [];
   }
