@@ -33,7 +33,17 @@ export interface Report {
   textureBytesTotal: number;
   textureVramTotal: number;
   materials: unknown[];
+  /** Groups of materials with identical render state (merge candidates). */
+  duplicateMaterialGroups: string[][];
   findings: Finding[];
+  /**
+   * Rules the run did not evaluate. A skipped rule cannot produce a finding,
+   * so it silently inflates `score` — the Inspector must say when this is
+   * non-empty. Kept in step with `AnalysisResult` in @glbforge/core: this
+   * interface is a hand-written mirror, and the two drifting apart is what
+   * shipped a Studio bundle that read `.length` off undefined.
+   */
+  skipped: Array<{ rule: string; reason: string }>;
 }
 
 /** What the forge decided, for assets it made. Absent on everything else. */

@@ -99,5 +99,21 @@ the same registration into another checkout.
   older as deprecated. Validate changes with `test/usd-oracle.py`: `pip install
   usd-core` in a venv and run core tests with `GLBFORGE_PXR_PYTHON=<venv>/bin/python`.
   `USD_WRITE_NEW_USDC_FILES_AS_VERSION=0.8.0` + `Sdf.Layer.Export` gives byte references.
+- **The Studio is built twice, differently.** `packages/studio/dist` (served by
+  `glbforge ui`, shipped in the npm package) comes from `pnpm build`; the
+  committed `site/studio/` that glbforge.dev serves comes from `pnpm build:site`,
+  which is the same build plus `--base=/studio/`. Copying `dist` into
+  `site/studio` emits `/assets/*` under a path that serves `/studio/assets/*`,
+  so every visit 404s the bundle and renders a blank page — shipped once, live
+  for two days. `packages/studio/test/site-build.test.ts` freezes this.
+  Rebuild core first (`pnpm -r build`): the Studio bundles `@glbforge/core`
+  from `dist`, not `src`, so a stale `dist` silently ships an old pipeline —
+  an `analyze()` predating `AnalysisResult.skipped` crashed the Inspector,
+  which reads it unconditionally. Note the Studio's build runs no `tsc`
+  (`tsc --noEmit` catches exactly this class, but the package has pre-existing
+  unrelated type errors), and `persist.ts` replays stored reports into the
+  Inspector without re-analysis — a report shape change needs a `SCHEMA` bump
+  there or stale IndexedDB rows crash the app on load with no UI left to clear
+  them.
 - **Docs to keep in sync when scope changes**: `README.md`, `site/llms.txt`
   (AI-facing scope statement), `packages/mcp/README.md`, `ROADMAP.md`.
