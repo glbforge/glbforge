@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 6 closed · 4 passes
+**1 open** · 7 closed · 5 passes
 
 ## Open
 
@@ -30,10 +30,12 @@ mention wins, and this index is regenerated from all of them.
 | `L5` | fixed | `site/llms.txt` listed a tool that does not exist | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
 | `L6` | fixed | the scheduled sandbox cannot push, so a pass cannot open its PR | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
 | `L7` | fixed | the scheduled sandbox cannot reach glbforge.dev | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
+| `L8` | fixed | `CLAUDE.md` stated a `print` rule profile as shipped; only `authoring@1` exists | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) |
 
 ## Passes
 
 - **2026-09-22** — [2026-09-22-nothing-to-fix](passes/2026-09-22-nothing-to-fix.md) — `80da0f1` — nothing to fix
+- **2026-09-22** — [2026-09-22-claude-md-print-profile](passes/2026-09-22-claude-md-print-profile.md) — `agent-loop/2026-09-22-claude-md-print-profile` — `L8` fixed
 - **2026-09-21** — [2026-09-21-llms-tool-names](passes/2026-09-21-llms-tool-names.md) — `cse_01NFyKU3` — `L5` fixed, `L6` fixed, `L7` fixed
 - **2026-09-21** — [2026-09-21-instanced-draw-calls](passes/2026-09-21-instanced-draw-calls.md) — `97ee78c` — `L2` fixed
 - **2026-09-21** — [2026-09-21-bootstrap](passes/2026-09-21-bootstrap.md) — `5adca00` — `L1` fixed, `L2` open, `L3` fixed, `L4` open
