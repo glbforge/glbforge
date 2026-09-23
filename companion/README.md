@@ -78,8 +78,33 @@ curl -s -X POST localhost:4747/snapshot -d '{"out":"/tmp/companion.png"}'
 curl -s "localhost:4747/events?since=0"
 ```
 
-Give background work a face: a Claude Code `Stop` hook, a CI step or a cron
-job can `POST /event` and the character will say something about it.
+Give background work a face: a CI step or a cron job can `POST /event`
+(`react: "body"` for a free canned reaction, `"brain"` for one in the
+character's own words); Claude Code sessions are wired up by `--hooks` below.
+
+## Give it eyes on Claude Code
+
+```bash
+glbforge companion --hooks          # or: npx -y @glbforge/companion hooks install   (--project for one repo)
+```
+
+That writes five Claude Code hooks into `~/.claude/settings.json` (merged,
+backed up first, idempotent, `hooks remove` takes them out): `Stop`,
+`StopFailure`, `Notification` (permission prompts, idle, agent needs input,
+agent completed, elicitation), `SessionStart` (startup) and `SessionEnd`.
+Each runs `node companion/hook.mjs`, which turns the hook's JSON into one
+line and a gesture and POSTs it to the window as a *body* reaction — no
+brain turn, no cost, and it exits 0 in under 3 s whether or not the
+companion is running, so it can never slow a session down. From then on
+every Claude Code session on the machine, in any terminal or the desktop
+app, shows up on the character: it hops and quotes the last line when a
+session finishes, waves and says "XUI needs you" when one is waiting on a
+permission, shakes on an API failure, nods when a session starts. Sessions
+already running pick the hooks up after `/hooks` or a restart.
+
+`POST /event` is the same channel for anything else: `react: "body"` with a
+`kind` (done | attention | error | info | bye) is the free canned reaction;
+`react: "brain"` asks the character to react in its own words (a paid turn).
 
 ## Drive it — or be it — from an agent (MCP)
 
