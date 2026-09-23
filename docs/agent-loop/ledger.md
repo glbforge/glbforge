@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 8 closed · 11 passes
+**1 open** · 10 closed · 12 passes
 
 ## Open
 
@@ -32,10 +32,13 @@ mention wins, and this index is regenerated from all of them.
 | `L7` | fixed | the scheduled sandbox cannot reach glbforge.dev | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
 | `L8` | fixed | `CLAUDE.md` stated a `print` rule profile as shipped; only `authoring@1` exists | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) |
 | `L9` | fixed | the live check died on a branch switch and said nothing for 17 hours | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| `L10` | fixed | `.gltf`/`.usda` external resource URIs could escape the asset directory and read arbitrary host files, byte-exact | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
+| `L11` | fixed | `site/llms.txt` said "27-tool MCP server" in its own summary line while its own tool table said 28 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 
 ## Passes
 
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — `manual, from the maintainer's machine` — `L9` fixed
+- **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
 - **2026-09-22** — [2026-09-22-pass7-tool-claims](passes/2026-09-22-pass7-tool-claims.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
 - **2026-09-22** — [2026-09-22-pass6-forge-ship-walkthrough](passes/2026-09-22-pass6-forge-ship-walkthrough.md) — `56a5e59` — nothing to fix
