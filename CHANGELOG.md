@@ -4,6 +4,64 @@
 
 ### Added
 
+- **`animate`: motion without a rig.** `glbforge animate model.web.glb`
+  (MCP `animate`, core `animate()`) bakes a looping procedural clip — idle,
+  bob, spin, sway, breathe, hop — as ordinary glTF animation channels on a
+  pivot pair inserted at the base centre of the asset. Originals, skins and
+  authored clips are untouched; re-running with the same clip name replaces
+  the clip instead of stacking pivots; every curve is closed so looping never
+  pops; amplitudes are fractions of the measured height, so the same input
+  and settings give identical bytes on the CLI and the MCP. The reply states
+  what was baked (rise in mm, yaw / tilt in degrees, scale change) and runs
+  `inspect_animation` on the written file to confirm it moves.
+- **USDZ carries node animation.** `toUsdz` bakes the first clip that moves a
+  node as `xformOp:transform` time samples at 30 fps on every mesh Xform under
+  it, so AR Quick Look plays an `animate` clip; the pure-TS USD reader turns
+  the samples back into a moving clip. Previously "node animations without a
+  skin are not exported".
+- **Desktop companion** (`companion/`, standalone, not in the workspace
+  lockfile): an Electron window — transparent, frameless, always on top,
+  hidden from the Dock — renders a GLB with its clips, turns toward the cursor,
+  hops when clicked, drags anywhere. A localhost HTTP surface
+  (`/load /play /emote /say /move /snapshot /quit`) and an MCP bridge
+  (`companion_*`, snapshot returned as an image block) let an agent use the
+  model on screen as its face. macOS tested; nothing leaves 127.0.0.1.
+- **The companion has a brain.** Double-click the window (or press `/`) and
+  type: an embedded Claude agent on the Claude Agent SDK answers in the
+  bubble, gestures, plays clips, can look at itself and inspect its own mesh
+  with glbforge's tools — and has no shell or filesystem. It runs on the
+  Claude CLI's login; when that is missing, `/state` says so with the fix and
+  typed messages queue for an external brain instead of being lost. Any MCP
+  client can be that brain: `companion_listen` hands it what the user typed
+  (or an event a hook posted with `companion_event`), `companion_reply`
+  answers. Every mutating call now returns the body's state after the call
+  plus advisory notes; `/events` is the log of clicks, drags, messages,
+  replies and tool calls. The window fidgets when ignored, leans into a
+  drag, and shows a thinking indicator while the brain works.
+- **`glbforge companion model.glb`** and **`npx -y @glbforge/companion`**:
+  the companion is a published package with a `bin`; the CLI launches it
+  from the checkout when built there and through npx otherwise, passes the
+  glbforge MCP server so the character can inspect itself, and `--mcp`
+  registers the bridge in `.mcp.json`. Six packages release together now.
+- **The brain got cheap.** One persistent Claude Code session (streaming
+  input) instead of a process per message, and one lazy `inspect_self` tool
+  instead of glbforge's whole 28-tool server in the prompt: the prefix every
+  call re-reads went from 23,676 tokens to 6,821, a follow-up turn is ~1.5
+  cents at list instead of ~9, and `/state` reports measured tokens per turn.
+- **Random agent tasks** (`pnpm random-task`, `docs/agent-tasks/`): seeded
+  draws of source × goal × constraint × twist, walked as an agent with a
+  verdict per step. First walk: `2026-09-22-badge-companion.md`, T1–T7.
+
+### Fixed
+
+- `inspect_animation` called a closed-loop bob "root motion" and advised
+  stripping it. Root motion now means net travel: the root ends the clip more
+  than 1 mm from where it started, and the message carries the distance.
+- Clip ranges were reported with float32 noise (`1.2000000476837158`); the
+  IR rounds key-time ranges to microseconds.
+
+### Added (earlier, unreleased)
+
 - **Auto-tune: the matte picks its own tolerance.** The one knob a lift has
   cannot be known in advance — too tight leaves background welded on, too
   loose eats the object, and where those meet depends entirely on the
@@ -86,6 +144,88 @@
   generative routes go quiet under `--json` so stdout stays parseable.
 
 ### Fixed
+
+- **A texture that could not be decoded killed the tools that explain
+  assets.** `ImageUtils.getSize` reads a DataView straight off an image
+  header, so a truncated or corrupt embedded PNG threw `Offset is outside the
+  bounds of the DataView` — and nothing caught it. That escaped from
+  `analyze_glb` *and* from `validate`, naming no file, no texture and no
+  reason, from the two tools whose whole job is saying why an asset is broken.
+  All three glTF/USD read paths now go through one guarded `imageSize`, and
+  bytes-present-but-unreadable is reported as the new `TEXTURE_UNDECODABLE`
+  error, naming the texture, its mime type and its byte count. `validate`
+  still says the file `opens` — the container parses; one texture is broken,
+  and those are different claims — while marking it not AR Quick Look
+  compatible. A format we simply cannot measure is not reported as damage.
+
+- **`UV_MISSING` called our own optimizer's output a defect.** `prune` folds a
+  single-colour base-color texture into the material factor and drops the UV
+  set that existed only to sample it — free, and measured at SSIM 0.9998 on a
+  forged logo. The linter then warned that the asset "cannot be textured
+  as-is" and advised running a texture stage or unwrapping in a DCC: undoing a
+  lossless win to fix a non-problem, with a warning counted against the score
+  that gates CI. Missing UVs are only a defect when something wants to read
+  them, so the rule asks the material now — **error** when it samples a
+  texture it cannot apply (that really does render wrong, and used to be a
+  mere warning), **warning** when there is no material yet (a pre-texture
+  export, unchanged), **information** when the colour is a flat factor and
+  nothing reads UVs at all. Folding a texture into a factor was also the one
+  thing the pipeline did to an asset without reporting a code for it; it now
+  says so with `TEXTURES_FOLDED`, naming the UV set that went with it.
+
+- **`matte_preview` never worked over MCP.** The preview deliberately returns a
+  different shape from a forge — it writes no file, so it has no `out`, no
+  `diff` and nothing to validate — but the tool's output schema described only
+  the forge. Every preview call failed structured-output validation, so the
+  feature could not be reached by any client that checks.
+
+- **A matte forge shipped the mask itself.** `stats.matte` carries one alpha
+  byte per traced pixel: a quarter of a million numbers at the default trace
+  size, ~1.5 MB of JSON per call, burying the answer and an agent's context
+  under a silhouette it cannot read. The numbers that decide anything travel;
+  the pixels stay home, and `matte_preview` already returns the mask as a
+  picture. A forge reply is 4 KB now. The forged bytes are unchanged.
+
+- **A hairline became the heaviest thing in the mesh.** A stroke narrower than
+  the simplify tolerance collapses both halves of its split contour to their
+  own endpoints, and the fallback answered that by keeping the raw per-pixel
+  contour — abandoning simplification for exactly the mark that needed it. A
+  1px line came back at 13,108 triangles and 788 KB where the same line 2px
+  wide came back at 12 and 3 KB, and it was not even monotonic in the knob:
+  `simplify` 0.5 gave 12, while 1.2, 3 and 10 all gave 13,108. The tolerance
+  now backs off by halving until the loop survives. `simplify: 0` still means
+  what it says.
+
+- **A mistyped colour was written into the file as `null`.** The CLI and the
+  MCP server each padded a hex string to six digits and ran `parseInt` over
+  the pieces, which rejected nothing: `color: "zzz"` became `NaN` and reached
+  the GLB as `baseColorFactor: [null, null, 0, 1]`, which no strict loader
+  will open and which our own `post_validation` passed. The same padding read
+  `#abc` as `#abc000` rather than the `#aabbcc` every other tool means by it.
+  One strict parser in core now, refusing what it cannot read.
+
+- **The forge's refusals pointed at the paid path before the free one.** Both
+  refusals — full-bleed canvas, too many contours — recommended a generative
+  model and offered only `mode`/`threshold` locally. Neither mentioned matte,
+  which is the actual answer for the most common input that lands there: an
+  object on a plain background. Measured on a JPEG of a disc on a flat ground,
+  the default call refuses and recommends generation, while `matte: "auto"`
+  forges it at 100% confidence in half a second, for nothing.
+
+- **A missing output directory cost a whole pipeline run.** Every mutating MCP
+  tool writes its `out` last, so `out` pointing into a folder that did not
+  exist yet — exactly what "optimize it and save it to `public/`" produces —
+  raised a bare `ENOENT` *after* the work was done: 40 seconds of optimizing a
+  77 MB, 2M-triangle asset thrown away to learn the path was wrong, reported
+  as a generic `TOOL_ERROR`. Output paths are now settled up front, before
+  anything is read or rendered: the directory is created (the tool owns the
+  path it was handed), and what a `mkdir` cannot fix — an `out` that is itself
+  a directory, a file standing where a directory should be, a parent this
+  process cannot write — fails in milliseconds with the new
+  `OUTPUT_NOT_WRITABLE` code and the path it could not use. `dry_run` writes
+  nothing and so creates nothing. Covers `optimize_glb` (and its `lods`
+  siblings), `ship_asset`, `extrude_image`, `export_stl`, `export_usdz`,
+  `meshy_download`, `generation_status`, `render` and `render_preview`.
 
 - **The shadow rule could eat the whole subject** (`matte/border@2`, found in
   testing before release). A neutral object *darker* than a neutral ground is

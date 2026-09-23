@@ -1,3 +1,4 @@
+import { undecodableTexture } from './analyze/materials.js';
 import type { AnalysisResult, Finding } from './types.js';
 
 type Rule = (r: AnalysisResult) => Finding | Finding[] | null;
@@ -84,16 +85,81 @@ const RULES: Record<string, Rule> = {
     };
   },
 
-  'geo/missing-uvs': (r) => {
-    const n = r.geometry.primsMissingUVs;
-    if (n === 0) return null;
+  /**
+   * Missing UVs are only a defect if something wants to read them, so ask the
+   * material rather than the vertex layout alone.
+   *
+   * A flat-colour material reads none, and our own optimizer produces exactly
+   * that: prune folds a single-colour base-color texture into the factor and
+   * the UV set goes with it, losslessly (measured at SSIM 0.9998 on a forged
+   * logo). Reporting that as a warning told the reader an asset we had just
+   * finished optimizing "cannot be textured as-is", and advised running a
+   * texture stage or unwrapping in a DCC — undoing the optimization to fix a
+   * non-problem, and putting a warning in the count that gates CI.
+   *
+   * The three cases are genuinely different and only one of them is a bug:
+   * a material that samples a texture and has no UVs to sample it with WILL
+   * render wrong, which is worth an error, not the warning it used to get.
+   */
+  /**
+   * Bytes present, format known, no size readable: the image is truncated or
+   * corrupt. It used to escape as a raw "Offset is outside the bounds of the
+   * DataView" from the header reader, killing the whole report rather than
+   * appearing in it.
+   */
+  'tex/undecodable': (r) => {
+    const bad = r.textures.filter(undecodableTexture);
+    if (bad.length === 0) return null;
     return {
-      ruleId: 'geo/missing-uvs',
-      severity: 'warn',
-      message: `${n} primitive(s) have no TEXCOORD attribute — the asset cannot be textured as-is.`,
-      suggestion: 'If this is a pre-texture generation export, run the texture stage (or unwrap in a DCC) before shipping.',
-      data: { primitives: n },
+      ruleId: 'tex/undecodable',
+      severity: 'error',
+      message: `${bad.length} texture(s) cannot be decoded — ${bad.map((t) => `"${t.name}" (${t.mimeType}, ${t.bytes} bytes)`).join(', ')}. The bytes are there but the image header does not read, so the size and GPU cost are unknown and the texture will not upload.`,
+      suggestion: 'Re-export or replace the image. optimize_glb cannot re-encode what it cannot decode.',
+      data: { textures: bad.map((t) => t.name) },
     };
+  },
+
+  'geo/missing-uvs': (r) => {
+    const missing = r.geometry.primitives.filter((p) => !p.attributes.some((a) => a.startsWith('TEXCOORD')));
+    if (missing.length === 0) return null;
+    // true = its material samples a texture, false = flat material, null = no material.
+    const samplesTexture = (name: string | null) => {
+      const mat = name === null ? undefined : r.materials.find((m) => m.name === name);
+      return mat ? mat.textureSlots.length > 0 : null;
+    };
+    const broken = missing.filter((p) => samplesTexture(p.materialName) === true);
+    const bare = missing.filter((p) => samplesTexture(p.materialName) === null);
+    const flat = missing.filter((p) => samplesTexture(p.materialName) === false);
+    const out: Finding[] = [];
+    if (broken.length) {
+      const slots = [...new Set(broken.flatMap((p) => r.materials.find((m) => m.name === p.materialName)?.textureSlots ?? []))];
+      out.push({
+        ruleId: 'geo/missing-uvs',
+        severity: 'error',
+        message: `${broken.length} primitive(s) have no TEXCOORD attribute but their material samples ${slots.length} texture slot(s) (${slots.join(', ')}) — those textures cannot be applied and the surface will render without them.`,
+        suggestion: 'Unwrap the primitive, or drop the texture bindings the geometry cannot carry.',
+        data: { primitives: broken.length, slots },
+      });
+    }
+    if (bare.length) {
+      out.push({
+        ruleId: 'geo/missing-uvs',
+        severity: 'warn',
+        message: `${bare.length} primitive(s) have no TEXCOORD attribute and no material — the asset cannot be textured as-is.`,
+        suggestion: 'If this is a pre-texture generation export, run the texture stage (or unwrap in a DCC) before shipping.',
+        data: { primitives: bare.length },
+      });
+    }
+    if (flat.length) {
+      out.push({
+        ruleId: 'geo/missing-uvs',
+        severity: 'info',
+        message: `${flat.length} primitive(s) have no TEXCOORD attribute; their material carries colour as a factor and samples no texture, so nothing reads UVs.`,
+        suggestion: 'Nothing to do unless you intend to texture it later, which needs an unwrap first.',
+        data: { primitives: flat.length },
+      });
+    }
+    return out;
   },
 
   'geo/unindexed': (r) => {

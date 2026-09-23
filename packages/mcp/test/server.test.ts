@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -32,6 +33,16 @@ beforeAll(async () => {
   }
   const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
   await writeFile(join(dir, 'ring.png'), png);
+  // A subject on a plain ground with no alpha of its own: the case matte exists
+  // for, and the only input that exercises the matte reply shapes.
+  const opaque = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const i = (y * size + x) * 4;
+    const inside = Math.hypot(x - 48, y - 48) < 30;
+    opaque[i] = inside ? 30 : 240; opaque[i + 1] = inside ? 90 : 240;
+    opaque[i + 2] = inside ? 200 : 240; opaque[i + 3] = 255;
+  }
+  await writeFile(join(dir, 'blob.png'), await sharp(opaque, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
   const { doc } = await extrudeImage(new Uint8Array(png), { pillow: 0.04 });
   glb = join(dir, 'ring.glb');
   await writeFile(glb, await (await createNodeIO()).writeBinary(doc));
@@ -51,7 +62,7 @@ describe('agent-friendly MCP surface', () => {
   it('lists every tool with the preview/drill-down surface', async () => {
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
     expect(names).toEqual([
-      'analyze_glb', 'analyze_performance', 'audit_directory', 'capabilities', 'compare_glb', 'diff', 'export_stl', 'export_usdz', 'extrude_image', 'generate_image_to_3d',
+      'analyze_glb', 'analyze_performance', 'animate', 'audit_directory', 'capabilities', 'compare_glb', 'diff', 'export_stl', 'export_usdz', 'extrude_image', 'generate_image_to_3d',
       'generation_status', 'inspect', 'inspect_all', 'inspect_animation', 'inspect_geometry', 'inspect_materials', 'inspect_report', 'list_profiles', 'meshy_create_task', 'meshy_download',
       'meshy_task_status', 'optimize_glb', 'render', 'render_animation_strip', 'render_preview', 'ship_asset', 'validate',
     ]);
@@ -173,6 +184,44 @@ describe('agent-friendly MCP surface', () => {
     expect(parse(pinned).profileVersion).toBe(1);
   });
 
+  it('creates a missing output directory rather than failing at the write', async () => {
+    // The documented workflow — "optimize it and save it to public/" — used to
+    // run the whole pipeline and then raise ENOENT on the writeFile.
+    const out = join(dir, 'public', 'models', 'ring.web.glb');
+    const r = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out, targetTriangles: 3000, lods: [500], preview: 'none' } })) as Result;
+    expect(envelope(r).ok).toBe(true);
+    expect(parse(r).outPath).toBe(out);
+    expect(existsSync(out)).toBe(true);
+    expect(existsSync(join(dir, 'public', 'models', 'ring.web.lod1.glb'))).toBe(true); // siblings land beside it
+
+    // dry_run writes nothing, so it creates nothing either.
+    const ghost = join(dir, 'ghost');
+    const d = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out: join(ghost, 'ring.web.glb'), targetTriangles: 3000, dry_run: true, preview: 'none' } })) as Result;
+    expect(parse(d).written).toBe(false);
+    expect(existsSync(ghost)).toBe(false);
+  }, 60_000);
+
+  it('refuses an unusable out up front, before the input is even read', async () => {
+    const wall = join(dir, 'wall.txt');
+    await writeFile(wall, 'not a directory');
+    const blocked = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out: join(wall, 'ring.web.glb') } })) as Result;
+    const env = envelope(blocked);
+    expect(env.ok).toBe(false);
+    expect(env.errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+    expect(env.summary).toContain(wall);
+
+    // A directory passed as `out` is the other way to spell it.
+    const asDir = (await client.callTool({ name: 'extrude_image', arguments: { path: join(dir, 'ring.png'), out: dir } })) as Result;
+    expect(envelope(asDir).errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+
+    // Ordering: the output path is checked before the input is opened, so a
+    // run that is wrong in both ways reports the cheap check, not FILE_NOT_FOUND.
+    const both = (await client.callTool({ name: 'export_stl', arguments: { path: join(dir, 'missing.glb'), out: join(wall, 'x.stl') } })) as Result;
+    const order = envelope(both);
+    expect(order.errors.some((e: { code: string }) => e.code === 'OUTPUT_NOT_WRITABLE')).toBe(true);
+    expect(order.errors.some((e: { code: string }) => e.code === 'FILE_NOT_FOUND')).toBe(false);
+  }, 30_000);
+
   it('extrude_image and export_stl return thumbnails and next actions', async () => {
     const out = join(dir, 'forged.glb');
     const r = (await client.callTool({ name: 'extrude_image', arguments: { path: join(dir, 'ring.png'), out, layers: 2 } })) as Result;
@@ -184,5 +233,57 @@ describe('agent-friendly MCP surface', () => {
     const usdz = (await client.callTool({ name: 'export_usdz', arguments: { path: out, out: join(dir, 'forged.usdz'), preview: 'none' } })) as Result;
     expect(parse(usdz).files[0].name).toBe('model.usdc');
     expect(parse(usdz).textures).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('says it folded a solid texture, and stops calling the result a defect', async () => {
+    // prune folds a single-colour base-color texture into the material factor
+    // and the UV set goes with it — free and invisible (SSIM ~1.0). Every other
+    // thing the pipeline does on its own carries a code; this one carried none,
+    // and the only trace was a UV_MISSING *warning* on our own output telling
+    // the reader it "cannot be textured as-is" and to go run a texture stage.
+    const out = join(dir, 'folded.web.glb');
+    const r = (await client.callTool({
+      name: 'optimize_glb', arguments: { path: glb, out, preview: 'none' },
+    })) as Result;
+    const errors = envelope(r).errors as Array<{ code: string; severity: string }>;
+    const folded = errors.find((e) => e.code === 'TEXTURES_FOLDED');
+    expect(folded, 'the fold is reported with a code').toBeDefined();
+    expect(folded!.severity).toBe('info');
+    for (const uv of errors.filter((e) => e.code === 'UV_MISSING')) {
+      expect(uv.severity).toBe('info');
+    }
+  }, 60_000);
+
+  it('matte_preview answers with the cut, not a forge', async () => {
+    // It writes no file, so it has no out/diff/post_validation: a data shape the
+    // forge schema does not describe. Validated clients reject the whole reply
+    // when the schema does not admit it, which made the preview unreachable.
+    const r = (await client.callTool({
+      name: 'extrude_image',
+      arguments: { path: join(dir, 'blob.png'), out: join(dir, 'unused.glb'), matte: 'auto', matte_preview: true },
+    })) as Result;
+    const d = parse(r);
+    expect(envelope(r).ok).toBe(true);
+    expect(d.preview_only).toBe(true);
+    expect(d.written).toBe(false);
+    expect(d.matte.usable).toBe(true);
+    expect(d.matte.ladder.length).toBeGreaterThan(1);
+    expect(image(r)).toBeDefined();
+  }, 60_000);
+
+  it('a matte forge reports the cut without shipping the mask', async () => {
+    // core hands back the mask itself — one byte per traced pixel. In-process
+    // that is the point; over MCP it is a quarter-million numbers of JSON that
+    // an agent cannot read and must pay for. The numbers travel, the pixels do not.
+    const r = (await client.callTool({
+      name: 'extrude_image',
+      arguments: { path: join(dir, 'blob.png'), out: join(dir, 'matted.glb'), matte: 'auto', preview: 'none' },
+    })) as Result;
+    const d = parse(r);
+    expect(d.written).toBe(true);
+    expect(d.mode).toBe('matte');
+    expect(d.matte.confidence).toBeGreaterThan(0.4);
+    expect(d.matte).not.toHaveProperty('alpha');
+    expect(JSON.stringify(d).length).toBeLessThan(8000);
   }, 60_000);
 });

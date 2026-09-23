@@ -101,10 +101,23 @@ function simplifyLoop(points: Pt[], epsilon: number): Pt[] {
     if (points[i][0] > points[maxI][0]) maxI = i;
   }
   const [a, b] = minI < maxI ? [minI, maxI] : [maxI, minI];
-  const seg1 = dpSimplify(points.slice(a, b + 1), epsilon);
-  const seg2 = dpSimplify([...points.slice(b), ...points.slice(0, a + 1)], epsilon);
-  const merged = [...seg1.slice(0, -1), ...seg2.slice(0, -1)];
-  return merged.length >= 3 ? merged : points;
+  const half1 = points.slice(a, b + 1);
+  const half2 = [...points.slice(b), ...points.slice(0, a + 1)];
+  // A stroke narrower than the tolerance collapses: both halves reduce to their
+  // own endpoints and the merged loop has fewer than three points. Keeping the
+  // raw contour there is the worst answer available — the thinnest mark in the
+  // artwork silently becomes the densest thing in the mesh. Measured on a 1px
+  // line: 13,108 triangles at eps 1.2, against 12 for the same line 2px wide,
+  // and 12 again at eps 0.5. So back the tolerance off until the loop survives
+  // rather than abandoning simplification altogether. Halving is deterministic
+  // and reaches a sane epsilon for any stroke in a couple of steps.
+  for (let eps = epsilon; eps > 0.01; eps /= 2) {
+    const seg1 = dpSimplify(half1, eps);
+    const seg2 = dpSimplify(half2, eps);
+    const merged = [...seg1.slice(0, -1), ...seg2.slice(0, -1)];
+    if (merged.length >= 3) return merged;
+  }
+  return points;
 }
 
 /**

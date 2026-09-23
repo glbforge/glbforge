@@ -4,7 +4,7 @@ name: Release
 # is pushed. No tokens, no OTP: npm verifies the workflow identity itself.
 #
 # One-time setup on npmjs.com (per package: glbforge, @glbforge/core,
-# @glbforge/meshy, @glbforge/mcp):
+# @glbforge/meshy, @glbforge/mcp, @glbforge/studio, @glbforge/companion):
 #   Package -> Settings -> Trusted Publisher -> GitHub Actions
 #   org: glbforge   repo: glbforge   workflow: release.yml
 on:
@@ -53,7 +53,9 @@ jobs:
       - name: Publish packages not yet on the registry
         run: |
           set -euo pipefail
-          for dir in packages/*; do
+          # companion/ is a standalone package (its own lockfile keeps Electron
+          # out of the workspace install); it publishes from source, no build.
+          for dir in packages/* companion; do
             name=$(node -p "require('./$dir/package.json').name")
             version=$(node -p "require('./$dir/package.json').version")
             if npm view "$name@$version" version >/dev/null 2>&1; then

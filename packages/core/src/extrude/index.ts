@@ -216,8 +216,10 @@ export async function extrudeFromRgba(
     if (solid / mask.length > 0.9) {
       throw new Error(
         'The image fills the whole canvas — this looks like a photograph, not flat artwork. ' +
-        'Use a generative model (glbforge ship routes there automatically, or glbforge gen), ' +
-        'or pass an explicit --mode/--threshold to isolate a silhouette.',
+        'If it is an object on a plain background, matte lifts it out for free, here, now ' +
+        '(`matte: "auto"` / `--matte`; preview the cut first with `matte_preview` / `--matte-preview`). ' +
+        'If it is a real scene, use a generative model (ship routes there automatically, or glbforge gen). ' +
+        'An explicit mode/threshold overrides the silhouette test entirely.',
       );
     }
   }
@@ -229,9 +231,10 @@ export async function extrudeFromRgba(
   if (loops.length > 150) {
     throw new Error(
       `Traced ${loops.length} contours — this looks like a photograph or a noisy mask, ` +
-      'not flat artwork. Extrusion is for logos/graphics with clean silhouettes; ' +
-      'for photos of objects use Meshy image-to-3D instead, or pass an explicit ' +
-      '--mode/--threshold to isolate the shape.',
+      'not flat artwork. Extrusion is for logos/graphics with clean silhouettes. ' +
+      'If this is an object on a plain background, matte lifts it out for free, here, now ' +
+      '(`matte: "auto"` / `--matte`); for a real scene use image-to-3D; ' +
+      'an explicit mode/threshold overrides the trace.',
     );
   }
   if (loops.filter((l) => l.depth % 2 === 0).length === 0) {
@@ -389,6 +392,26 @@ function smoothLoop(points: Array<[number, number]>, iterations: number): Array<
     current = out;
   }
   return current;
+}
+
+/**
+ * `#rgb` / `#rrggbb` → an RGBA base-color factor, or a refusal.
+ *
+ * Both callers used to pad the string to six digits and run parseInt over the
+ * pieces, which quietly accepted anything: "zzz" became NaN and reached the
+ * file as `baseColorFactor: [null, null, 0, 1]`, a GLB no strict loader will
+ * take, written without a word of complaint. The same padding read "#abc" as
+ * "#abc000" rather than the "#aabbcc" every other tool means by it. A colour
+ * is either legible or it is a typo worth hearing about.
+ */
+export function parseHexColor(hex: string): [number, number, number, number] {
+  const raw = hex.trim().replace(/^#/, '');
+  const expanded = raw.length === 3 ? [...raw].map((c) => c + c).join('') : raw;
+  if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
+    throw new Error(`Not a hex colour: "${hex}". Use #rgb or #rrggbb, for example "#ff2266".`);
+  }
+  const byte = (i: number) => parseInt(expanded.slice(i * 2, i * 2 + 2), 16) / 255;
+  return [byte(0), byte(1), byte(2), 1];
 }
 
 /** Drop specks and re-derive containment nesting after filtering. */

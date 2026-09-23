@@ -6,7 +6,7 @@
  */
 import { Document, ImageUtils, Material, Node, Primitive, Texture, TextureInfo } from '@gltf-transform/core';
 import { readFloat } from '../accessors.js';
-import { imageHasAlpha } from '../analyze/materials.js';
+import { imageHasAlpha, imageSize } from '../analyze/materials.js';
 import { diag, type Diagnostic } from './diagnostics.js';
 import {
   ident, mat4Compose, mat4Mul, IDENTITY,
@@ -75,7 +75,7 @@ export function fromGltf(doc: Document, opts: FromGltfOptions = {}): SceneIR {
     const image = tex.getImage();
     const uri = tex.getURI() || null;
     const unresolved = !!opts.unresolvedTextures && (opts.unresolvedTextures.has(i) || (uri !== null && opts.unresolvedTextures.has(uri)));
-    const size = image && !unresolved ? ImageUtils.getSize(image, tex.getMimeType()) : null;
+    const size = image && !unresolved ? imageSize(image, tex.getMimeType()) : null;
     return {
       index: i,
       path: `/Asset/Textures/${ident(tex.getName() || (uri ? uri.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, '') : 'Texture'))}_${i}`,
@@ -244,6 +244,8 @@ export function fromGltf(doc: Document, opts: FromGltfOptions = {}): SceneIR {
       channels.push({ node: ni, property: pathName as IRChannel['property'], times, values, width, interpolation });
     }
     if (!Number.isFinite(start)) { start = 0; end = 0; }
+    // Key times are float32 in the file; report the range at microsecond precision, not with float32 noise.
+    start = Math.round(start * 1e6) / 1e6; end = Math.round(end * 1e6) / 1e6;
     return { index: ai, path: `/Asset/Animations/${ident(anim.getName() || 'Animation')}_${ai}`, name: anim.getName() || `animation_${ai}`, channels, start, end };
   });
 

@@ -6,7 +6,7 @@
  * composed: arcs are recorded on `layerStack` and reported.
  */
 import { ImageUtils } from '@gltf-transform/core';
-import { imageHasAlpha } from '../analyze/materials.js';
+import { imageHasAlpha, imageSize } from '../analyze/materials.js';
 import { diag, type Diagnostic } from './diagnostics.js';
 import {
   IDENTITY, mat4Compose, mat4Decompose, mat4Invert, mat4Mul, transformPoint, triangulate,
@@ -168,7 +168,7 @@ export function fromUsd(layer: UsdLayerData, opts: FromUsdOptions): SceneIR {
     const data = opts.resolveAsset ? opts.resolveAsset(assetPath) : null;
     const mime = data ? sniffMime(data) : null;
     let size: number[] | null = null;
-    if (data && mime && /png|jpeg|webp|ktx2/.test(mime)) { try { size = ImageUtils.getSize(data, mime); } catch { size = null; } }
+    if (data && mime) size = imageSize(data, mime);
     const index = textures.length;
     const base = assetPath.slice(assetPath.lastIndexOf('/') + 1);
     textures.push({

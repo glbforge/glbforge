@@ -4,7 +4,7 @@ export { analyze, type AnalyzeOptions } from './analyze/index.js';
 export { runRules, RULE_IDS } from './rules.js';
 export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncoder } from './optimize.js';
 export { createNodeIO } from './io.js';
-export { extrudeImage, extrudeFromRgba, previewMatte, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
+export { extrudeImage, extrudeFromRgba, previewMatte, parseHexColor, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
 export { measureFlatness, type Flatness } from './extrude/layers.js';
 export { flattenProjection } from './extrude/bleed.js';
 export { liftSubject, cutoutRgba, tuneMatte, DEFAULT_TOLERANCE, MATTE_VERSION, type Matte, type MatteOptions, type TunedMatte } from './extrude/matte.js';
@@ -23,6 +23,7 @@ export { writeUsdc } from './usdc.js';
 export { buildSkeleton, SKEL_FPS, compose, decompose, invert, mul } from './usd-skel.js';
 export { storeZip, type ZipEntry } from './zip.js';
 export { toStl, type StlOptions, type StlResult } from './stl.js';
+export { animate, sceneBounds, ANIMATE_PRESETS, PIVOT_NAME, PIVOT_OFFSET_NAME, type AnimateOptions, type AnimateResult, type AnimatePreset } from './animate.js';
 export { detectGenerator, type GeneratorGuess, type GeneratorProfile } from './detect.js';
 export { alignmentScore, sampleSurface, triangleSoup, type AlignmentScore } from './harness/align.js';
 export {

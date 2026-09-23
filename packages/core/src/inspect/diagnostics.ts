@@ -75,7 +75,7 @@ export const ERROR_CODES = {
   TOPO_FLOATING_FRAGMENTS: spec('warning', 'Tiny disconnected pieces beside the real parts: debris from booleans, cuts or duplicated faces.', 'Delete loose geometry, or join a fragment that is a real detail to its body.', 'topo/floating-fragments'),
   NORMALS_MISSING: spec('warning', 'No authored normals; viewers compute their own (smooth or flat depending on the viewer), so shading differs between apps.', 'optimize_glb writes smooth normals; export_usdz generates them at export time (reported as NORMALS_GENERATED).'),
   NORMALS_INVERTED: spec('warning', 'Authored vertex normals point against the face winding on many faces — the mesh shades dark or inside-out with back-face culling.', 'Recompute normals or flip the face winding in a DCC; optimize_glb with regenerated normals removes the mismatch.'),
-  UV_MISSING: spec('info', 'No texture coordinates; the mesh cannot be textured.', 'Unwrap in a DCC, or run the generator\'s texture stage.'),
+  UV_MISSING: spec('info', 'A primitive has no texture coordinates. What that costs depends on the material: an error when it samples a texture it now cannot apply, a warning when there is no material yet, information when the colour is a flat factor and nothing reads UVs at all.', 'Unwrap only when something needs to sample a texture; run the generator\'s texture stage for a pre-texture export.'),
   UV_OUT_OF_RANGE: spec('info', 'UVs fall outside 0..1; fine with REPEAT wrapping, wrong with CLAMP or atlases.', 'Check wrap modes on the material; re-bake if an atlas was intended.'),
   MESH_UNINDEXED: spec('info', 'Primitive has no index buffer (~3x vertex data, no GPU vertex cache reuse).', 'optimize_glb welds and indexes.'),
   MESH_UNWELDED: spec('info', 'A large share of vertices are exact duplicates across all attributes.', 'optimize_glb welds them.'),
@@ -123,6 +123,7 @@ export const ERROR_CODES = {
   CLIPS_DROPPED: spec('warning', 'Only the first animation clip is exported; the others are dropped.', 'Export one GLB per clip, or merge clips before export.'),
   INFLUENCES_TRUNCATED: spec('warning', 'Joint influences beyond 4 per vertex were dropped on export.', 'Limit influences to 4 before export to control which are kept.'),
   // --- materials / textures ------------------------------------------------
+  TEXTURE_UNDECODABLE: spec('error', 'A texture\'s bytes are present but cannot be read: the image is truncated or corrupt, so its dimensions and memory cost are unknown and it will not upload.', 'Re-export or replace the image; optimize_glb cannot re-encode what it cannot decode.'),
   TEXTURE_UNRESOLVED: spec('error', 'A texture file referenced by a material could not be found (missing external file, or a usdz entry that does not exist).', 'Fix the path or pack the image; export_usdz/optimize_glb embed textures.'),
   MATERIAL_UNBOUND: spec('info', 'A material is not bound to any mesh.', 'Remove it (optimize_glb prunes unused materials) or bind it.'),
   MESH_NO_MATERIAL: spec('warning', 'A mesh has no material binding; viewers show a default white/grey (or magenta) surface.', 'Bind a material; export_usdz binds a neutral default and reports DEFAULT_MATERIAL_BOUND.'),
@@ -159,11 +160,14 @@ export const ERROR_CODES = {
   MESH_WELDED: spec('info', 'Duplicate vertices were welded.', 'Nothing to do.'),
   MESH_SIMPLIFIED: spec('info', 'Geometry was simplified to the triangle target (requested).', 'Check `fidelity`; raise targetTriangles if detail was lost.'),
   TEXTURES_REENCODED: spec('info', 'Textures were resized/re-encoded (requested).', 'Nothing to do.'),
+  TEXTURES_FOLDED: spec('info', 'A texture carrying a single colour was folded into the material factor and dropped; any UV set that existed only to sample it went with it.', 'Nothing to do — the render is unchanged. Re-texturing later needs an unwrap.'),
   DEGENERATE_PRUNED: spec('info', 'Degenerate triangles were pruned.', 'Nothing to do.'),
   UV_FLIPPED: spec('info', 'Texture V coordinates were flipped for the target convention (glTF top-down → USD bottom-up).', 'Nothing to do.'),
   AXIS_CONVERTED: spec('info', 'The asset was rotated to the target up-axis (e.g. Z-up for STL).', 'Nothing to do.'),
   SCALE_CONVERTED: spec('info', 'The asset was rescaled to the target unit (e.g. millimetres for STL).', 'Nothing to do.'),
   MORPH_TARGETS_DROPPED: spec('warning', 'Morph targets were not carried to the output format.', 'Bake the desired shape, or use a format that carries them.'),
+  ANIMATION_BAKED: spec('info', 'A procedural clip was baked onto a pivot inserted above the scene roots (animate); originals untouched.', 'Nothing to do. inspect_animation reports the clip; export_usdz carries it as xform time samples.'),
+  ANIMATE_WARNING: spec('warning', 'animate could not bake what was asked (no geometry to measure, or amplitude 0).', 'Check the message: pass geometry with positions, or an amplitude above 0.'),
   ANIMATED_ASSET: spec('info', 'The asset has skins or animation clips; optimization is bone-aware and USDZ export carries the skeleton and first clip.', 'Budget triangles with deformation cost in mind.'),
   GENERATOR_FINGERPRINT: spec('info', 'The producing generator was recognized from the file\'s structure; suggestions are tailored to its known weak spots.', 'Nothing to do.'),
   // --- rendering ------------------------------------------------------------
@@ -173,6 +177,7 @@ export const ERROR_CODES = {
   DRY_RUN: spec('info', 'dry_run=true: nothing was written; `diff` shows what would change.', 'Re-run with dry_run=false to apply.'),
   ROUTED_TO_GENERATION: spec('info', 'The input looks photographic; deterministic extrusion was skipped in favor of a generation route.', 'Call generate_image_to_3d as listed in nextActions.'),
   SUBJECT_LIFTED: spec('info', 'The silhouette was not read from the image: it was inferred by lifting the subject off its background (matte/border@1). The entry carries the mask\'s coverage, piece and hole counts, and a confidence.', 'Check the confidence and the thumbnail before building on the result; a low-confidence cut is refused outright, not returned.'),
+  OUTPUT_NOT_WRITABLE: spec('error', 'The `out` path cannot be written: it is a directory, its parent is a file, or the directory is not writable. Checked before any work runs, so nothing was computed.', 'Pass `out` as a full file path under a writable directory; missing directories are created for you.'),
   TOOL_ERROR: spec('error', 'The tool failed before producing a result; the message carries the underlying error.', 'Fix the input (path, arguments) and retry.'),
 } as const satisfies Record<string, CodeSpec>;
 
@@ -217,6 +222,7 @@ export const RULE_TO_CODE: Record<string, DiagnosticCode> = {
   'perf/triangle-budget': 'TRIANGLE_BUDGET_EXCEEDED',
   'perf/draw-calls': 'DRAW_CALL_BUDGET_EXCEEDED',
   'perf/file-size': 'FILE_SIZE_BUDGET_EXCEEDED',
+  'tex/undecodable': 'TEXTURE_UNDECODABLE',
   'tex/oversized': 'TEXTURE_SIZE_BUDGET_EXCEEDED',
   'tex/total-weight': 'TEXTURE_BYTES_BUDGET_EXCEEDED',
   'tex/vram-estimate': 'GPU_MEMORY_BUDGET_EXCEEDED',

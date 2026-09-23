@@ -33,6 +33,37 @@ export function imageHasAlpha(bytes: Uint8Array | null, mimeType: string): boole
   return null;
 }
 
+/** Formats we can read a size out of; anything else is legitimately unknown. */
+const SIZEABLE = /^image\/(png|jpeg|webp|ktx2)$/;
+
+/**
+ * `ImageUtils.getSize`, for which a truncated image is an exception rather
+ * than a fact. It reads a DataView straight off the header, so half a PNG
+ * throws "Offset is outside the bounds of the DataView" — which escaped all
+ * the way out of analyze and validate, naming no file, no texture and no
+ * reason, from the two tools whose job is explaining why an asset is broken.
+ *
+ * A texture that cannot be read is something to report, not something to die
+ * on: null here, and `undecodableTexture` turns that into a finding.
+ */
+export function imageSize(bytes: Uint8Array | null, mimeType: string | null): [number, number] | null {
+  if (!bytes || !bytes.length || !mimeType) return null;
+  try {
+    return ImageUtils.getSize(bytes, mimeType) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when the bytes are present and the format is one we can size, yet no
+ * size came back — the image is corrupt or truncated. An unknown format sizes
+ * to null too, and is not a defect.
+ */
+export function undecodableTexture(t: { bytes: number; mimeType: string | null; width: number | null }): boolean {
+  return t.bytes > 0 && !!t.mimeType && SIZEABLE.test(t.mimeType) && t.width === null;
+}
+
 /** Estimated GPU bytes once uploaded: RGBA8 + mips; KTX2 stays ~4bpp. */
 function estimateVram(width: number | null, height: number | null, mimeType: string): number {
   if (!width || !height) return 0;
@@ -103,8 +134,7 @@ export function analyzeMaterials(doc: Document): {
     const image = tex.getImage();
     const bytes = image?.byteLength ?? 0;
     textureBytesTotal += bytes;
-    const size =
-      image ? ImageUtils.getSize(image, tex.getMimeType()) : null;
+    const size = imageSize(image, tex.getMimeType());
     const vramBytes = estimateVram(size?.[0] ?? null, size?.[1] ?? null, tex.getMimeType());
     textureVramTotal += vramBytes;
     textures.push({
