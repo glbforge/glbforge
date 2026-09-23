@@ -46,7 +46,7 @@ const KNOWN_EXTENSIONS = new Set([
 
 export async function loadScene(path: string): Promise<LoadedScene> {
   const { readFile, stat } = await import('node:fs/promises');
-  const { dirname, resolve, basename } = await import('node:path');
+  const { dirname, resolve, basename, relative, isAbsolute } = await import('node:path');
   const format = formatOf(path);
   if (!format) throw Object.assign(new Error(`Unsupported file type: ${path} (glb, gltf, usdz, usda, usdc, usd).`), { code: 'FORMAT_UNSUPPORTED' });
   let bytes: Uint8Array;
@@ -68,9 +68,24 @@ export async function loadScene(path: string): Promise<LoadedScene> {
         }
         const resources: Record<string, Uint8Array<ArrayBuffer>> = {};
         const dir = dirname(resolve(path));
+        // A relative or absolute URI could walk out of the asset's own directory
+        // (`../../etc/passwd`, `/etc/passwd`) and have its bytes read into the
+        // document, then recoverable through the loaded accessors/textures.
+        // Refused the same way a missing file is: no read, a diagnostic instead.
+        const escapesAssetDir = (target: string) => {
+          const rel = relative(dir, target);
+          return rel.startsWith('..') || isAbsolute(rel);
+        };
         const load = async (uri: string, kind: 'buffer' | 'image') => {
           if (uri.startsWith('data:')) return;
-          try { resources[uri] = new Uint8Array(await readFile(resolve(dir, decodeURIComponent(uri)))) as Uint8Array<ArrayBuffer>; }
+          const target = resolve(dir, decodeURIComponent(uri));
+          if (escapesAssetDir(target)) {
+            resources[uri] = new Uint8Array(0);
+            if (kind === 'buffer') diagnostics.push(diag('BUFFER_UNRESOLVED', '/Asset', `Buffer "${uri}" resolves outside the asset's directory and was not read.`, { property: 'buffers', data: { uri } }));
+            else unresolved.add(uri);
+            return;
+          }
+          try { resources[uri] = new Uint8Array(await readFile(target)) as Uint8Array<ArrayBuffer>; }
           catch {
             resources[uri] = new Uint8Array(0);
             if (kind === 'buffer') diagnostics.push(diag('BUFFER_UNRESOLVED', '/Asset', `Buffer "${uri}" was not found next to ${basename(path)}.`, { property: 'buffers', data: { uri } }));
@@ -115,6 +130,10 @@ export async function loadScene(path: string): Promise<LoadedScene> {
   const resolveAsset = (assetPath: string): Uint8Array | null => {
     if (container) return findUsdzEntry(container, assetPath, layerName)?.data ?? null;
     const full = resolve(dir, assetPath.replace(/^\.\//, ''));
+    // Same containment as the .gltf buffer/image case: a referenced asset path
+    // must stay under the layer's own directory, or it is treated as absent.
+    const rel = relative(dir, full);
+    if (rel.startsWith('..') || isAbsolute(rel)) return null;
     try { return existsSync(full) ? new Uint8Array(readFileSync(full)) : null; } catch { return null; }
   };
   const ir = fromUsd(layer, { format: realFormat, sourcePath: path, fileBytes: bytes.byteLength, resolveAsset, layerName, diagnostics });

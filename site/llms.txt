@@ -9,7 +9,7 @@
 > SSIM, forges 2D artwork into watertight 3D, generates volumetric 3D from
 > images via several models, and exports web/print/AR-ready results (GLB, STL,
 > USDZ). TypeScript monorepo (MIT): a CLI, a local + in-browser Studio, a
-> 27-tool MCP server, and a GitHub Action.
+> 28-tool MCP server, and a GitHub Action.
 
 Key facts (September 2026, in step with the repository's main branch — the
 0.9.0 line; `npm view glbforge version` says what is published. This file is
