@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 6 closed · 3 passes
+**1 open** · 6 closed · 4 passes
 
 ## Open
 
@@ -33,6 +33,7 @@ mention wins, and this index is regenerated from all of them.
 
 ## Passes
 
+- **2026-09-22** — [2026-09-22-nothing-to-fix](passes/2026-09-22-nothing-to-fix.md) — `80da0f1` — nothing to fix
 - **2026-09-21** — [2026-09-21-llms-tool-names](passes/2026-09-21-llms-tool-names.md) — `cse_01NFyKU3` — `L5` fixed, `L6` fixed, `L7` fixed
 - **2026-09-21** — [2026-09-21-instanced-draw-calls](passes/2026-09-21-instanced-draw-calls.md) — `97ee78c` — `L2` fixed
 - **2026-09-21** — [2026-09-21-bootstrap](passes/2026-09-21-bootstrap.md) — `5adca00` — `L1` fixed, `L2` open, `L3` fixed, `L4` open
