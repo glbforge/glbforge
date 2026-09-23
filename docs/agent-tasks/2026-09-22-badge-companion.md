@@ -190,6 +190,24 @@ rest. That is the intended policy (allow the body, deny everything else),
 but the warning suggests a `PreToolUse` hook is the SDK's preferred shape.
 Cosmetic; noted so a later pass does not mistake it for a bug.
 
+### T13 · `fixed` · two hook shapes that silently do nothing on Claude Code 2.1.126
+
+Wiring the companion to Claude Code hooks (`glbforge companion --hooks`).
+Two things the docs suggest but this CLI version does not honour, found by
+reading `~/.claude/debug/*.txt` after a headless `claude -p` run:
+
+- the `args` exec form (`{command: "node", args: ["/…/hook.mjs"]}`) is
+  ignored: bare `node` was spawned, read the hook JSON from stdin as a
+  script and died with a SyntaxError. The installer writes the shell form,
+  `node "/…/hook.mjs"`.
+- an `async: true` Stop hook is killed when a headless session exits right
+  after it; SessionStart and SessionEnd arrived, Stop never did. The hooks
+  are synchronous with a 3 s cap (the script returns in ~60 ms).
+
+Verified after both fixes: one `claude -p` run produced SessionStart (nod),
+Stop with the last assistant line (hop) and SessionEnd (wave) on the
+companion, zero brain turns, 7.6 s wall clock for the whole session.
+
 ## What the walk produced
 
 - `packages/core/src/animate.ts`: `animate(doc, { preset, duration,

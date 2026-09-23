@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — 56a5e59 (agent-loop/2026-09-21-bootstrap)
+**Role:** auditor
 
 ## Step 0 — claim check
 

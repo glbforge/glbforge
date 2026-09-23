@@ -17,7 +17,8 @@
  *   POST /move     {x, y} | {corner}   move the window
  *   POST /snapshot {out?}              PNG of the window, file or base64
  *   POST /chat     {text}              talk to the character (embedded brain answers; external brain: queued for /listen)
- *   POST /event    {text, source}      tell the character something happened (CI failed, task done); it reacts
+ *   POST /event    {text, source, react?} something happened: react=brain (default) asks the brain; react=body is a
+ *                                      canned bubble + gesture by kind (done|attention|error|info|bye) — what hooks use, free
  *   GET  /listen?timeout=25            external brain: long-poll the next unanswered message / event
  *   POST /reply    {id, text, seconds} external brain: answer an item from /listen (bubble + marks it answered)
  *   POST /quit
@@ -215,8 +216,19 @@ async function chat(text, source) {
   await ask('thinking', { on: true, hint: 'waiting for a brain to answer (external mode)' }).catch(() => {});
   return { queued: true, id: item.id, mode: 'external', hint: 'an external brain must call /listen then /reply; nothing answers until it does' };
 }
-async function nudge(text, source) {
-  const item = pushEvent('event', { text, source });
+const REACTIONS = { done: 'hop', attention: 'wave', error: 'shake', info: 'nod', bye: 'wave' };
+async function nudge(text, source, { react = 'brain', kind = 'info', gesture, seconds, meta = {} } = {}) {
+  text = String(text ?? '').trim();
+  if (!text) throw new Error('text required');
+  if (react === 'body') {
+    // A canned reaction: bubble + gesture, no brain turn. What hooks use, so a session finishing costs nothing.
+    const item = pushEvent('hook', { text, source, kind, ...meta });
+    const g = gesture ?? REACTIONS[kind] ?? 'nod';
+    const say = await body.say({ text, seconds: seconds ?? Math.min(10, 3 + text.length / 14) });
+    await body.emote({ gesture: g });
+    return { id: item.id, mode: 'body', kind, gesture: g, shown: say.shown, seconds: say.seconds };
+  }
+  const item = pushEvent('event', { text, source, ...meta });
   if (brain?.available) return runBrain(`[event from ${source || 'system'}] ${text}\n\nReact briefly as the character: a short bubble and, if it fits, a gesture.`, item);
   inbox.push(item);
   return { queued: true, id: item.id, mode: 'external' };
@@ -328,7 +340,7 @@ async function handle(req, res) {
       }
       case '/snapshot': { const r = await body.snapshot(b.out); return envelope(res, `Snapshot ${r.size.width}x${r.size.height}${r.out ? ` → ${r.out}` : ' (base64)'}`, r); }
       case '/chat': { const r = await chat(b.text, b.source || 'http'); return envelope(res, r.queued ? `Queued message #${r.id} for an external brain` : `Replied in ${r.duration_ms} ms with ${r.tools.length} tool call(s)`, r); }
-      case '/event': { const r = await nudge(b.text, b.source); return envelope(res, r.queued ? `Queued event #${r.id} for an external brain` : `Reacted in ${r.duration_ms} ms`, r); }
+      case '/event': { const r = await nudge(b.text, b.source, { react: b.react, kind: b.kind, gesture: b.gesture, seconds: b.seconds, meta: { event: b.event, session_id: b.session_id, cwd: b.cwd } }); return envelope(res, r.queued ? `Queued event #${r.id} for an external brain` : r.mode === 'body' ? `Reacted with "${r.gesture}" (${r.kind}), no brain turn` : `Reacted in ${r.duration_ms} ms`, r); }
       case '/reply': {
         const item = inbox.find((i) => i.id === Number(b.id)) ?? inbox.find((i) => !answered.has(i.id));
         if (!item) return fail(res, 404, 'nothing to reply to (inbox empty)');

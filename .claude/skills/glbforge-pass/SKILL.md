@@ -62,27 +62,25 @@ pnpm probe -- --json /tmp/probe.json --markdown /tmp/probe.md
 A red suite before you have changed anything is itself the finding: stop,
 record it, and open a PR that fixes it or an issue that reports it.
 
-## 3. Look where the probe cannot
+## 3. Take your role, and look where it looks
 
-The probe covers contract drift, advice that does not work, latency, code
-vocabulary and site reachability. It does not have judgement. Spend the rest
-of the pass on one or two of these, rotating between passes so the same ground
-is not re-walked:
+`pnpm ledger` prints the least recently used role on its last line. **Take
+that one.** Read its section in [`docs/agent-loop/ROLES.md`](../../../docs/agent-loop/ROLES.md)
+before you start, because the role decides what counts as a good pass — an
+auditor succeeds by finding nothing, a saboteur by finding a crash, a rival by
+publishing a table where GLBForge sometimes loses.
 
-- **Read a tool description as an agent with no other context.** Does it say
-  when to call it, what it returns, and what to do next? `inspect` does.
-  Check one that has not been reviewed recently.
-- **Walk a real task end to end** — forge an image, ship it, export USDZ,
-  diff two versions — using only what the tools return. Every place you had
-  to guess, open a file, or already know something is a defect for an agent.
-- **glbforge.dev as an agent arrives at it**: fetch `/llms.txt` and the docs
-  pages and check each concrete claim against the code. Claims about versions,
-  tool counts, caps and latencies rot silently.
-- **Compare against how the MCP ecosystem has moved** since the last pass —
-  new spec capabilities, conventions in well-regarded servers, client
-  behaviour. Note the date of anything you learn; do not assume your training
-  data is current.
-- **`schemas/` and `docs/error-codes.md` as an integrator's only reference.**
+The roster exists because one stance wears out. This loop ran nine auditor
+passes and the last four found nothing, which was honest and nearly useless:
+the ground had not gone quiet, the loop had one way of looking at it.
+
+If the least-recent role genuinely cannot run — a rival's tool will not
+install, the performance role has no fixture big enough — take the next one
+down and **write down why you skipped**. Skipping to reach an easier role is
+the single move that breaks the rotation.
+
+The probe still runs every pass regardless of role; it is the floor, not the
+work.
 
 ## 4. Change only what the evidence supports
 
@@ -124,6 +122,7 @@ layout is this way.
 
 ```markdown
 # Pass — 2026-09-22 — <commit or run id>
+**Role:** saboteur
 
 One paragraph: what you measured and what the ground looked like.
 
@@ -134,6 +133,9 @@ What was measured, and for anything left open, what closing it would take.
 
 Rules the generator enforces:
 
+- `**Role:**` on the second line, one of the roles in `ROLES.md`. An unknown
+  role is an error; a missing one is allowed but leaves you out of the
+  rotation, so do not omit it.
 - Heading form is exact: `### L<n> · \`state\` · title`. States are `open`,
   `fixed`, `wontfix`, `watching`.
 - **A finding id is global and permanent.** To change something's state, write

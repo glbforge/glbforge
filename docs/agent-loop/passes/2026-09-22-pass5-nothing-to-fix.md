@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — 56a5e59
+**Role:** auditor
 
 Step 0: `gh pr list` showed five open `agent-loop/*` branches plus `#10`
 (`fix/honest-measurements`, infra `#9` stacks on, not a ledger finding).

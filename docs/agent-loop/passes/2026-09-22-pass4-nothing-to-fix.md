@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — 56a5e59
+**Role:** auditor
 
 Step 0: `gh pr list` showed four open `agent-loop/*` branches. `#11`
 (`close-l2-draw-calls`) closes L2 — claimed, left alone. `#13`

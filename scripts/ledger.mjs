@@ -45,6 +45,9 @@ const out = join(root, 'docs', 'agent-loop', 'ledger.md');
 
 const STATES = new Set(['open', 'fixed', 'wontfix', 'watching']);
 const HEAD = /^#\s+Pass\s+—\s+(\d{4}-\d{2}-\d{2})\s+—\s+(.+?)\s*$/m;
+const ROLE = /^\*\*Role:\*\*\s+([a-z][a-z-]*)\s*$/m;
+/** Kept in step with docs/agent-loop/ROLES.md; a pass takes the least recent. */
+const ROLES = ['auditor', 'newcomer', 'saboteur', 'rival', 'integrator', 'performance', 'archaeologist', 'newcomer-to-new-code'];
 const FINDING = /^###\s+(L\d+)\s+·\s+`([a-z]+)`\s+·\s+(.+?)\s*$/gm;
 
 const problems = [];
@@ -67,7 +70,9 @@ for (const file of files) {
     seen.add(f.id);
   }
 
-  passes.push({ file, date: head[1], ref: head[2], findings });
+  const role = text.match(ROLE)?.[1] ?? null;
+  if (role && !ROLES.includes(role)) problems.push(`${file}: unknown role \`${role}\`; see docs/agent-loop/ROLES.md`);
+  passes.push({ file, date: head[1], ref: head[2], role, findings });
 }
 
 // Sort by date, then filename, so two passes on one day stay deterministic.
@@ -91,6 +96,19 @@ const openish = byId.filter((f) => f.state === 'open' || f.state === 'watching')
 const closed = byId.filter((f) => f.state === 'fixed' || f.state === 'wontfix');
 
 const link = (p) => `passes/${p.file}`;
+
+// Least-recently-used ordering: never-used roles first, then oldest last-use.
+const rotation = ROLES
+  .map((role) => {
+    const used = passes.filter((p) => p.role === role);
+    return { role, count: used.length, last: used[used.length - 1] ?? null };
+  })
+  .sort((a, b) => {
+    if (!a.last && !b.last) return ROLES.indexOf(a.role) - ROLES.indexOf(b.role);
+    if (!a.last) return -1;
+    if (!b.last) return 1;
+    return a.last.date === b.last.date ? a.last.file.localeCompare(b.last.file) : a.last.date.localeCompare(b.last.date);
+  });
 const row = (f) => `| \`${f.id}\` | ${f.state} | ${f.title} | [${f.first.date}](${link(f.first)}) | [${f.last.date}](${link(f.last)}) |`;
 
 const L = [];
@@ -126,11 +144,20 @@ L.push('| id | state | finding | first seen | last touched |');
 L.push('|---|---|---|---|---|');
 for (const f of closed) L.push(row(f));
 L.push('');
+L.push('## Roles');
+L.push('');
+L.push('Least recently used first. A pass takes the top one — see');
+L.push('[ROLES.md](ROLES.md), which says what each stance counts as success.');
+L.push('');
+L.push('| role | passes | last used |');
+L.push('|---|---|---|');
+for (const r of rotation) L.push(`| ${r.role} | ${r.count} | ${r.last ? `[${r.last.date}](${link(r.last)})` : '**never**'} |`);
+L.push('');
 L.push('## Passes');
 L.push('');
 for (const p of [...passes].reverse()) {
   const what = p.findings.length ? p.findings.map((f) => `\`${f.id}\` ${f.state}`).join(', ') : 'nothing to fix';
-  L.push(`- **${p.date}** — [${p.file.replace(/\.md$/, '')}](${link(p)}) — \`${p.ref}\` — ${what}`);
+  L.push(`- **${p.date}** — [${p.file.replace(/\.md$/, '')}](${link(p)})${p.role ? ` — *${p.role}*` : ''} — \`${p.ref}\` — ${what}`);
 }
 L.push('');
 
@@ -145,4 +172,5 @@ if (process.argv.includes('--check')) {
 } else {
   await writeFile(out, text);
   console.log(`ledger.md: ${openish.length} open, ${closed.length} closed, ${passes.length} passes.`);
+  console.log(`next role (least recently used): ${rotation[0].role}`);
 }

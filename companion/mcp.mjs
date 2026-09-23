@@ -91,8 +91,8 @@ server.tool('companion_chat',
   wrap(async ({ text }) => out(await call('POST', '/chat', { text, source: 'mcp' }, 180000))));
 
 server.tool('companion_event',
-  'Tell the character something happened so it reacts on screen ("tests passed", "deploy failed on main", "user has been idle 20 min"). Use it from hooks and pipelines to give the user a face for background work.',
-  { text: z.string().max(500), source: z.string().max(60).optional().describe('Who is reporting: ci, claude-code, cron…') }, { title: 'Report an event', ...RW },
+  'Tell the character something happened so it reacts on screen ("tests passed", "deploy failed on main"). react=body (default) is a canned bubble + gesture chosen by kind — free, instant, what hooks use; react=brain asks the embedded brain to react in character (a paid turn).',
+  { text: z.string().max(500), source: z.string().max(60).optional().describe('Who is reporting: ci, claude-code, cron…'), react: z.enum(['body', 'brain']).default('body'), kind: z.enum(['done', 'attention', 'error', 'info', 'bye']).default('info').describe('body reaction: done=hop, attention=wave, error=shake, info=nod, bye=wave') }, { title: 'Report an event', ...RW },
   wrap(async (args) => out(await call('POST', '/event', args, 180000))));
 
 server.tool('companion_listen',

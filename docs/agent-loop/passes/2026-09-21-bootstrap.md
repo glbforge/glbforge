@@ -1,4 +1,5 @@
 # Pass — 2026-09-21 — 5adca00
+**Role:** auditor
 
 Built the probe, recorded the baseline, fixed two of four findings.
 
