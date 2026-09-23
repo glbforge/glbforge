@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 7 closed · 9 passes
+**1 open** · 7 closed · 10 passes
 
 ## Open
 
@@ -34,6 +34,7 @@ mention wins, and this index is regenerated from all of them.
 
 ## Passes
 
+- **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
 - **2026-09-22** — [2026-09-22-pass7-tool-claims](passes/2026-09-22-pass7-tool-claims.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
 - **2026-09-22** — [2026-09-22-pass6-forge-ship-walkthrough](passes/2026-09-22-pass6-forge-ship-walkthrough.md) — `56a5e59` — nothing to fix
 - **2026-09-22** — [2026-09-22-pass5-nothing-to-fix](passes/2026-09-22-pass5-nothing-to-fix.md) — `56a5e59` — nothing to fix
