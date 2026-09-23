@@ -244,6 +244,8 @@ export function fromGltf(doc: Document, opts: FromGltfOptions = {}): SceneIR {
       channels.push({ node: ni, property: pathName as IRChannel['property'], times, values, width, interpolation });
     }
     if (!Number.isFinite(start)) { start = 0; end = 0; }
+    // Key times are float32 in the file; report the range at microsecond precision, not with float32 noise.
+    start = Math.round(start * 1e6) / 1e6; end = Math.round(end * 1e6) / 1e6;
     return { index: ai, path: `/Asset/Animations/${ident(anim.getName() || 'Animation')}_${ai}`, name: anim.getName() || `animation_${ai}`, channels, start, end };
   });
 

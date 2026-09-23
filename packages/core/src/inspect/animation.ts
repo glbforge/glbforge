@@ -51,6 +51,21 @@ export interface AnimationReport {
 }
 
 const EPS = 1e-5;
+/** Metres a root must end away from its first key before a clip counts as travelling. */
+const ROOT_MOTION_MIN = 1e-3;
+const round6 = (v: number) => Math.round(v * 1e6) / 1e6;
+
+/** Distance between a translation channel's first and last key. */
+export function netDisplacement(ch: IRChannel): number {
+  const w = ch.width, stride = ch.interpolation === 'CUBICSPLINE' ? w * 3 : w;
+  const off = ch.interpolation === 'CUBICSPLINE' ? w : 0;
+  const keys = Math.floor(ch.values.length / (stride || 1));
+  if (keys < 2) return 0;
+  const a = (keys - 1) * stride + off;
+  let sum = 0;
+  for (let c = 0; c < Math.min(w, 3); c++) { const d = ch.values[a + c] - ch.values[off + c]; sum += d * d; }
+  return Math.sqrt(sum);
+}
 
 /** Does a channel's value change across its keys (beyond float noise)? */
 export function channelMoves(ch: IRChannel, component?: number): boolean {
@@ -78,7 +93,7 @@ export function inspectAnimation(ir: SceneIR): AnimationReport {
   const animatedPrims = new Map<string, { properties: Set<string>; clips: Set<string> }>();
   const movingJointNodes = new Set<number>();
   const drivenWeights = new Map<number, Set<number>>(); // node → target indices with a moving weight
-  let rootMotion = false;
+  let rootMotion = false, rootTravel = 0;
   let rangeStart = Infinity, rangeEnd = -Infinity;
   for (const anim of ir.animations) {
     let moving = false;
@@ -101,13 +116,18 @@ export function inspectAnimation(ir: SceneIR): AnimationReport {
         drivenWeights.set(ch.node, set);
       }
       if (ch.property === 'translation') {
+        // Root motion is travel: the root ends the clip somewhere else. A closed
+        // loop (idle bob, breathing) returns to its first key and is in place.
         const isRoot = node.parent === null || (node.isJoint && (node.parent === null || !ir.nodes[node.parent].isJoint));
-        if (isRoot) rootMotion = true;
+        if (isRoot) {
+          const d = netDisplacement(ch);
+          if (d > ROOT_MOTION_MIN) { rootMotion = true; rootTravel = Math.max(rootTravel, d); }
+        }
       }
     }
     const duration = toSeconds(anim.end - anim.start);
     if (anim.channels.length) { rangeStart = Math.min(rangeStart, anim.start); rangeEnd = Math.max(rangeEnd, anim.end); }
-    clips.push({ prim_path: anim.path, name: anim.name, start: toUnit(anim.start), end: toUnit(anim.end), duration_seconds: duration, channel_count: anim.channels.length, has_motion: moving, animated_prims: [...prims] });
+    clips.push({ prim_path: anim.path, name: anim.name, start: toUnit(anim.start), end: toUnit(anim.end), duration_seconds: round6(duration), channel_count: anim.channels.length, has_motion: moving, animated_prims: [...prims] });
     if (anim.channels.length && duration <= 0) {
       diagnostics.push(diag('ANIMATION_ZERO_LENGTH', anim.path, `Clip "${anim.name}" has zero duration (${anim.channels.length} channel(s), one key).`));
     } else if (anim.channels.length && !moving) {
@@ -173,7 +193,7 @@ export function inspectAnimation(ir: SceneIR): AnimationReport {
     entry.properties.add(p.property); entry.clips.add('timeSamples');
     animatedPrims.set(p.prim_path, entry);
   }
-  if (rootMotion) diagnostics.push(diag('ROOT_MOTION', clips.find((c) => c.has_motion)?.prim_path ?? '', 'A root node/joint translates over the clip (root motion).'));
+  if (rootMotion) diagnostics.push(diag('ROOT_MOTION', clips.find((c) => c.has_motion)?.prim_path ?? '', `A root node/joint ends the clip ${rootTravel.toFixed(3)} m from where it started (root motion).`));
 
   const hasRange = Number.isFinite(rangeStart);
   const duration = hasRange ? toSeconds(rangeEnd - rangeStart) : 0;
@@ -182,7 +202,7 @@ export function inspectAnimation(ir: SceneIR): AnimationReport {
     time_code_range: hasRange ? [toUnit(rangeStart), toUnit(rangeEnd)] : null,
     time_unit: timeUnit,
     frames_per_second: ir.fps,
-    duration_seconds: duration,
+    duration_seconds: round6(duration),
     clips,
     animated_prims: [...animatedPrims.entries()].map(([prim_path, e]) => ({ prim_path, properties: [...e.properties], clips: [...e.clips] })),
     skeletons,

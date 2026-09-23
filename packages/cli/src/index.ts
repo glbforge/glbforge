@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { alignmentScore, analyze, animate, ANIMATE_PRESETS, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
 import { resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
@@ -27,6 +27,7 @@ import { printDiff, printDiffReport, printInspect, printReport } from './report.
 import { scaffoldViewer } from './scaffold.js';
 import { registerMeshyCommands } from './meshy-cmd.js';
 import { cliVersion, registerInitCommand } from './init.js';
+import { registerCompanionCommand } from './companion-cmd.js';
 import { loadDotEnv } from './env.js';
 
 loadDotEnv();
@@ -782,6 +783,44 @@ program
   });
 
 program
+  .command('animate')
+  .description('Bake a looping procedural motion into a GLB as an ordinary animation clip, no rig needed: idle (rise, settle, gentle turn), bob, spin, sway, breathe, hop. Drives a pivot inserted at the base centre; original nodes, skins and clips are untouched, and re-running replaces the clip. Amplitudes are fractions of the measured height (deterministic).')
+  .argument('<file>', 'path to .glb')
+  .option('-o, --out <file>', 'output path (default: <name>.<preset>.glb)')
+  .option('-p, --preset <name>', `motion: ${ANIMATE_PRESETS.join(' | ')}`, 'idle')
+  .option('--duration <seconds>', 'loop length (default per preset: idle 4, bob 3, spin 6, sway 3, breathe 4, hop 1.2)', parseFloat)
+  .option('--amplitude <factor>', 'scale every displacement and angle (1 = a few % of the height / a few degrees)', parseFloat, 1)
+  .option('--fps <hz>', 'key rate', parseFloat, 30)
+  .option('--name <clip>', 'clip name (default: the preset)')
+  .option('--json', 'emit JSON')
+  .action(async (file: string, opts: { out?: string; preset: string; duration?: number; amplitude: number; fps: number; name?: string; json?: boolean }) => {
+    const started = Date.now();
+    const outPath = opts.out ?? file.replace(/\.glb$/i, '') + `.${opts.preset}.glb`;
+    const io = await createIO();
+    const doc = await io.readBinary(new Uint8Array(await readFile(file)));
+    doc.setLogger(new Logger(Logger.Verbosity.ERROR));
+    const result = animate(doc, { preset: opts.preset as (typeof ANIMATE_PRESETS)[number], duration: opts.duration, amplitude: opts.amplitude, fps: opts.fps, name: opts.name });
+    const bytes = await io.writeBinary(doc);
+    await writeFile(outPath, bytes);
+    const sha = createHash('sha256').update(bytes).digest('hex');
+    usage('animate', outPath, { sha256: sha, edge: { from: resolvePath(file), to: resolvePath(outPath) }, duration_ms: Date.now() - started, ok: true });
+    if (opts.json) {
+      console.log(JSON.stringify({ outPath, bytes: bytes.byteLength, sha256: sha, ...result }, null, 2));
+    } else {
+      const mm = (v: number) => `${(v * 1000).toFixed(0)} mm`;
+      const parts = [
+        result.motion.rise ? `rises ${mm(result.motion.rise)}` : '',
+        result.motion.yaw_degrees ? `turns ${result.motion.yaw_degrees >= 360 ? '360°' : `±${result.motion.yaw_degrees.toFixed(1)}°`}` : '',
+        result.motion.tilt_degrees ? `tilts ±${result.motion.tilt_degrees.toFixed(1)}°` : '',
+        result.motion.scale_change ? `scales ±${(result.motion.scale_change * 100).toFixed(1)}%` : '',
+      ].filter(Boolean);
+      console.log(`  ${outPath} (${(bytes.byteLength / 1048576).toFixed(2)}MB)  clip "${result.clip}": ${parts.join(', ') || 'no motion'} over ${result.duration_seconds}s, ${result.keys} keys, ${result.channels} channel(s)${result.reused_pivot ? ', pivot reused' : ''}`);
+      for (const w of result.warnings) console.log(`  ! ${w}`);
+      console.log(`  next: glbforge inspect ${outPath}   ·   glbforge usdz ${outPath}  (AR Quick Look plays the clip)`);
+    }
+  });
+
+program
   .command('scaffold')
   .description('Emit a minimal Vite + React Three Fiber viewer for a GLB.')
   .argument('<file>', 'path to (optimized) .glb')
@@ -793,6 +832,7 @@ program
   });
 
 registerInitCommand(program);
+registerCompanionCommand(program);
 registerMeshyCommands(program, async (input, output, profileName) =>
   (await optimizeFile(input, output, profileName)).passed);
 

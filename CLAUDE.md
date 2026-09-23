@@ -2,7 +2,9 @@
 
 pnpm monorepo: `@glbforge/core` (pure pipeline), `glbforge` (CLI, `packages/cli`),
 `@glbforge/mcp` (MCP server), `@glbforge/meshy` (Meshy + fal.ai clients),
-`@glbforge/studio` (browser Studio). Landing site in `site/` (static, Cloudflare),
+`@glbforge/studio` (browser Studio), `@glbforge/companion` (`companion/`,
+standalone Electron desktop character with its own lockfile — `pnpm install`
+there, not `--ignore-workspace`, or Electron's postinstall is skipped). Landing site in `site/` (static, Cloudflare),
 hosted API in `worker/`. Roadmap and history: `ROADMAP.md`.
 
 ## Build / test
@@ -91,7 +93,7 @@ the same registration into another checkout.
   files. Don't add fixtures without LFS tracking.
 - **Release**: tag `v*` → `release.yml` publishes all packages via npm OIDC
   (`pnpm pack` + `npm publish --provenance`; never `pnpm publish` in CI). Bump
-  all five package versions together; update `server.json` and the MCP registry
+  all six package versions together (`packages/*` and `companion/`); update `server.json` and the MCP registry
   (`dev.glbforge/glbforge`, domain key in `~/.config/glbforge/`) afterwards.
 - **USDZ crate writer** (`core/src/usdc.ts`) targets crate 0.8.0; Pixar flags anything
   older as deprecated. Validate changes with `test/usd-oracle.py`: `pip install

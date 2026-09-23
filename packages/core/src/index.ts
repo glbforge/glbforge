@@ -23,6 +23,7 @@ export { writeUsdc } from './usdc.js';
 export { buildSkeleton, SKEL_FPS, compose, decompose, invert, mul } from './usd-skel.js';
 export { storeZip, type ZipEntry } from './zip.js';
 export { toStl, type StlOptions, type StlResult } from './stl.js';
+export { animate, sceneBounds, ANIMATE_PRESETS, PIVOT_NAME, PIVOT_OFFSET_NAME, type AnimateOptions, type AnimateResult, type AnimatePreset } from './animate.js';
 export { detectGenerator, type GeneratorGuess, type GeneratorProfile } from './detect.js';
 export { alignmentScore, sampleSurface, triangleSoup, type AlignmentScore } from './harness/align.js';
 export {

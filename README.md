@@ -32,7 +32,7 @@ routes photographs to generators, and exports GLB / STL / USDZ.
   budget-gated asset: route (optimize / forge / generate) → analyze →
   optimize → gate. `--json` emits the route, the forge's decision and the
   full optimization report as one document.
-- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 27 tools,
+- ✅ MCP server wrapping all of the above (`@glbforge/mcp`, 28 tools,
   `dev.glbforge/glbforge` in the official MCP registry)
 - ✅ **GLBForge Studio** (`glbforge ui`) — local web UI: drag-drop analyze,
   one-click optimize with a before/after compare slider in the viewport,
@@ -223,6 +223,8 @@ preserved, weights normalized, deterministic).
 ## USDZ for iOS AR
 
 ```bash
+npx glbforge animate model.web.glb       # → model.idle.glb (looping idle clip, no rig; -p spin|bob|sway|breathe|hop)
+npx glbforge companion model.idle.glb    # a talking desktop character (Electron via npx -y @glbforge/companion; --mcp registers its bridge)
 npx glbforge usdz model.web.glb          # → model.usdz (PNG textures; --jpeg for smaller)
 ```
 

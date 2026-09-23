@@ -4,6 +4,64 @@
 
 ### Added
 
+- **`animate`: motion without a rig.** `glbforge animate model.web.glb`
+  (MCP `animate`, core `animate()`) bakes a looping procedural clip — idle,
+  bob, spin, sway, breathe, hop — as ordinary glTF animation channels on a
+  pivot pair inserted at the base centre of the asset. Originals, skins and
+  authored clips are untouched; re-running with the same clip name replaces
+  the clip instead of stacking pivots; every curve is closed so looping never
+  pops; amplitudes are fractions of the measured height, so the same input
+  and settings give identical bytes on the CLI and the MCP. The reply states
+  what was baked (rise in mm, yaw / tilt in degrees, scale change) and runs
+  `inspect_animation` on the written file to confirm it moves.
+- **USDZ carries node animation.** `toUsdz` bakes the first clip that moves a
+  node as `xformOp:transform` time samples at 30 fps on every mesh Xform under
+  it, so AR Quick Look plays an `animate` clip; the pure-TS USD reader turns
+  the samples back into a moving clip. Previously "node animations without a
+  skin are not exported".
+- **Desktop companion** (`companion/`, standalone, not in the workspace
+  lockfile): an Electron window — transparent, frameless, always on top,
+  hidden from the Dock — renders a GLB with its clips, turns toward the cursor,
+  hops when clicked, drags anywhere. A localhost HTTP surface
+  (`/load /play /emote /say /move /snapshot /quit`) and an MCP bridge
+  (`companion_*`, snapshot returned as an image block) let an agent use the
+  model on screen as its face. macOS tested; nothing leaves 127.0.0.1.
+- **The companion has a brain.** Double-click the window (or press `/`) and
+  type: an embedded Claude agent on the Claude Agent SDK answers in the
+  bubble, gestures, plays clips, can look at itself and inspect its own mesh
+  with glbforge's tools — and has no shell or filesystem. It runs on the
+  Claude CLI's login; when that is missing, `/state` says so with the fix and
+  typed messages queue for an external brain instead of being lost. Any MCP
+  client can be that brain: `companion_listen` hands it what the user typed
+  (or an event a hook posted with `companion_event`), `companion_reply`
+  answers. Every mutating call now returns the body's state after the call
+  plus advisory notes; `/events` is the log of clicks, drags, messages,
+  replies and tool calls. The window fidgets when ignored, leans into a
+  drag, and shows a thinking indicator while the brain works.
+- **`glbforge companion model.glb`** and **`npx -y @glbforge/companion`**:
+  the companion is a published package with a `bin`; the CLI launches it
+  from the checkout when built there and through npx otherwise, passes the
+  glbforge MCP server so the character can inspect itself, and `--mcp`
+  registers the bridge in `.mcp.json`. Six packages release together now.
+- **The brain got cheap.** One persistent Claude Code session (streaming
+  input) instead of a process per message, and one lazy `inspect_self` tool
+  instead of glbforge's whole 28-tool server in the prompt: the prefix every
+  call re-reads went from 23,676 tokens to 6,821, a follow-up turn is ~1.5
+  cents at list instead of ~9, and `/state` reports measured tokens per turn.
+- **Random agent tasks** (`pnpm random-task`, `docs/agent-tasks/`): seeded
+  draws of source × goal × constraint × twist, walked as an agent with a
+  verdict per step. First walk: `2026-09-22-badge-companion.md`, T1–T7.
+
+### Fixed
+
+- `inspect_animation` called a closed-loop bob "root motion" and advised
+  stripping it. Root motion now means net travel: the root ends the clip more
+  than 1 mm from where it started, and the message carries the distance.
+- Clip ranges were reported with float32 noise (`1.2000000476837158`); the
+  IR rounds key-time ranges to microseconds.
+
+### Added (earlier, unreleased)
+
 - **Auto-tune: the matte picks its own tolerance.** The one knob a lift has
   cannot be known in advance — too tight leaves background welded on, too
   loose eats the object, and where those meet depends entirely on the

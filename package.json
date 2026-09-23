@@ -9,7 +9,8 @@
     "build:og": "node scripts/build-og.mjs",
     "probe": "pnpm --filter @glbforge/mcp probe",
     "ledger": "node scripts/ledger.mjs",
-    "live-check": "node scripts/live-check.mjs"
+    "live-check": "node scripts/live-check.mjs",
+    "random-task": "node scripts/random-task.mjs"
   },
   "devDependencies": {
     "sharp": "^0.35.3"

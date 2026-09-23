@@ -92,6 +92,17 @@ updated with the code: anything not listed here is not shipped):
 - Animated assets: skinned meshes and morph targets are simplified bone-aware
   (attribute-aware meshopt simplification with joint-boundary vertex locks;
   skins, inverse bind matrices, targets, and clips preserved).
+- Procedural animation (`glbforge animate`, MCP `animate`): bake a looping
+  idle / bob / spin / sway / breathe / hop clip into any GLB without a rig —
+  a pivot at the base centre carries the motion, originals untouched,
+  deterministic keys; USDZ export bakes it as xform time samples so AR Quick
+  Look plays it.
+- Desktop companion (`glbforge companion model.glb`, `npx -y @glbforge/companion`):
+  the asset as a talking always-on-top character on macOS — plays its clips,
+  gazes at the cursor, answers typed messages with a Claude agent on the
+  Claude CLI login (body + glbforge inspect tools only, no shell), or lets
+  any MCP client be the character (`companion_listen` / `companion_reply`);
+  every call returns the body's state after it.
 - USDZ export (`glbforge usdz`, MCP `export_usdz`): iOS AR Quick Look output
   with a binary usdc (crate 0.8.0) layer written in pure TypeScript and
   verified against Pixar's reader, UsdPreviewSurface materials, PNG/JPEG
@@ -108,7 +119,7 @@ updated with the code: anything not listed here is not shipped):
   device; only optional signed-in generation (GitHub/Google, metered credits)
   touches a server. Shows the measured visual-fidelity SSIM, a
   reference · result · change heatmap, and exports GLB / STL / USDZ.
-- MCP server (27 tools): `dev.glbforge/glbforge` in the official MCP registry;
+- MCP server (28 tools): `dev.glbforge/glbforge` in the official MCP registry;
   install with `claude mcp add glbforge -- npx -y @glbforge/mcp`. Agent-oriented:
   every tool returns `{ok, summary, duration_ms, errors[], data}` where
   errors[] carry stable codes (docs/error-codes.md), a severity and the
@@ -130,7 +141,7 @@ updated with the code: anything not listed here is not shipped):
   inspect_geometry, inspect_animation, inspect_materials, analyze_performance,
   render, render_animation_strip, capabilities,
   analyze_glb, inspect_report, render_preview, compare_glb, optimize_glb,
-  ship_asset, audit_directory, extrude_image, export_stl, export_usdz,
+  ship_asset, audit_directory, extrude_image, animate, export_stl, export_usdz,
   list_profiles, generate_image_to_3d, generation_status,
   meshy_create_task, meshy_task_status, meshy_download.
 - GitHub Action: `uses: glbforge/glbforge@main` runs only on GLB/glTF files

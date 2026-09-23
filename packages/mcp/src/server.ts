@@ -38,6 +38,10 @@ import { Document, Logger } from '@gltf-transform/core';
 import {
   alignmentScore,
   analyze,
+  animate,
+  ANIMATE_PRESETS,
+  PIVOT_NAME,
+  inspectAnimation,
   applyPerceptualVerdict,
   auditDirectory,
   BUDGET_METHODOLOGY_URL,
@@ -852,6 +856,67 @@ export function createServer(): McpServer {
       diff: diffScenes(beforeSnap, afterIr),
       post_validation: post.validation,
     }, `${dry_run ? 'Would export' : 'Exported'} ${basename(path)} → ${basename(out)} (${result.format}, ${(result.usdz.byteLength / 1048576).toFixed(2)} MB): ${plural(result.meshes, 'mesh')}, ${plural(result.materials, 'material')}, ${plural(result.textures, 'texture')}${result.skeletons ? `, ${plural(result.skeletons, 'skeleton')} + ${result.frames}-frame clip` : ''}; ${post.validation.arkit_compatible ? 'AR Quick Look compatible' : 'NOT AR Quick Look compatible'}, ${severityTail(errors)}`, { image: image?.image, errors });
+  });
+
+  tool('animate', {
+    annotations: WRITES_FILES,
+    description:
+      'Bake a looping procedural motion into a GLB as an ordinary animation clip — no rig needed: idle (slow rise and settle with a gentle turn), ' +
+      'bob, spin (one turn per loop), sway, breathe, hop. The clip drives a pivot inserted at the base centre of the asset; the original nodes, ' +
+      'skins and authored clips are untouched, and calling it again with the same clip name replaces the clip rather than stacking pivots. ' +
+      'Amplitudes are fractions of the measured height, so the same input and settings give identical bytes. Use it on the optimized .web.glb ' +
+      'when an asset has to move in a viewer, a desktop companion or AR Quick Look (export_usdz bakes the clip as xform time samples). ' +
+      'Returns the measured motion (rise, yaw, tilt, scale change), the pivot, an inspect_animation of the written file, the diff and a thumbnail. dry_run=true writes nothing.',
+    inputSchema: {
+      path: z.string().describe('Absolute path to the .glb'),
+      out: z.string().describe('Absolute output path for the animated .glb (may equal path)'),
+      preset: z.enum(ANIMATE_PRESETS as unknown as [string, ...string[]]).default('idle').describe('idle | bob | spin | sway | breathe | hop'),
+      duration: z.number().positive().optional().describe('Loop length in seconds (default per preset: idle 4, bob 3, spin 6, sway 3, breathe 4, hop 1.2)'),
+      amplitude: z.number().min(0).default(1).describe('Scales every displacement and angle; 1 = a few % of the height / a few degrees'),
+      fps: z.number().min(1).max(240).default(30).describe('Key rate'),
+      name: z.string().optional().describe('Clip name (default: the preset); an existing clip of this name is replaced'),
+      preview: previewField('the animated asset (rest pose)'),
+      render: RENDER_FLAG,
+      dry_run: DRY_RUN,
+    },
+  }, async ({ path, out, preset, duration, amplitude, fps, name, preview, render, dry_run }) => {
+    await prepareOut(out, dry_run);
+    const { doc, bytes } = await readDoc(path);
+    const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
+    const beforeSnap = snapshotScene(beforeIr);
+    const result = animate(doc, { preset: preset as (typeof ANIMATE_PRESETS)[number], duration, amplitude, fps, name });
+    const io = await createNodeIO();
+    const outBytes = await io.writeBinary(doc);
+    if (!dry_run) await writeFile(out, outBytes);
+    const afterIr = fromGltf(doc, { format: 'glb', sourcePath: out, fileBytes: outBytes.byteLength });
+    const animation = inspectAnimation(afterIr);
+    const clip = animation.clips.find((c) => c.name === result.clip) ?? null;
+    const errors: Diagnostic[] = animation.diagnostics.filter((d) => d.code !== 'ANIMATION_NO_MOTION' || !clip?.has_motion);
+    if (result.channels) errors.push(diag('ANIMATION_BAKED', `/Asset/${PIVOT_NAME}`, `Clip "${result.clip}" (${result.preset}) drives ${PIVOT_NAME} at the base centre [${result.pivot.map((v) => v.toFixed(3)).join(', ')}]${result.reused_pivot ? ' (pivot reused)' : ''}.`));
+    for (const w of result.warnings) errors.push(diag('ANIMATE_WARNING', '/Asset', w, { severity: 'warning' }));
+    if (clip && !clip.has_motion) errors.push(diag('ANIMATION_NO_MOTION', `/Asset/${result.clip}`, `Clip "${result.clip}" was written but no channel changes value.`, { severity: 'error' }));
+    if (dry_run) errors.push(diag('DRY_RUN', '/Asset', `dry_run: ${out} was not written.`));
+    const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
+    const mm = (v: number) => `${(v * 1000).toFixed(0)} mm`;
+    const parts = [
+      result.motion.rise ? `rises ${mm(result.motion.rise)}` : '',
+      result.motion.yaw_degrees ? `turns ${result.motion.yaw_degrees >= 360 ? '360°' : `±${result.motion.yaw_degrees.toFixed(1)}°`}` : '',
+      result.motion.tilt_degrees ? `tilts ±${result.motion.tilt_degrees.toFixed(1)}°` : '',
+      result.motion.scale_change ? `scales ±${(result.motion.scale_change * 100).toFixed(1)}%` : '',
+    ].filter(Boolean);
+    return reply({
+      out, bytes: outBytes.byteLength, sha256: sha256(outBytes),
+      clip: result.clip, preset: result.preset, duration_seconds: result.duration_seconds, fps: result.fps, keys: result.keys, channels: result.channels,
+      pivot: result.pivot, height: result.height, motion: result.motion, reused_pivot: result.reused_pivot,
+      animation: { has_motion: clip?.has_motion ?? false, clips: animation.clips.map((c) => ({ name: c.name, duration_seconds: c.duration_seconds, has_motion: c.has_motion })) },
+      warnings: result.warnings,
+      dry_run, written: !dry_run,
+      diff: diffScenes(beforeSnap, afterIr),
+      nextActions: dry_run ? [] : [
+        { tool: 'render_animation_strip', args: { path: out, include_clip: true }, note: 'See the motion as a contact sheet (and GIF) before shipping it' },
+        { tool: 'export_usdz', args: { path: out, out: out.replace(/\.glb$/i, '') + '.usdz' }, note: 'AR Quick Look plays the clip as xform time samples' },
+      ],
+    }, `${dry_run ? 'Would bake' : 'Baked'} "${result.clip}" (${result.preset}) into ${basename(out)}: ${parts.join(', ') || 'no motion'} over ${result.duration_seconds}s, ${result.keys} keys, ${plural(result.channels, 'channel')}; ${clip?.has_motion ? 'inspect_animation confirms motion' : 'NO motion detected'}, ${severityTail(errors)}`, { image: image?.image, errors });
   });
 
   const imageToDataUrl = async (image: string): Promise<string> => {
