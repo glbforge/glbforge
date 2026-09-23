@@ -33,16 +33,32 @@ mention wins, and this index is regenerated from all of them.
 | `L8` | fixed | `CLAUDE.md` stated a `print` rule profile as shipped; only `authoring@1` exists | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) | [2026-09-22](passes/2026-09-22-claude-md-print-profile.md) |
 | `L9` | fixed | the live check died on a branch switch and said nothing for 17 hours | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
 
+## Roles
+
+Least recently used first. A pass takes the top one — see
+[ROLES.md](ROLES.md), which says what each stance counts as success.
+
+| role | passes | last used |
+|---|---|---|
+| saboteur | 0 | **never** |
+| rival | 0 | **never** |
+| integrator | 0 | **never** |
+| performance | 0 | **never** |
+| archaeologist | 0 | **never** |
+| newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
+| newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
+| auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+
 ## Passes
 
-- **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — `manual, from the maintainer's machine` — `L9` fixed
-- **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
-- **2026-09-22** — [2026-09-22-pass7-tool-claims](passes/2026-09-22-pass7-tool-claims.md) — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
-- **2026-09-22** — [2026-09-22-pass6-forge-ship-walkthrough](passes/2026-09-22-pass6-forge-ship-walkthrough.md) — `56a5e59` — nothing to fix
-- **2026-09-22** — [2026-09-22-pass5-nothing-to-fix](passes/2026-09-22-pass5-nothing-to-fix.md) — `56a5e59` — nothing to fix
-- **2026-09-22** — [2026-09-22-pass4-nothing-to-fix](passes/2026-09-22-pass4-nothing-to-fix.md) — `56a5e59` — nothing to fix
-- **2026-09-22** — [2026-09-22-nothing-to-fix](passes/2026-09-22-nothing-to-fix.md) — `80da0f1` — nothing to fix
-- **2026-09-22** — [2026-09-22-claude-md-print-profile](passes/2026-09-22-claude-md-print-profile.md) — `agent-loop/2026-09-22-claude-md-print-profile` — `L8` fixed
-- **2026-09-21** — [2026-09-21-llms-tool-names](passes/2026-09-21-llms-tool-names.md) — `cse_01NFyKU3` — `L5` fixed, `L6` fixed, `L7` fixed
-- **2026-09-21** — [2026-09-21-instanced-draw-calls](passes/2026-09-21-instanced-draw-calls.md) — `97ee78c` — `L2` fixed
-- **2026-09-21** — [2026-09-21-bootstrap](passes/2026-09-21-bootstrap.md) — `5adca00` — `L1` fixed, `L2` open, `L3` fixed, `L4` open
+- **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
+- **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
+- **2026-09-22** — [2026-09-22-pass7-tool-claims](passes/2026-09-22-pass7-tool-claims.md) — *auditor* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
+- **2026-09-22** — [2026-09-22-pass6-forge-ship-walkthrough](passes/2026-09-22-pass6-forge-ship-walkthrough.md) — *newcomer* — `56a5e59` — nothing to fix
+- **2026-09-22** — [2026-09-22-pass5-nothing-to-fix](passes/2026-09-22-pass5-nothing-to-fix.md) — *auditor* — `56a5e59` — nothing to fix
+- **2026-09-22** — [2026-09-22-pass4-nothing-to-fix](passes/2026-09-22-pass4-nothing-to-fix.md) — *auditor* — `56a5e59` — nothing to fix
+- **2026-09-22** — [2026-09-22-nothing-to-fix](passes/2026-09-22-nothing-to-fix.md) — *auditor* — `80da0f1` — nothing to fix
+- **2026-09-22** — [2026-09-22-claude-md-print-profile](passes/2026-09-22-claude-md-print-profile.md) — *auditor* — `agent-loop/2026-09-22-claude-md-print-profile` — `L8` fixed
+- **2026-09-21** — [2026-09-21-llms-tool-names](passes/2026-09-21-llms-tool-names.md) — *auditor* — `cse_01NFyKU3` — `L5` fixed, `L6` fixed, `L7` fixed
+- **2026-09-21** — [2026-09-21-instanced-draw-calls](passes/2026-09-21-instanced-draw-calls.md) — *auditor* — `97ee78c` — `L2` fixed
+- **2026-09-21** — [2026-09-21-bootstrap](passes/2026-09-21-bootstrap.md) — *auditor* — `5adca00` — `L1` fixed, `L2` open, `L3` fixed, `L4` open

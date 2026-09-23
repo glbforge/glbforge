@@ -1,4 +1,5 @@
 # Pass — 2026-09-23 — manual, from the maintainer's machine
+**Role:** auditor
 
 Not a scheduled pass. A check on the loop's own health after ~40 hours found
 the live check had been dead for seventeen of them.

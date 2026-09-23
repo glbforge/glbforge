@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — 56a5e59
+**Role:** newcomer
 
 Sixth scheduled pass today. `.claude/skills/glbforge-pass/SKILL.md` is still not
 on `main` — the ledger infrastructure lives only on the unmerged

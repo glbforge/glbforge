@@ -1,4 +1,5 @@
 # Pass — 2026-09-21 — 97ee78c
+**Role:** auditor
 
 Scheduled run, branched from `agent-loop/2026-09-21-bootstrap` (the skill was
 not yet on `main`). Build clean, suite green, probe matched the committed

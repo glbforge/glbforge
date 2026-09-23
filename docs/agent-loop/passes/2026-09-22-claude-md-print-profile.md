@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — agent-loop/2026-09-22-claude-md-print-profile
+**Role:** auditor
 
 Step 0: `gh pr list` showed four open `agent-loop/*` branches. `#11` and `#12`
 both close L2 (instanced draw calls) — claimed, left alone; a review comment

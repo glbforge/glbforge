@@ -1,4 +1,5 @@
 # Pass — 2026-09-22 — 80da0f1
+**Role:** auditor
 
 Step 0: two open PRs both cover L2 (`#11` bakes instanced draw calls when
 the triangle budget allows, `#12` the budget-gated variant) — claimed,
