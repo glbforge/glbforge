@@ -18,7 +18,8 @@
  * Texture sampling is nearest-neighbour with no mip pyramid: see
  * `sampleTexel` for why that is deliberate and what it costs.
  */
-import { Document, Node, Primitive, Texture } from '@gltf-transform/core';
+import { Document, Node, Primitive, Texture, type TextureInfo } from '@gltf-transform/core';
+import { KHRTextureTransform, type Transform } from '@gltf-transform/extensions';
 import { readFloat } from '../accessors.js';
 import { computeSmoothNormals } from '../normals.js';
 import { restPoseSkin } from '../skinning.js';
@@ -150,6 +151,28 @@ export interface Fragment {
   color: [number, number, number]; // linear base color factor
 }
 
+/**
+ * `KHR_texture_transform` reassigns what a raw TEXCOORD_0 value samples —
+ * tools that atlas or tile textures (gltfpack among them) rely on it, and a
+ * renderer that ignores it samples the wrong texel entirely: not a subtle
+ * shift, a wrong-looking render that still "succeeds". Composition is the
+ * spec's translate ∘ rotate ∘ scale, applied about the UV origin (glTF has
+ * no notion of a transform centre, unlike three.js's Texture.center).
+ */
+function applyTextureTransform(uvs: Float32Array, info: TextureInfo | null): void {
+  const transform = info?.getExtension<Transform>(KHRTextureTransform.EXTENSION_NAME);
+  if (!transform) return;
+  const [ox, oy] = transform.getOffset();
+  const [sx, sy] = transform.getScale();
+  const rotation = transform.getRotation();
+  const c = Math.cos(rotation), s = Math.sin(rotation);
+  for (let i = 0; i < uvs.length; i += 2) {
+    const u = uvs[i], v = uvs[i + 1];
+    uvs[i] = ox + sx * (c * u - s * v);
+    uvs[i + 1] = oy + sy * (s * u + c * v);
+  }
+}
+
 async function gatherFragments(doc: Document, decoder: TextureDecoder | undefined): Promise<Fragment[]> {
   // Decode each texture once.
   const decoded = new Map<Texture, DecodedTexture | null>();
@@ -220,6 +243,7 @@ async function gatherFragments(doc: Document, decoder: TextureDecoder | undefine
       }
       const material = prim.getMaterial();
       const factor = material?.getBaseColorFactor() ?? [0.8, 0.8, 0.8, 1];
+      applyTextureTransform(uvs, material?.getBaseColorTextureInfo() ?? null);
       fragments.push({
         tris, normals, uvs,
         texture: await decode(material?.getBaseColorTexture() ?? null),
