@@ -15,6 +15,9 @@ import addFormats from 'ajv-formats';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { writeAgentFixtures } from '../../core/test/agent-fixtures.js';
+import { analyze, getProfile } from '@glbforge/core';
+import { makeRiggedCylinder } from '../../core/test/fixtures.js';
+import { compact } from '../src/compact.js';
 import { createServer } from '../src/server.js';
 
 type Diagnostic = { code: string; severity: string; prim_path: string; message: string; suggested_fix?: string; data?: Record<string, unknown> };
@@ -187,5 +190,62 @@ describe('inspect', () => {
     const env = await call('inspect', { path: fx['z-up.usda'] ?? Object.values(fx).find((p) => p.endsWith('.usda'))! });
     expect(env.ok).toBe(true);
     expect((env.data as { format: string }).format).toBe('usda');
+  });
+});
+
+describe('nextActions only promises repairs optimize can actually make', () => {
+  // join() merges primitives that share a material, but never a skinned one:
+  // JOINTS_0 indexes into a specific skin, so a merged primitive would have no
+  // single valid skin. A rigged asset therefore has a draw-call floor optimize
+  // cannot go below, and promising a fix sends an agent round the same loop.
+  const riggedWithManyPrims = (count: number) => {
+    const doc = makeRiggedCylinder();
+    const root = doc.getRoot();
+    const scene = root.listScenes()[0];
+    const skin = root.listSkins()[0];
+    const source = root.listMeshes()[0].listPrimitives()[0];
+    for (let i = 1; i < count; i++) {
+      const mesh = doc.createMesh(`part_${i}`).addPrimitive(source.clone());
+      scene.addChild(doc.createNode(`part_${i}`).setMesh(mesh).setSkin(skin));
+    }
+    return doc;
+  };
+
+  it('drops the draw-call promise on a rigged asset, and says why', () => {
+    const doc = riggedWithManyPrims(9);
+    const r = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    expect(r.geometry.drawCallEstimate).toBeGreaterThan(r.profile.maxDrawCalls);
+
+    const finding = r.findings.find((f) => f.ruleId === 'perf/draw-calls')!;
+    expect(finding).toBeDefined();
+    const data = finding.data as { skinnedPrimitives: number; joinFloor: number; joinable: boolean };
+    expect(data.skinnedPrimitives).toBe(9);
+    expect(data.joinable).toBe(false);
+    expect(data.joinFloor).toBeGreaterThan(r.profile.maxDrawCalls);
+    // The human-facing text has to name the cause, not just repeat "merge".
+    expect(finding.suggestion).toMatch(/skinned/);
+
+    // The machine-facing promise is simply withheld.
+    expect(compact(r).nextActions.flatMap((a) => a.resolves ?? [])).not.toContain('perf/draw-calls');
+  });
+
+  it('keeps the promise when the primitives really can be joined', () => {
+    const doc = riggedWithManyPrims(9);
+    // Make it genuinely unskinned: a primitive is skinned when it carries
+    // JOINTS_0, so dropping the node's skin alone would not change anything.
+    for (const node of doc.getRoot().listNodes()) if (node.getSkin()) node.setSkin(null);
+    for (const mesh of doc.getRoot().listMeshes()) {
+      for (const prim of mesh.listPrimitives()) {
+        prim.setAttribute('JOINTS_0', null).setAttribute('WEIGHTS_0', null);
+      }
+    }
+    const r = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    expect(r.geometry.drawCallEstimate).toBeGreaterThan(r.profile.maxDrawCalls);
+
+    const data = r.findings.find((f) => f.ruleId === 'perf/draw-calls')!.data as
+      { skinnedPrimitives: number; joinable: boolean };
+    expect(data.skinnedPrimitives).toBe(0);
+    expect(data.joinable).toBe(true);
+    expect(compact(r).nextActions.flatMap((a) => a.resolves ?? [])).toContain('perf/draw-calls');
   });
 });
