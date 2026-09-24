@@ -37,8 +37,14 @@ export interface MeshTopology {
   watertight: boolean;
 }
 
-/** Stable LSD radix sort of (lo, hi) pairs by hi then lo; returns the permutation. Passes over zero halves are skipped. */
-function sortPairs(lo: Uint32Array, hi: Uint32Array, count: number, maxValue: number): Uint32Array {
+/**
+ * Stable LSD radix sort of (lo, hi) pairs by hi then lo; returns the
+ * permutation. Passes over zero halves are skipped. Exported for
+ * `analyze/geometry.ts`'s edge-incidence count, which needs the same
+ * boundary/non-manifold classification but not the shells/loops this file
+ * also computes.
+ */
+export function sortPairs(lo: Uint32Array, hi: Uint32Array, count: number, maxValue: number): Uint32Array {
   let perm = new Uint32Array(count);
   for (let i = 0; i < count; i++) perm[i] = i;
   let tmp = new Uint32Array(count);
