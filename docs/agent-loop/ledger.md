@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 10 closed · 12 passes
+**1 open** · 11 closed · 13 passes
 
 ## Open
 
@@ -34,6 +34,7 @@ mention wins, and this index is regenerated from all of them.
 | `L9` | fixed | the live check died on a branch switch and said nothing for 17 hours | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
 | `L10` | fixed | `.gltf`/`.usda` external resource URIs could escape the asset directory and read arbitrary host files, byte-exact | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | `L11` | fixed | `site/llms.txt` said "27-tool MCP server" in its own summary line while its own tool table said 28 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
+| `L12` | fixed | a vertex with a `NaN`/`Infinite` component on one axis broke the MCP envelope contract for `inspect` and `diff` | [2026-09-24](passes/2026-09-24-nan-vertex-envelope-crash.md) | [2026-09-24](passes/2026-09-24-nan-vertex-envelope-crash.md) |
 
 ## Roles
 
@@ -48,11 +49,12 @@ Least recently used first. A pass takes the top one — see
 | archaeologist | 0 | **never** |
 | newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
-| saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| saboteur | 2 | [2026-09-24](passes/2026-09-24-nan-vertex-envelope-crash.md) |
 
 ## Passes
 
+- **2026-09-24** — [2026-09-24-nan-vertex-envelope-crash](passes/2026-09-24-nan-vertex-envelope-crash.md) — *saboteur* — `09397cd` — `L12` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
 - **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — *saboteur* — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix

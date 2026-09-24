@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document } from '@gltf-transform/core';
-import { createNodeIO, fromGltf, getPack, inspectScene, listRules, runPacks, type RuleFinding } from '../src/index.js';
+import { classifyOrigin, createNodeIO, fromGltf, getPack, inspectScene, listRules, runPacks, sceneExtent, type RuleFinding } from '../src/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -145,5 +145,30 @@ describe('core-scene@1', () => {
     const rep = inspectScene(ir);
     expect(rep.hierarchy.unapplied_transforms[0].dequantization).toBe(true);
     expect(rep.summary).toMatch(/1 node: 1 quantized mesh node \(node transform is the encoding\)\./);
+  });
+
+  it('a vertex with a non-finite component on ONE axis is dropped wholesale, not just on that axis', () => {
+    // min/max per axis already skip a NaN (`NaN < Infinity` is false), but
+    // `sum` used to accumulate it regardless, so a corrupt Y with finite X/Z
+    // left the bounding box looking clean while the centroid (and therefore
+    // distance_to_centroid_m) came out NaN — a silent, asymmetric corruption
+    // downstream code had no way to detect.
+    const nan = irOf([{ name: 'n', mesh: { positions: [0, 0, 0, 1, 0, 0, 0, NaN, 0.5], indices: [0, 1, 2] } }]);
+    const extent = sceneExtent(nan)!;
+    expect(extent).not.toBeNull();
+    for (const arr of [extent.min, extent.max, extent.size, extent.centroid]) {
+      for (const v of arr) expect(Number.isFinite(v)).toBe(true);
+    }
+    // Only the two finite vertices (0,0,0) and (1,0,0) count: a flat 1x0x0 box.
+    expect(extent.min).toEqual([0, 0, 0]);
+    expect(extent.max).toEqual([1, 0, 0]);
+    expect(extent.vertices).toBe(2);
+
+    const placement = classifyOrigin(extent);
+    expect(Number.isFinite(placement.distance_to_centroid_m)).toBe(true);
+
+    // A wholly non-finite mesh still reports "no bounds", not a NaN one.
+    const allNan = irOf([{ name: 'n', mesh: { positions: [NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN, NaN], indices: [0, 1, 2] } }]);
+    expect(sceneExtent(allNan)).toBeNull();
   });
 });
