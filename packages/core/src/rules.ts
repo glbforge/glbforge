@@ -46,12 +46,25 @@ const RULES: Record<string, Rule> = {
     // stored). Same split perf/triangle-budget already makes.
     const instanced = r.geometry.instancedNodes > 0;
     const bakeable = instanced && r.geometry.triangles <= r.profile.maxTriangles;
+    // join() merges primitives that share a material, but it never merges a
+    // skinned one: JOINTS_0 indexes into a specific skin's joint list, so a
+    // merged primitive would have no single valid skin. Every skinned
+    // primitive therefore keeps its own draw call whatever optimize does.
+    // Assume the best case for the rest — palette + join collapsing all of
+    // them into ONE call — and if the floor is still over budget, no amount
+    // of re-running optimize_glb can clear this rule.
+    const skinnedPrimitives = r.geometry.primitives.filter((p) => p.attributes.includes('JOINTS_0')).length;
+    const unskinned = r.geometry.primitives.length - skinnedPrimitives;
+    const joinFloor = skinnedPrimitives + (unskinned > 0 ? 1 : 0);
+    const joinable = joinFloor <= r.profile.maxDrawCalls;
     return {
       ruleId: 'perf/draw-calls',
       severity: 'error',
       message: `~${calls} draw calls (one per primitive, per node that places it) exceeds budget of ${r.profile.maxDrawCalls}.`
         + (instanced ? ` ${r.geometry.instancedNodes} of them are repeat placements of a shared mesh.` : ''),
-      suggestion: bakeable
+      suggestion: !joinable && skinnedPrimitives > 0
+        ? `${skinnedPrimitives} of these primitives are skinned, and join() cannot merge a skinned primitive — each one costs its own draw call however often optimize_glb is re-run. The floor for this asset is ~${joinFloor}. Merge the skinned meshes in a DCC so they share one skin before export, or pick a profile with more draw-call headroom.`
+        : bakeable
         ? 'These are separate nodes drawing the same mesh: optimize_glb will bake them into one primitive automatically to clear this (the triangle count is unaffected; it spends the memory dedup saved on fewer draw calls). To keep the memory savings instead, add EXT_mesh_gpu_instancing by hand, which draws every copy in one call without duplicating geometry.'
         : instanced
         ? 'These are separate nodes drawing the same mesh, and the triangle budget has no headroom left to spend on baking them into one primitive: get triangles under budget first (or place fewer copies), then re-run optimize_glb, or add EXT_mesh_gpu_instancing by hand, which draws every copy in one call without duplicating geometry.'
@@ -66,6 +79,10 @@ const RULES: Record<string, Rule> = {
         // has room for the memory it costs.
         triangles: r.geometry.triangles,
         maxTriangles: r.profile.maxTriangles,
+        // Whether optimize_glb can clear this rule at all on THIS asset.
+        skinnedPrimitives,
+        joinFloor,
+        joinable,
       },
     };
   },

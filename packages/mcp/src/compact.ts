@@ -24,6 +24,7 @@ const OPTIMIZER_RESOLVES = new Set([
   'perf/triangle-budget',   // meshopt simplification
   'perf/file-size',         // quantize + meshopt + texture re-encode
   'perf/draw-calls',        // join(), but only when there is something to join
+                            // (the `joinable` guard below enforces that)
   'tex/oversized',          // resize to the profile cap
   'tex/total-weight',       // re-encode
   'tex/vram-estimate',      // resize / KTX2
@@ -44,7 +45,11 @@ function optimizerResolves(errors: Finding[]): string[] {
     // no bake -> the count will not move, so the promise is dropped.
     .filter((f) => {
       if (f.ruleId !== 'perf/draw-calls') return true;
-      const d = f.data as { instancedNodes?: number; triangles?: number; maxTriangles?: number } | undefined;
+      const d = f.data as { instancedNodes?: number; triangles?: number; maxTriangles?: number; joinable?: boolean } | undefined;
+      // join() cannot merge a skinned primitive, so a rigged asset has a
+      // draw-call floor optimize cannot go below however often it is re-run.
+      // The rule works that floor out; honour it rather than promising again.
+      if (d?.joinable === false) return false;
       if ((d?.instancedNodes ?? 0) === 0) return true;
       return (d?.triangles ?? Infinity) <= (d?.maxTriangles ?? -Infinity);
     })
