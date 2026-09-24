@@ -38,7 +38,7 @@ export function analyze(doc: Document, opts: AnalyzeOptions): AnalysisResult {
     textures,
     textureBytesTotal,
     textureVramTotal,
-    generator: detectGenerator(doc),
+    generator: detectGenerator(doc, geometry.topology),
     profile: opts.profile,
     findings: [],
     skipped: topology
