@@ -301,15 +301,69 @@ export function triangulate(counts: ArrayLike<number>, indices: ArrayLike<number
 }
 
 /** World-space bounding box of a set of IR meshes (positions × node world), or null when empty. */
+/**
+ * Rest-pose matrices for a skin (jointWorld * inverseBind), one per joint.
+ * Null when the skin is unknown.
+ */
+export function skinRestMatrices(ir: SceneIR, skinIndex: number): Mat4[] | null {
+  const skin = ir.skins[skinIndex];
+  if (!skin) return null;
+  return skin.joints.map((j, k) =>
+    mat4Mul(ir.nodes[j]?.world ?? IDENTITY, skin.inverseBind?.[k] ?? IDENTITY));
+}
+
+/**
+ * Visit every vertex of `m` in world space, at the rest pose.
+ *
+ * A skinned mesh is placed by its joint matrices, and glTF ignores the node's
+ * own transform. Quantization leans on exactly that: it cannot put the
+ * dequantization scale on a skinned mesh's node, so it bakes it into the skin's
+ * inverse bind matrices. Reading positions through the node matrix instead then
+ * reports the raw [-1,1] quantization cube rather than the model.
+ */
+export function forEachWorldVertex(
+  ir: SceneIR,
+  m: IRMesh,
+  visit: (x: number, y: number, z: number) => void,
+): void {
+  const w = ir.nodes[m.node]?.world ?? IDENTITY;
+  const p = m.positions;
+  const mats = m.skin !== null && m.joints && m.weights && m.influences > 0
+    ? skinRestMatrices(ir, m.skin) : null;
+  if (!mats) {
+    for (let i = 0; i < m.vertexCount; i++) {
+      const v = transformPoint(w, p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+      visit(v[0], v[1], v[2]);
+    }
+    return;
+  }
+  const joints = m.joints!, weights = m.weights!, inf = m.influences;
+  for (let i = 0; i < m.vertexCount; i++) {
+    const x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+    let px = 0, py = 0, pz = 0, total = 0;
+    for (let k = 0; k < inf; k++) {
+      const weight = weights[i * inf + k];
+      if (!(weight > 0)) continue;
+      const jm = mats[joints[i * inf + k]] ?? w;
+      total += weight;
+      px += weight * (jm[0] * x + jm[4] * y + jm[8] * z + jm[12]);
+      py += weight * (jm[1] * x + jm[5] * y + jm[9] * z + jm[13]);
+      pz += weight * (jm[2] * x + jm[6] * y + jm[10] * z + jm[14]);
+    }
+    // An unweighted vertex follows its node, exactly as poseScene treats it.
+    if (total <= 0) { const v = transformPoint(w, x, y, z); visit(v[0], v[1], v[2]); }
+    else if (Math.abs(total - 1) > 1e-4) visit(px / total, py / total, pz / total);
+    else visit(px, py, pz);
+  }
+}
+
 export function worldBounds(ir: SceneIR, meshes: IRMesh[] = ir.meshes): { min: number[]; max: number[]; size: number[] } | null {
   const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
   for (const m of meshes) {
-    const w = ir.nodes[m.node]?.world ?? IDENTITY;
-    const p = m.positions;
-    for (let i = 0; i < m.vertexCount; i++) {
-      const v = transformPoint(w, p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+    forEachWorldVertex(ir, m, (x, y, z) => {
+      const v = [x, y, z];
       for (let a = 0; a < 3; a++) { if (v[a] < min[a]) min[a] = v[a]; if (v[a] > max[a]) max[a] = v[a]; }
-    }
+    });
   }
   if (!Number.isFinite(min[0])) return null;
   return { min, max, size: max.map((v, i) => v - min[i]) };
