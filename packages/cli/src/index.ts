@@ -356,7 +356,12 @@ program
     const outBytes = await io.writeBinary(doc);
     await writeFile(outPath, outBytes);
     if (opts.json) {
-      console.log(JSON.stringify({ outPath, bytes: outBytes.byteLength, ...stats }, null, 2));
+      // stats.matte carries the internal per-pixel alpha channel (Matte.alpha,
+      // matte.ts) for compositing, not for reporting — strip it the same way
+      // the --matte-preview branch above does, or a 512x512 image turns a
+      // 15KB result into a multi-megabyte document of "0": 0, "1": 0, ...
+      const matte = stats.matte ? { ...stats.matte, alpha: undefined } : stats.matte;
+      console.log(JSON.stringify({ outPath, bytes: outBytes.byteLength, ...stats, matte }, null, 2));
     } else {
       const layerNote = stats.layerInfo
         ? `, ${stats.layerInfo.length} layers`
