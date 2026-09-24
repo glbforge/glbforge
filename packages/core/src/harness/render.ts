@@ -22,6 +22,7 @@ import { Document, Node, Primitive, Texture, type TextureInfo } from '@gltf-tran
 import { KHRTextureTransform, type Transform } from '@gltf-transform/extensions';
 import { readFloat } from '../accessors.js';
 import { computeSmoothNormals } from '../normals.js';
+import { restPoseSkin } from '../skinning.js';
 import { SRGB8_TO_LINEAR, linearToSrgb8 } from '../color.js';
 
 export interface RenderCamera {
@@ -207,6 +208,13 @@ async function gatherFragments(doc: Document, decoder: TextureDecoder | undefine
       // smooth normals computed on load when the asset ships without any.
       const nrmAcc = prim.getAttribute('NORMAL');
       const nrm = nrmAcc ? readFloat(nrmAcc) : computeSmoothNormals(prim);
+      // A skinned primitive is placed by its joint matrices, not by its node —
+      // which is the whole model once quantization moves the dequantization
+      // into the inverse bind matrices. Null for unskinned prims, so those keep
+      // the node-matrix path below unchanged.
+      const skinned = restPoseSkin(node, prim, nrm);
+      const sp = skinned?.positions ?? null;
+      const sn = skinned?.normals ?? null;
       // Normal matrix = inverse-transpose of the upper 3x3; uniform scale is
       // the common case, so normalizing after the plain 3x3 is enough here.
       const tris = new Float32Array(count * 3);
@@ -214,17 +222,22 @@ async function gatherFragments(doc: Document, decoder: TextureDecoder | undefine
       const uvs = new Float32Array(count * 2);
       for (let i = 0; i < count; i++) {
         const v = idx ? idx[i] : i;
-        const x = p[v * 3], y = p[v * 3 + 1], z = p[v * 3 + 2];
-        tris[i * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
-        tris[i * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
-        tris[i * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
-        if (nrm) {
-          const nx = nrm[v * 3], ny = nrm[v * 3 + 1], nz = nrm[v * 3 + 2];
-          let wx = m[0] * nx + m[4] * ny + m[8] * nz;
-          let wy = m[1] * nx + m[5] * ny + m[9] * nz;
-          let wz = m[2] * nx + m[6] * ny + m[10] * nz;
-          const wl = Math.hypot(wx, wy, wz) || 1;
-          normals[i * 3] = wx / wl; normals[i * 3 + 1] = wy / wl; normals[i * 3 + 2] = wz / wl;
+        if (sp) {
+          tris[i * 3] = sp[v * 3]; tris[i * 3 + 1] = sp[v * 3 + 1]; tris[i * 3 + 2] = sp[v * 3 + 2];
+          if (sn) { normals[i * 3] = sn[v * 3]; normals[i * 3 + 1] = sn[v * 3 + 1]; normals[i * 3 + 2] = sn[v * 3 + 2]; }
+        } else {
+          const x = p[v * 3], y = p[v * 3 + 1], z = p[v * 3 + 2];
+          tris[i * 3] = m[0] * x + m[4] * y + m[8] * z + m[12];
+          tris[i * 3 + 1] = m[1] * x + m[5] * y + m[9] * z + m[13];
+          tris[i * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
+          if (nrm) {
+            const nx = nrm[v * 3], ny = nrm[v * 3 + 1], nz = nrm[v * 3 + 2];
+            let wx = m[0] * nx + m[4] * ny + m[8] * nz;
+            let wy = m[1] * nx + m[5] * ny + m[9] * nz;
+            let wz = m[2] * nx + m[6] * ny + m[10] * nz;
+            const wl = Math.hypot(wx, wy, wz) || 1;
+            normals[i * 3] = wx / wl; normals[i * 3 + 1] = wy / wl; normals[i * 3 + 2] = wz / wl;
+          }
         }
         if (uv) { uvs[i * 2] = uv[v * 2]; uvs[i * 2 + 1] = uv[v * 2 + 1]; }
       }

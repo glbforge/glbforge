@@ -3,7 +3,7 @@
  * axis — and where the origin sits relative to it. Shared by the report
  * and the core-scene rule pack so both read the same numbers.
  */
-import { IDENTITY, transformPoint, type SceneIR } from './ir.js';
+import { forEachWorldVertex, type SceneIR } from './ir.js';
 
 export interface SceneExtent {
   /** Metres. */
@@ -40,13 +40,11 @@ export function sceneExtent(ir: SceneIR): SceneExtent | null {
   const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity], sum = [0, 0, 0];
   let count = 0;
   for (const m of ir.meshes) {
-    const w = ir.nodes[m.node]?.world ?? IDENTITY;
-    const p = m.positions;
-    for (let i = 0; i < m.vertexCount; i++) {
-      const v = transformPoint(w, p[i * 3], p[i * 3 + 1], p[i * 3 + 2]);
+    forEachWorldVertex(ir, m, (x, y, z) => {
+      const v = [x, y, z];
       for (let a = 0; a < 3; a++) { if (v[a] < min[a]) min[a] = v[a]; if (v[a] > max[a]) max[a] = v[a]; sum[a] += v[a]; }
       count++;
-    }
+    });
   }
   if (!count || !Number.isFinite(min[0])) return null;
   const size = max.map((v, i) => (v - min[i]) * mpu);
