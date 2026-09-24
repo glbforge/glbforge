@@ -14,8 +14,10 @@ TypeScript analysis, optimization, extrusion, and export for glTF/GLB assets.
   rules with fixes, budget scoring
 - `optimize(doc, {profile, textureFormat})` — dedup → palette/join → weld →
   meshopt-simplify (error ladder) → smooth normals → WebP or KTX2 → meshopt
-- `extrudeImage(bytes, opts)` — raster/SVG silhouette → beveled watertight
-  mesh with the source image projected as texture
+- `extrudeImage(bytes, opts)` — raster/SVG silhouette → extruded, optionally
+  beveled mesh with the source image projected as texture; flat (bevel=0)
+  output is edge-closed by construction, a beveled rim can self-intersect at
+  a deeply concave silhouette corner
 - `animate(doc, {preset, duration, amplitude})` — bake a looping procedural
   clip (idle, bob, spin, sway, breathe, hop) onto a pivot at the base centre,
   no rig required; amplitudes are fractions of the measured height, so the

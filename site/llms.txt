@@ -71,8 +71,11 @@ updated with the code: anything not listed here is not shipped):
   measures the artwork (colour histogram of the solid pixels) and layers only
   what is genuinely flat-coloured; the projected texture is an opaque plate
   (colour padded past the silhouette) so a lossy re-encode cannot ring along
-  the art/void edge. Output is watertight (verified 0 boundary / 0
-  non-manifold edges) and therefore 3D-printable via STL export.
+  the art/void edge. A flat (bevel=0) output is edge-closed by construction
+  (verified 0 boundary / 0 non-manifold edges) and 3D-printable via STL
+  export; a beveled rim can self-intersect at a deeply concave silhouette
+  corner, which that edge count cannot catch — confirm a beveled STL slices
+  cleanly before printing.
   `--matte auto` (CLI) / `matte` (MCP `extrude_image`) / "Lift subject and
   forge" (Studio) lifts a subject off its background first, so a photo of an
   object on a plain ground becomes a sticker instead of being refused:

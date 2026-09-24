@@ -779,8 +779,10 @@ export function createServer(): McpServer {
     annotations: WRITES_FILES,
     description:
       'Export a GLB as binary STL for 3D printing — scaled to millimeters, rotated z-up (both reported as AXIS_CONVERTED / SCALE_CONVERTED). ' +
-      'Reports watertightness (glbforge-extruded assets are watertight by construction; ' +
-      'simplified AI meshes usually are too). Returns a thumbnail of the exported geometry. dry_run=true writes nothing.',
+      'Reports watertightness as this build measures it: every edge shared by exactly two triangles. A flat (bevel=0) glbforge-extruded ' +
+      'asset is closed by construction that way, and a simplified AI mesh usually is too — but the check is edge-based, not a full solid-' +
+      'validity check, so it cannot see a self-intersecting shell; a beveled extrude can self-intersect at a deeply concave silhouette corner ' +
+      'and still report watertight:true. Confirm a beveled STL slices cleanly before printing. Returns a thumbnail of the exported geometry. dry_run=true writes nothing.',
     inputSchema: {
       path: z.string().describe('Absolute path to the .glb'),
       out: z.string().describe('Absolute output path for the .stl'),

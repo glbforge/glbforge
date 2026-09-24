@@ -44,8 +44,11 @@ routes photographs to generators, and exports GLB / STL / USDZ.
   artwork (logos, wordmarks) this beats image-to-3D generation outright:
   ~1.5k tris vs ~2M, exact silhouette, original colors. `--bevel` adds a
   signage-style rounded rim (miter-limited, clamp-probed insets + a crack
-  stitching pass keep it watertight even on thin graffiti strokes; verified
-  0 boundary / 0 non-manifold edges on real logo fixtures). Photographic
+  stitching pass hold the edge count at 0 boundary / 0 non-manifold on real
+  logo fixtures even on thin graffiti strokes — but that edge count isn't a
+  full solid-validity check, and a beveled rim can still self-intersect at a
+  deeply concave silhouette corner; confirm a beveled STL slices cleanly
+  before printing). Photographic
   inputs are detected and routed to Meshy instead — or, with `--matte auto`,
   lifted off their background first (see below). Also exposed as the
   `extrude_image` MCP tool.
