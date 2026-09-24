@@ -12,6 +12,8 @@
     "bin.mjs",
     "main.mjs",
     "brain.mjs",
+    "hook.mjs",
+    "hooks.mjs",
     "preload.cjs",
     "mcp.mjs",
     "renderer/",
@@ -19,7 +21,8 @@
   ],
   "scripts": {
     "start": "node bin.mjs",
-    "mcp": "node mcp.mjs"
+    "mcp": "node mcp.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.278",
