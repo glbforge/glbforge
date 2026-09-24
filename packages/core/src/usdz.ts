@@ -8,12 +8,12 @@
  * and JPEG. Deterministic: fixed prim naming, fixed zip timestamps, fixed
  * encoders.
  */
-import { Document, Material, Node, Primitive, Texture, TextureInfo } from '@gltf-transform/core';
+import { Document, Material, Node, Primitive, Skin, Texture, TextureInfo } from '@gltf-transform/core';
 import { readFloat } from './accessors.js';
 import { computeSmoothNormals } from './normals.js';
 import { writeUsda, type UsdAttribute, type UsdLayer, type UsdPrim, type UsdProperty } from './usd-ir.js';
 import { writeUsdc } from './usdc.js';
-import { buildSkeleton, compose, mul, sampleChannel, SKEL_FPS, type BlendShapeSource } from './usd-skel.js';
+import { buildSkeleton, compose, invert, mul, sampleChannel, SKEL_FPS, type BlendShapeSource } from './usd-skel.js';
 import { storeZip, type ZipEntry } from './zip.js';
 
 /** Re-encode a texture for USDZ (PNG or JPEG only). Node's default uses sharp. */
@@ -64,11 +64,56 @@ async function sharpEncoder(): Promise<UsdzTextureEncoder> {
 }
 
 /** Build the USD layer for a document; textures must already be resolved to file names. */
+const IDENT16 = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+
+/**
+ * Map every skin onto the skin whose Skeleton represents it, plus the
+ * geomBindTransform that recovers this skin's own bind pose from it.
+ *
+ * Two skins share a Skeleton when they list the same joints in the same order
+ * and their inverse bind matrices differ by ONE right-multiplied transform:
+ * `IBM_k[j] === IBM_rep[j] * E` for every joint j. That is exactly the shape
+ * quantization leaves behind (E being the mesh's dequantization): glTF then
+ * skins by `jointWorld * IBM_rep * E * p`, which is what UsdSkel computes from
+ * a shared Skeleton with geomBindTransform = E. Anything else — one joint that
+ * disagrees, a different joint list — keeps its own Skeleton, so a genuinely
+ * different rig is never folded away.
+ */
+function shareSkeletons(skins: Skin[]): Map<Skin, { rep: Skin; bind: number[] }> {
+  const out = new Map<Skin, { rep: Skin; bind: number[] }>();
+  const ibmOf = (s: Skin): number[][] | null => {
+    const acc = s.getInverseBindMatrices();
+    if (!acc) return null;
+    const arr = readFloat(acc);
+    return s.listJoints().map((_, i) => Array.from(arr.subarray(i * 16, i * 16 + 16)));
+  };
+  const reps: { rep: Skin; joints: Node[]; ibm: number[][] | null }[] = [];
+  for (const skin of skins) {
+    const joints = skin.listJoints();
+    const ibm = ibmOf(skin);
+    let placed = false;
+    for (const r of reps) {
+      if (r.joints.length !== joints.length || !r.joints.every((j, i) => j === joints[i])) continue;
+      if (!r.ibm || !ibm) {
+        if (!r.ibm && !ibm) { out.set(skin, { rep: r.rep, bind: IDENT16 }); placed = true; }
+        break;
+      }
+      const e = mul(invert(r.ibm[0]), ibm[0]);
+      const agrees = r.ibm.every((m, i) =>
+        mul(m, e).every((v, k) => Math.abs(v - ibm[i][k]) <= 1e-5 * (1 + Math.abs(v))));
+      if (agrees) { out.set(skin, { rep: r.rep, bind: e }); placed = true; }
+      break;
+    }
+    if (!placed) { reps.push({ rep: skin, joints, ibm }); out.set(skin, { rep: skin, bind: IDENT16 }); }
+  }
+  return out;
+}
+
 export function buildUsdLayer(
   doc: Document,
   texFiles: Map<Texture, string>,
   opts: { name?: string; warnings: string[] },
-): { layer: UsdLayer; meshes: number; triangles: number } {
+): { layer: UsdLayer; meshes: number; triangles: number; skeletons: number } {
   const root = doc.getRoot();
   const scene = root.getDefaultScene() ?? root.listScenes()[0];
   if (!scene) throw new Error('Document has no scene to export.');
@@ -182,8 +227,16 @@ export function buildUsdLayer(
     };
   });
 
-  // --- Skeletons: one per skin, under a SkelRoot; morph-only meshes get a one-joint skeleton ---
+  // --- Skeletons: one per DISTINCT rig, under a SkelRoot; morph-only meshes get a one-joint skeleton ---
   const skins = root.listSkins();
+  // quantize() cannot put a skinned mesh's dequantization on its node — glTF
+  // ignores a skinned node's transform — so it bakes the scale into the skin's
+  // inverse bind matrices and clones the skin once per mesh. A Skeleton per
+  // clone duplicates the whole SkelAnimation N times (31 copies of a 122-frame
+  // clip on a rigged character here, +3.5 MB). UsdSkel already has the right
+  // hook: geomBindTransform is applied to a mesh's points before skinning,
+  // which is exactly what that per-mesh scale is.
+  const shared = shareSkeletons(skins);
   const skeletons = new Map<import('@gltf-transform/core').Skin | null, ReturnType<typeof buildSkeleton>>();
   let frames = 0;
   // Blend shape sources grouped by the skeleton they bind to (null = morph-only).
@@ -195,7 +248,8 @@ export function buildUsdLayer(
     const walk = (node: Node) => {
       const mesh = node.getMesh();
       if (mesh) {
-        const skin = node.getSkin() && skins.includes(node.getSkin()!) ? node.getSkin() : null;
+        const own = node.getSkin() && skins.includes(node.getSkin()!) ? node.getSkin() : null;
+        const skin = own ? (shared.get(own)?.rep ?? own) : null;
         mesh.listPrimitives().forEach((prim, pi) => {
           if (seen.has(prim) || !prim.listTargets().length) return;
           seen.add(prim);
@@ -212,14 +266,20 @@ export function buildUsdLayer(
     };
     scene.listChildren().forEach(walk);
   }
-  skins.forEach((skin, i) => {
+  const emitted: ReturnType<typeof buildSkeleton>[] = [];
+  const reps = skins.filter((skin) => shared.get(skin)!.rep === skin);
+  reps.forEach((skin, i) => {
     const sk = buildSkeleton(skin, root.listAnimations(), `/${rootName}`, i === 0 ? 'Skel' : `Skel_${i}`, blendBySkin.get(skin) ?? []);
-    skeletons.set(skin, sk);
     frames = Math.max(frames, sk.frames);
     warnings.push(...sk.warnings);
+    emitted.push(sk);
+    // Every clone of this rig resolves to the one Skeleton prim, so the map
+    // has N entries pointing at one export — emit from `emitted`, not from it.
+    for (const other of skins) if (shared.get(other)!.rep === skin) skeletons.set(other, sk);
   });
   if (blendBySkin.has(null)) {
     const sk = buildSkeleton(null, root.listAnimations(), `/${rootName}`, skins.length ? 'Skel_morph' : 'Skel', blendBySkin.get(null)!);
+    emitted.push(sk);
     skeletons.set(null, sk);
     frames = Math.max(frames, sk.frames);
     warnings.push(...sk.warnings);
@@ -298,7 +358,7 @@ export function buildUsdLayer(
     const jointsAcc = prim.getAttribute('JOINTS_0'), weightsAcc = prim.getAttribute('WEIGHTS_0');
     if (sk) {
       apiSchemas.push('SkelBindingAPI');
-      props.push(attr('primvars:skel:geomBindTransform', 'matrix4d', { value: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1] }));
+      props.push(attr('primvars:skel:geomBindTransform', 'matrix4d', { value: (skin ? shared.get(skin)?.bind : null) ?? IDENT16 }));
       if (skin && jointsAcc && weightsAcc) {
         const j = jointsAcc.getArray()!, w = readFloat(weightsAcc);
         const jointIndices = new Int32Array(count * 4), jointWeights = new Float32Array(count * 4);
@@ -380,13 +440,13 @@ export function buildUsdLayer(
     name: rootName, path: `/${rootName}`, typeName: skeletons.size ? 'SkelRoot' : 'Xform', properties: [],
     children: [
       ...(allMaterials.length ? [{ name: 'Materials', path: `/${rootName}/Materials`, typeName: 'Scope', properties: [], children: allMaterials }] : []),
-      ...[...skeletons.values()].map((s) => s.skeletonPrim),
+      ...emitted.map((s) => s.skeletonPrim),
       ...nodePrims,
     ],
   };
   const layer: UsdLayer = { defaultPrim: rootName, metersPerUnit: 1, upAxis: 'Y', doc: 'Exported by GLBForge (glbforge.dev)', prims: [rootPrim] };
   if (frames > 0) Object.assign(layer, { startTimeCode: 0, endTimeCode: frames - 1, timeCodesPerSecond: SKEL_FPS, framesPerSecond: SKEL_FPS });
-  return { layer, meshes: meshCount, triangles };
+  return { layer, meshes: meshCount, triangles, skeletons: emitted.length };
 }
 
 export async function toUsdz(doc: Document, opts: UsdzOptions = {}): Promise<UsdzResult> {
@@ -422,14 +482,14 @@ export async function toUsdz(doc: Document, opts: UsdzOptions = {}): Promise<Usd
     texFiles.set(tex, name);
   }
 
-  const { layer, meshes, triangles } = buildUsdLayer(doc, texFiles, { name: opts.name, warnings });
+  const { layer, meshes, triangles, skeletons: skeletonCount } = buildUsdLayer(doc, texFiles, { name: opts.name, warnings });
   const frames = layer.endTimeCode !== undefined ? layer.endTimeCode + 1 : 0;
   const layerBytes = format === 'usda' ? new TextEncoder().encode(writeUsda(layer)) : writeUsdc(layer);
   const entries: ZipEntry[] = [{ name: `model.${format}`, data: layerBytes }, ...files];
   return {
     usdz: storeZip(entries),
     format,
-    skeletons: root.listSkins().length + (root.listMeshes().some((m) => m.listPrimitives().some((p) => p.listTargets().length)) && !root.listSkins().length ? 1 : 0),
+    skeletons: skeletonCount,
     frames,
     files: entries.map((e) => ({ name: e.name, bytes: e.data.length })),
     meshes, triangles,
