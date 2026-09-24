@@ -4,6 +4,10 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { extrudeImage, getProfile, optimize, toUsdz } from '../src/index.js';
+import { Document } from '@gltf-transform/core';
+import { readFloat } from '../src/accessors.js';
+import { mul } from '../src/usd-skel.js';
+import { makeRiggedCylinder } from './fixtures.js';
 import { listZip, crc32 } from '../src/zip.js';
 
 async function ringPng(): Promise<Uint8Array> {
@@ -111,4 +115,73 @@ describe('USDZ export', () => {
     doc.getRoot().listMaterials()[0].setBaseColorTexture(tex);
     await expect(toUsdz(doc)).rejects.toThrow(/KTX2/);
   }, 30_000);
+});
+
+describe('cloned skins share one Skeleton', () => {
+  // quantize() cannot put a skinned mesh's dequantization on its node, so it
+  // bakes the scale into the skin's inverse bind matrices and clones the skin
+  // per mesh. One Skeleton per clone duplicates the whole SkelAnimation.
+  // UsdSkel's geomBindTransform is applied to a mesh's points before skinning,
+  // which is exactly that per-mesh scale — so one Skeleton is enough.
+  const usdaOf = async (doc: Document) => {
+    const out = await toUsdz(doc, { format: 'usda' });
+    const e = listZip(out.usdz)[0];
+    return { usda: Buffer.from(out.usdz.subarray(e.offset, e.offset + e.size)).toString('utf8'), skeletons: out.skeletons };
+  };
+
+  /** A second mesh on a clone of the rig whose IBMs are right-multiplied by `e`. */
+  const addClonedSkin = (doc: Document, e: number[]) => {
+    const root = doc.getRoot();
+    const skin = root.listSkins()[0];
+    const src = readFloat(skin.getInverseBindMatrices()!);
+    const joints = skin.listJoints();
+    const out = new Float32Array(src.length);
+    for (let j = 0; j < joints.length; j++) {
+      out.set(mul(Array.from(src.subarray(j * 16, j * 16 + 16)), e), j * 16);
+    }
+    const clone = doc.createSkin('rig_clone')
+      .setSkeleton(skin.getSkeleton())
+      .setInverseBindMatrices(doc.createAccessor().setType('MAT4').setArray(out).setBuffer(root.listBuffers()[0]));
+    for (const j of joints) clone.addJoint(j);
+    const mesh = doc.createMesh('part2').addPrimitive(root.listMeshes()[0].listPrimitives()[0].clone());
+    root.listScenes()[0].addChild(doc.createNode('part2').setMesh(mesh).setSkin(clone));
+    return clone;
+  };
+
+  it('folds a quantization clone onto one Skeleton and carries the difference per mesh', async () => {
+    const doc = makeRiggedCylinder();
+    const e = [2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0.25, -0.5, 0.125, 1]; // scale + offset
+    addClonedSkin(doc, e);
+    expect(doc.getRoot().listSkins()).toHaveLength(2);
+
+    const { usda, skeletons } = await usdaOf(doc);
+    expect(skeletons).toBe(1);
+    expect(usda.match(/def Skeleton/g) ?? []).toHaveLength(1);
+    // The duplicated clip was the real cost.
+    expect(usda.match(/def SkelAnimation/g) ?? []).toHaveLength(1);
+
+    // One mesh rides the shared bind pose; the clone carries `e` instead.
+    // matrix4d prints as four row tuples: ( (1, 0, 0, 0), (0, 1, 0, 0), ... )
+    const binds = [...usda.matchAll(/geomBindTransform = (.+)/g)]
+      .map((m) => (m[1].match(/-?\d+(?:\.\d+)?(?:e-?\d+)?/g) ?? []).map(Number));
+    expect(binds).toHaveLength(2);
+    const identity = binds.find((b) => Math.abs(b[0] - 1) < 1e-6);
+    const scaled = binds.find((b) => Math.abs(b[0] - 2) < 1e-6);
+    expect(identity).toBeDefined();
+    expect(scaled).toBeDefined();
+    e.forEach((v, i) => expect(scaled![i]).toBeCloseTo(v, 5));
+  });
+
+  it('keeps separate Skeletons when the rigs genuinely differ', async () => {
+    const doc = makeRiggedCylinder();
+    const clone = addClonedSkin(doc, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+    // Break the single-transform relationship: one joint disagrees with the rest.
+    const acc = clone.getInverseBindMatrices()!;
+    const arr = Float32Array.from(acc.getArray()!);
+    arr[16 + 12] += 3.5; // joint 1 only
+    acc.setArray(arr);
+
+    const { skeletons } = await usdaOf(doc);
+    expect(skeletons).toBe(2);
+  });
 });
