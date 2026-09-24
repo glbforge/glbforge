@@ -186,6 +186,45 @@ describe('inspect', () => {
     expect(env.errors[0].code).toBe('FILE_NOT_FOUND');
   });
 
+  it('a NaN vertex component does not break the envelope contract', async () => {
+    // A vertex with a non-finite value on only ONE axis (a bad DCC export, a
+    // divide-by-zero during a scale op) used to poison the centroid sum on
+    // every axis while the min/max comparisons on the OTHER axes stayed
+    // finite, so the bounding box looked clean while distance_to_centroid_m
+    // came out NaN. Zod's number() rejects NaN, and because `data` is typed
+    // `dataSchema.or(z.object({}).strict())` (empty when ok:false), the SDK's
+    // own output-schema check reported the union failure as "unrecognized
+    // key(s)" on the WHOLE data object and returned a plain-text SDK error
+    // instead of this codebase's JSON envelope — breaking `JSON.parse` for
+    // any client that trusts the "every tool answers with the envelope"
+    // contract, this test's own `call()` helper included.
+    const { Document } = await import('@gltf-transform/core');
+    const doc = new Document();
+    const buffer = doc.createBuffer();
+    const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, NaN, 0.5]);
+    const pos = doc.createAccessor().setType('VEC3').setArray(positions).setBuffer(buffer);
+    const idx = doc.createAccessor().setType('SCALAR').setArray(new Uint16Array([0, 1, 2])).setBuffer(buffer);
+    const prim = doc.createPrimitive().setAttribute('POSITION', pos).setIndices(idx);
+    const mesh = doc.createMesh('nanmesh').addPrimitive(prim);
+    doc.createScene('scene').addChild(doc.createNode('nannode').setMesh(mesh));
+    doc.getRoot().setDefaultScene(doc.getRoot().listScenes()[0]);
+    const { createNodeIO } = await import('@glbforge/core');
+    const io = await createNodeIO();
+    const path = join(dir, 'nan-vertex.glb');
+    await (await import('node:fs/promises')).writeFile(path, await io.writeBinary(doc));
+
+    const env = await call('inspect', { path }); // throws on JSON.parse or schema mismatch if the contract breaks
+    expect(env.ok).toBe(true);
+    const origin = (env.data as { origin: { distance_to_centroid_m: number | null } }).origin;
+    expect(origin.distance_to_centroid_m).not.toBeNull();
+    expect(Number.isFinite(origin.distance_to_centroid_m)).toBe(true);
+
+    const diffEnv = await call('diff', { before: fx['fifty-k.glb'], after: path });
+    expect(diffEnv.ok).toBe(true);
+    const after = (diffEnv.data as { origin: { after: { distance_to_centroid_m: number } } }).origin.after;
+    expect(Number.isFinite(after.distance_to_centroid_m)).toBe(true);
+  });
+
   it('reads USD too', async () => {
     const env = await call('inspect', { path: fx['z-up.usda'] ?? Object.values(fx).find((p) => p.endsWith('.usda'))! });
     expect(env.ok).toBe(true);

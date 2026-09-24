@@ -41,6 +41,16 @@ export function sceneExtent(ir: SceneIR): SceneExtent | null {
   let count = 0;
   for (const m of ir.meshes) {
     forEachWorldVertex(ir, m, (x, y, z) => {
+      // A vertex with a NaN/Infinite component on only ONE axis (a bad DCC
+      // export, a divide-by-zero during a scale op) must not poison the
+      // other two: the per-axis min/max comparisons below already skip a
+      // non-finite value (`NaN < Infinity` is false), but `sum` was still
+      // accumulating it unconditionally, so the centroid came out NaN while
+      // the bounding box looked perfectly clean — the exact asymmetry that
+      // let it reach an agent as a false `distance_to_centroid_m`. Drop the
+      // whole vertex instead, so every field this feeds stays finite or the
+      // caller falls back to null (below), never a silent NaN.
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
       const v = [x, y, z];
       for (let a = 0; a < 3; a++) { if (v[a] < min[a]) min[a] = v[a]; if (v[a] > max[a]) max[a] = v[a]; sum[a] += v[a]; }
       count++;
