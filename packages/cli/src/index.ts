@@ -828,7 +828,13 @@ program
   .action(async (file: string, opts: { out: string }) => {
     await scaffoldViewer(file, opts.out);
     console.log(`Viewer scaffolded in ${opts.out}/`);
-    console.log(`  cd ${opts.out} && pnpm install && pnpm dev`);
+    // --ignore-workspace: the viewer is deliberately not a workspace member
+    // (see scaffold.ts). Scaffolding into a directory that sits inside an
+    // existing pnpm workspace (e.g. this repo's own examples/) makes a
+    // plain `pnpm install` silently resolve to the OUTER workspace root and
+    // skip installing the viewer's own dependencies entirely (exits 0,
+    // "Done in 90ms", nothing installed) rather than failing loudly.
+    console.log(`  cd ${opts.out} && pnpm install --ignore-workspace && pnpm dev`);
   });
 
 registerInitCommand(program);

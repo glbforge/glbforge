@@ -34,6 +34,7 @@ export async function scaffoldViewer(glbPath: string, outDir: string): Promise<v
         react: '^18.3.0',
         'react-dom': '^18.3.0',
         three: '^0.169.0',
+        'three-stdlib': '^2.35.6',
         '@react-three/fiber': '^8.17.0',
         '@react-three/drei': '^9.114.0',
       },
@@ -97,7 +98,12 @@ import {
   Stats,
   useGLTF,
 } from '@react-three/drei';
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+// three-stdlib, not three/examples/jsm: drei's useGLTF loads through
+// three-stdlib's GLTFLoader, whose setKTX2Loader() takes its own KTX2Loader
+// class. The two loaders are runtime-identical but nominally different
+// types, so passing three's copy type-checks under \`vite build\` (no
+// type-checking) but fails \`tsc -b\` (the build script actually runs).
+import { KTX2Loader } from 'three-stdlib';
 
 // Transcoder wasm is copied into public/basis by the postinstall script.
 const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
