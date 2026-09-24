@@ -12,13 +12,16 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 10 closed · 12 passes
+**4 open** · 10 closed · 13 passes
 
 ## Open
 
 | id | state | finding | first seen | last touched |
 |---|---|---|---|---|
 | `L4` | open | `site/llms.txt` claims main is "the 0.9.0 line"; every package is 0.8.0 | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
+| `L30` | open | `analyze_glb` and `inspect` disagree about whether a spec-invalid primitive has any geometry at all — and `analyze` scores it 95/100 "passed" | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) |
+| `L31` | open | GLBForge gives no diagnostic for genuine glTF spec violations the reference validator rejects outright (bad accessor bounds, non-unit normals, out-of-range indices) | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) |
+| `L32` | open | the ledger's "next free id" is unreliable across concurrent unmerged passes — seven of seven open PRs collided on `L12` | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) |
 
 ## Closed
 
@@ -42,7 +45,6 @@ Least recently used first. A pass takes the top one — see
 
 | role | passes | last used |
 |---|---|---|
-| rival | 0 | **never** |
 | integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
@@ -50,9 +52,11 @@ Least recently used first. A pass takes the top one — see
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| rival | 1 | [2026-09-24](passes/2026-09-24-rival-gltf-validator.md) |
 
 ## Passes
 
+- **2026-09-24** — [2026-09-24-rival-gltf-validator](passes/2026-09-24-rival-gltf-validator.md) — *rival* — `09397cd` — `L30` open, `L31` open, `L32` open
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
 - **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — *saboteur* — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
