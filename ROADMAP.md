@@ -70,7 +70,9 @@ answers everything in tens of ms).
   character
 - [ ] From the first task walk: `inspect` should say an asset moves (T1);
   USDZ node counts include material prims (T4); pinned profiles are silent
-  about newer versions (T5); no CLI verb reaches the companion (T7)
+  about newer versions (T5). (T7, "no CLI verb reaches the companion", was
+  fixed the same day — `glbforge companion` — see
+  `docs/agent-tasks/2026-09-22-badge-companion.md`.)
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
   disagree on 100% of wall faces; ~~layered forge stacks by node translation~~
   (baked into vertices 2026-09-11, layer nodes are identity);
