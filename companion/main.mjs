@@ -20,7 +20,10 @@
  *   POST /event    {text, source, react?} something happened: react=brain (default) asks the brain; react=body is a
  *                                      canned bubble + gesture by kind (done|attention|error|info|bye) — what hooks use, free
  *   GET  /listen?timeout=25            external brain: long-poll the next unanswered message / event
- *   POST /reply    {id, text, seconds} external brain: answer an item from /listen (bubble + marks it answered)
+ *   POST /reply    {id, text, seconds} external brain: answer an item from /listen (bubble + marks it answered).
+ *                                       id omitted: the oldest unanswered item. id given but not currently
+ *                                       pending (already answered, or never existed): 404, not a silent
+ *                                       answer to a different item.
  *   POST /quit
  *
  * Brain: GLBFORGE_COMPANION_BRAIN = sdk (default: Claude Agent SDK on the user's
@@ -34,6 +37,7 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createBrain } from './brain.mjs';
+import { pickReplyTarget } from './reply-target.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // three is served to the renderer from wherever it resolves: under companion/ in a checkout, hoisted in an npx cache.
@@ -342,8 +346,8 @@ async function handle(req, res) {
       case '/chat': { const r = await chat(b.text, b.source || 'http'); return envelope(res, r.queued ? `Queued message #${r.id} for an external brain` : `Replied in ${r.duration_ms} ms with ${r.tools.length} tool call(s)`, r); }
       case '/event': { const r = await nudge(b.text, b.source, { react: b.react, kind: b.kind, gesture: b.gesture, seconds: b.seconds, meta: { event: b.event, session_id: b.session_id, cwd: b.cwd } }); return envelope(res, r.queued ? `Queued event #${r.id} for an external brain` : r.mode === 'body' ? `Reacted with "${r.gesture}" (${r.kind}), no brain turn` : `Reacted in ${r.duration_ms} ms`, r); }
       case '/reply': {
-        const item = inbox.find((i) => i.id === Number(b.id)) ?? inbox.find((i) => !answered.has(i.id));
-        if (!item) return fail(res, 404, 'nothing to reply to (inbox empty)');
+        const { item, error } = pickReplyTarget(inbox, answered, b.id != null ? Number(b.id) : null);
+        if (!item) return fail(res, 404, error);
         const r = await body.say({ text: b.text, seconds: b.seconds });
         answered.add(item.id);
         const idx = inbox.indexOf(item); if (idx >= 0) inbox.splice(idx, 1);
