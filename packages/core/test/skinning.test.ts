@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
-import { analyze, dominantJoints, getProfile, optimize } from '../src/index.js';
+import { analyze, dominantJoints, getProfile, optimize, sceneBounds } from '../src/index.js';
+import { fromGltf } from '../src/inspect/from-gltf.js';
+import { worldBounds } from '../src/inspect/ir.js';
 import { makeRiggedCylinder } from './fixtures.js';
 
 describe('skinning + morph targets through optimization', () => {
@@ -65,4 +67,46 @@ describe('skinning + morph targets through optimization', () => {
     };
     expect(await run()).toEqual(await run());
   });
+});
+
+describe('skinned quantization', () => {
+  // glTF ignores a skinned mesh node's transform, so gltf-transform cannot put
+  // the dequantization scale there — it bakes it into the skin's inverse bind
+  // matrices instead. Anything that reads POSITION through the node matrix then
+  // sees the raw [-1,1] quantization cube rather than the model. `compress` and
+  // `verify` together are what expose it, which is why the tests above, which
+  // switch both off, never caught it.
+  const sizeOf = (doc: Parameters<typeof analyze>[0]) => worldBounds(fromGltf(doc))!.size;
+
+  it('measures bounds, fidelity and the animate pivot on the model, not the [-1,1] cube', async () => {
+    const profile = getProfile('mobile-hero');
+    const src = sizeOf(makeRiggedCylinder());          // the tube is ~0.6 x 2 x 0.6
+    // The fixture has to be thinner than the cube on some axis, or the old bug
+    // would be invisible here: its height alone is 2 either way.
+    expect(src[0]).toBeLessThan(1);
+    expect(src[1]).toBeGreaterThan(1.5);
+
+    const doc = makeRiggedCylinder();
+    const summary = await optimize(doc, { profile, textures: false, compress: true, verify: true });
+
+    // The SSIM gate must judge the asset, not a blob. No simplification is
+    // needed at this size, so fidelity should be near-perfect.
+    expect(summary.perceptual).not.toBeNull();
+    expect(summary.perceptual!.passed).toBe(true);
+    expect(summary.perceptual!.ssimMin).toBeGreaterThan(summary.perceptual!.threshold);
+
+    // The old failure signature: the thin axes widen onto the 2-unit cube.
+    const out = sizeOf(doc);
+    expect(out[0]).toBeCloseTo(src[0], 3);
+    expect(out[1]).toBeCloseTo(src[1], 3);
+    expect(out[2]).toBeCloseTo(src[2], 3);
+    expect(out[0]).toBeLessThan(1);
+
+    // animate() positions its pivot from sceneBounds and scales the motion by
+    // the measured height, so it reads the same geometry.
+    const scene = doc.getRoot().getDefaultScene() ?? doc.getRoot().listScenes()[0];
+    const b = sceneBounds(scene)!;
+    expect(b.max[0] - b.min[0]).toBeCloseTo(src[0], 3);
+    expect(b.max[1] - b.min[1]).toBeCloseTo(src[1], 3);
+  }, 60_000);
 });

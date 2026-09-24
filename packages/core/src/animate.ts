@@ -17,6 +17,7 @@
  */
 import { Accessor, Animation, AnimationSampler, Document, Node, Scene } from '@gltf-transform/core';
 import { readFloat } from './accessors.js';
+import { restPoseSkin } from './skinning.js';
 
 export type AnimatePreset = 'idle' | 'bob' | 'spin' | 'sway' | 'breathe' | 'hop';
 
@@ -134,12 +135,15 @@ export function sceneBounds(scene: Scene): { min: [number, number, number]; max:
       for (const prim of mesh.listPrimitives()) {
         const acc = prim.getAttribute('POSITION');
         if (!acc) continue;
-        const p = readFloat(acc);
+        // Skinned prims are placed by their joints, so their positions come
+        // back already in world space and the node matrix must not be applied.
+        const skinned = restPoseSkin(node, prim);
+        const p = skinned ? skinned.positions : readFloat(acc);
         for (let i = 0; i + 2 < p.length; i += 3) {
           const x = p[i], y = p[i + 1], z = p[i + 2];
-          const wx = m[0] * x + m[4] * y + m[8] * z + m[12];
-          const wy = m[1] * x + m[5] * y + m[9] * z + m[13];
-          const wz = m[2] * x + m[6] * y + m[10] * z + m[14];
+          const wx = skinned ? x : m[0] * x + m[4] * y + m[8] * z + m[12];
+          const wy = skinned ? y : m[1] * x + m[5] * y + m[9] * z + m[13];
+          const wz = skinned ? z : m[2] * x + m[6] * y + m[10] * z + m[14];
           if (wx < min[0]) min[0] = wx; if (wx > max[0]) max[0] = wx;
           if (wy < min[1]) min[1] = wy; if (wy > max[1]) max[1] = wy;
           if (wz < min[2]) min[2] = wz; if (wz > max[2]) max[2] = wz;
