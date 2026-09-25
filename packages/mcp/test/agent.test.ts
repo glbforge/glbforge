@@ -222,6 +222,18 @@ describe('validate', () => {
     expect(bad.ok).toBe(false);
     expect(has(bad, 'FORMAT_UNSUPPORTED')).toBe(true);
   });
+
+  it('a relative path miss names the path it actually tried and the server cwd, not just "not found"', async () => {
+    // Most MCP hosts spawn this server without pinning its cwd to the
+    // project an agent has in mind, so a relative path can miss silently —
+    // the message needs to say what it resolved to so that reads as a
+    // wrong-cwd guess, not a phantom missing file.
+    const rel = 'definitely-not-a-real-file.glb';
+    const missing = await call('validate', { path: rel });
+    const err = find(missing, 'FILE_NOT_FOUND');
+    expect(err?.message).toContain(resolve(rel));
+    expect(err?.message).toContain(process.cwd());
+  });
 });
 
 describe('render', () => {

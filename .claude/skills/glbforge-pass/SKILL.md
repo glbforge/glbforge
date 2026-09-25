@@ -38,6 +38,17 @@ Anything already open is **claimed**. Do not work on what it covers, even if
 you would do it differently — if you think it is wrong, say so in a review
 comment on that PR rather than opening a rival. Pick the next thing, or, if
 everything open is already claimed and nothing else rises to the bar, close
+
+While you're looking: `pnpm ledger`'s "next free id" only knows about
+`main`, so every pass branched since the last merge computes the *same*
+next id independently — seven open PRs once all claimed `L12`. Note the
+highest `### L<n>` you see in any open `agent-loop/` PR's pass file (`gh pr
+diff <number> --name-only`, then read the one under `passes/`) and start
+your own numbering above the highest of *that* and what `pnpm ledger`
+prints, not just the ledger's. It won't make the eventual merge conflict
+disappear — that's `ledger.md`'s job, rerun `pnpm ledger` after — but it
+keeps two unrelated findings from silently folding into one row when both
+land.
 the pass with a ledger line saying exactly that.
 
 ## 1. Read what is already known
@@ -141,7 +152,8 @@ Rules the generator enforces:
 - **A finding id is global and permanent.** To change something's state, write
   a heading for that same id in *your* file — the newest pass wins. Do not
   edit the file that first raised it.
-- New findings take the next free id. `pnpm ledger` prints what exists.
+- New findings take the next free id — free across `pnpm ledger` *and* every
+  currently-open `agent-loop/` PR's pass file (step 0), not just `main`.
 - **Only write a heading for a finding you raise, or whose state you are
   changing.** Do not restate one you merely looked at and left alone: yours
   would be the newest mention, so a carried-forward `open` dated after

@@ -12,13 +12,14 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 10 closed · 12 passes
+**2 open** · 11 closed · 13 passes
 
 ## Open
 
 | id | state | finding | first seen | last touched |
 |---|---|---|---|---|
 | `L4` | open | `site/llms.txt` claims main is "the 0.9.0 line"; every package is 0.8.0 | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
+| `L39` | open | finding ids collide silently across concurrently-branched passes (`L12` claimed by 7 open PRs, `L13` by 2) | [2026-09-25](passes/2026-09-25-mcp-relative-path-cwd.md) | [2026-09-25](passes/2026-09-25-mcp-relative-path-cwd.md) |
 
 ## Closed
 
@@ -34,6 +35,7 @@ mention wins, and this index is regenerated from all of them.
 | `L9` | fixed | the live check died on a branch switch and said nothing for 17 hours | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
 | `L10` | fixed | `.gltf`/`.usda` external resource URIs could escape the asset directory and read arbitrary host files, byte-exact | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | `L11` | fixed | `site/llms.txt` said "27-tool MCP server" in its own summary line while its own tool table said 28 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
+| `L38` | fixed | a relative `path` misses silently against the MCP server's own cwd, and the error didn't say so | [2026-09-25](passes/2026-09-25-mcp-relative-path-cwd.md) | [2026-09-25](passes/2026-09-25-mcp-relative-path-cwd.md) |
 
 ## Roles
 
@@ -43,16 +45,17 @@ Least recently used first. A pass takes the top one — see
 | role | passes | last used |
 |---|---|---|
 | rival | 0 | **never** |
-| integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
 | newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| integrator | 1 | [2026-09-25](passes/2026-09-25-mcp-relative-path-cwd.md) |
 
 ## Passes
 
+- **2026-09-25** — [2026-09-25-mcp-relative-path-cwd](passes/2026-09-25-mcp-relative-path-cwd.md) — *integrator* — `8b223a6` — `L38` fixed, `L39` open
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
 - **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — *saboteur* — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
