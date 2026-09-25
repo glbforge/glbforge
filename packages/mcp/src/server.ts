@@ -31,7 +31,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { basename, join as joinPath } from 'node:path';
+import { basename, isAbsolute, join as joinPath, resolve as resolvePath } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { Document, Logger } from '@gltf-transform/core';
@@ -194,9 +194,24 @@ async function mattePreviewReply(path: string, bytes: Buffer, tolerance?: number
   { image: { type: 'image', data: Buffer.from(png).toString('base64'), mimeType: 'image/png' }, errors });
 }
 
+// A relative `path` resolves against this server process's own cwd, which a
+// client may launch anywhere (MCP host configs rarely set `cwd`) — not the
+// directory an agent has in mind. On failure, say what was actually tried so
+// a wrong-cwd miss reads as one, not as a phantom missing file.
+async function readInputFile(path: string): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const hint = isAbsolute(path)
+      ? ''
+      : ` (resolved to ${resolvePath(path)}; server cwd is ${process.cwd()} — pass an absolute path if that's not where you expected)`;
+    throw Object.assign(new Error(`Cannot read ${path}${hint}: ${detail}`), { code: 'FILE_NOT_FOUND' });
+  }
+}
+
 async function readDoc(path: string): Promise<{ doc: Document; bytes: Buffer }> {
-  let bytes: Buffer;
-  try { bytes = await readFile(path); } catch (err) { throw Object.assign(new Error(`Cannot read ${path}: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_NOT_FOUND' }); }
+  const bytes = await readInputFile(path);
   const io = await createNodeIO();
   let doc: Document;
   try { doc = await io.readBinary(new Uint8Array(bytes)); } catch (err) { throw Object.assign(new Error(`${basename(path)} could not be parsed as GLB: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_UNREADABLE' }); }
@@ -722,8 +737,7 @@ export function createServer(): McpServer {
       dry_run: DRY_RUN,
     },
   }, async ({ path, out, mode, matte, matte_tolerance, matte_preview, threshold, width, depth, bevel, bevelSegments, layers, pillow, emboss, preset, simplify, texture, color, metallic, roughness, preview, render, dry_run }) => {
-    let bytes: Buffer;
-    try { bytes = await readFile(path); } catch (err) { throw Object.assign(new Error(`Cannot read ${path}: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_NOT_FOUND' }); }
+    const bytes = await readInputFile(path);
 
     // Preview: the cut as a picture plus its numbers, before any geometry
     // exists. Tuning a tolerance by forging, rendering and squinting at a

@@ -84,6 +84,12 @@ Built for agents, not terminals:
 - **Checkable determinism.** Every written file comes back with its `sha256`.
 - **Read-only tools are annotated** (`readOnlyHint`) so clients can
   auto-approve analyze / inspect / render / audit / compare / list.
+- **Paths are resolved against the server process's cwd**, not the calling
+  agent's. Most MCP hosts don't pin a stdio server's working directory to the
+  project it's serving, so a relative path (`"model.glb"`) can miss even
+  when it looks right — pass absolute paths. A miss returns `FILE_NOT_FOUND`
+  with the path it actually resolved to and the server's cwd, so a wrong-cwd
+  guess is diagnosable instead of a phantom "file doesn't exist."
 
 Tools: `inspect`, `diff`, `validate`, `inspect_all`, `inspect_geometry`, `inspect_animation`,
 `inspect_materials`, `analyze_performance`, `render`, `render_animation_strip`,

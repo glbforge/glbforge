@@ -50,7 +50,16 @@ export async function loadScene(path: string): Promise<LoadedScene> {
   const format = formatOf(path);
   if (!format) throw Object.assign(new Error(`Unsupported file type: ${path} (glb, gltf, usdz, usda, usdc, usd).`), { code: 'FORMAT_UNSUPPORTED' });
   let bytes: Uint8Array;
-  try { bytes = new Uint8Array(await readFile(path)); } catch (err) { throw Object.assign(new Error(`Cannot read ${path}: ${err instanceof Error ? err.message : String(err)}`), { code: 'FILE_NOT_FOUND' }); }
+  try {
+    bytes = new Uint8Array(await readFile(path));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    // A relative path resolves against this process's cwd, which an MCP
+    // host rarely pins to the project an agent has in mind — say what was
+    // actually tried so a wrong-cwd miss reads as one, not a phantom file.
+    const hint = isAbsolute(path) ? '' : ` (resolved to ${resolve(path)}; process cwd is ${process.cwd()} — pass an absolute path if that's not where you expected)`;
+    throw Object.assign(new Error(`Cannot read ${path}${hint}: ${detail}`), { code: 'FILE_NOT_FOUND' });
+  }
   const diagnostics: Diagnostic[] = [];
 
   if (format === 'glb' || format === 'gltf') {

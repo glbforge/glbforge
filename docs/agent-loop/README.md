@@ -149,6 +149,16 @@ CI runs `node scripts/ledger.mjs --check` and fails if the index is stale.
 On a merge conflict in `ledger.md`, take either side and re-run `pnpm ledger`
 rather than resolving it by hand.
 
+Append-only files can't textually conflict, but a *finding id* still can:
+each pass computes its "next free id" from `main`, which several passes
+branched from the same unmerged `main` will all see identically — seven open
+PRs once independently claimed `L12` for seven unrelated findings, because
+none of them exist on any of the others' branches for `pnpm ledger` to see.
+`ledger.mjs` has no visibility into sibling branches to catch this — a merge
+that lands two colliding ids folds one finding's title over the other's with
+no error, silently. The mitigation is procedural, in the pass's own step 0:
+check open PRs' pass files for the highest id in flight, not just `main`'s.
+
 ## Roles, because one stance wears out
 
 The loop ran nine auditor passes and the last four reported "nothing to fix".
