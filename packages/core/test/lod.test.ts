@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyze, buildLod, extrudeImage, getProfile, optimize } from '../src/index.js';
+import { alignmentScore, analyze, buildLod, extrudeImage, getProfile, optimize } from '../src/index.js';
 
 async function layeredPng(): Promise<Uint8Array> {
   const sharp = (await import('sharp')).default;
@@ -43,5 +43,42 @@ describe('geometry-only LODs', () => {
     const b = await run();
     expect(b.indices).toEqual(a.indices);
     expect(b.lod.method).toBe(a.lod.method);
+  }, 60_000);
+
+  it('records how far the cluster-decimate fallback drifts from the source surface, not just its triangle count', async () => {
+    // buildLod reports { triangles, method } but no geometric-fidelity
+    // number — a rival pass (gltfpack's -si, matched to the same triangle
+    // budget on this same non-manifold asset) measured this fallback at
+    // 2-4x worse chamfer/f-score than a competing simplifier once the
+    // reduction is severe enough to force clustering. Nothing today would
+    // catch that getting worse. This pins today's fidelity as a floor using
+    // the harness's own alignment scorer (already deterministic and
+    // seeded), so a regression in clusterDecimate or smoothPositions shows
+    // up here even without a rival installed.
+    const { doc } = await extrudeImage(await layeredPng(), { layers: 2, pillow: 0.03, simplify: 0.3 });
+    const profile = getProfile('mobile-hero');
+    await optimize(doc, { profile, textures: false, compress: false, verify: false });
+    const before = analyze(doc, { profile, topology: true });
+    expect(before.geometry.topology!.nonManifoldEdges).toBeGreaterThan(0);
+
+    const io = (await import('../src/index.js')).createNodeIO;
+    const nodeIo = await io();
+    const referenceBytes = await nodeIo.writeBinary(doc);
+    const reference = await nodeIo.readBinary(referenceBytes);
+
+    // Severe enough (well past the 1.1x stall threshold) to force the
+    // cluster fallback on this asset's stacked, locked rims.
+    const target = Math.floor(before.geometry.triangles / 150);
+    const lodDoc = await nodeIo.readBinary(referenceBytes);
+    const lod = await buildLod(lodDoc, target, { profile, compress: false });
+    expect(lod.method).toBe('cluster');
+
+    const score = alignmentScore(lodDoc, reference);
+    // Measured today (this asset, this target): chamfer ~0.030, f-score@1%
+    // ~0.15, f-score@2% ~0.28. Floors below with headroom for float/host
+    // noise, not for a future regression to hide behind.
+    expect(score.chamfer).toBeLessThan(0.05);
+    expect(score.fscore1).toBeGreaterThan(0.08);
+    expect(score.fscore2).toBeGreaterThan(0.18);
   }, 60_000);
 });
