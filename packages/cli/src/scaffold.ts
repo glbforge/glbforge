@@ -1,6 +1,30 @@
 import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { createNodeIO } from '@glbforge/core';
+import type { Node } from '@gltf-transform/core';
+
+/**
+ * Named mesh-bearing nodes in the default scene, in document order. The
+ * emitted viewer renders the whole scene as one opaque `<primitive>` (see
+ * below), but drei's `useGLTF` already parses these same names into `nodes`/
+ * `materials` maps at runtime — an agent that wants to address one part
+ * individually (highlight it, swap its material) needs to know they exist
+ * without a separate `glbforge inspect` round trip first.
+ */
+async function meshNodeNames(glbPath: string): Promise<string[]> {
+  const io = await createNodeIO();
+  const doc = await io.read(glbPath);
+  const scene = doc.getRoot().listScenes()[0];
+  if (!scene) return [];
+  const names: string[] = [];
+  const visit = (node: Node) => {
+    if (node.getMesh()) names.push(node.getName() || '(unnamed)');
+    for (const child of node.listChildren()) visit(child);
+  };
+  for (const child of scene.listChildren()) visit(child);
+  return names;
+}
 
 /**
  * Emits a minimal, self-contained Vite + React Three Fiber viewer for an
@@ -11,6 +35,8 @@ export async function scaffoldViewer(glbPath: string, outDir: string): Promise<v
   await mkdir(join(outDir, 'src'), { recursive: true });
   await mkdir(join(outDir, 'public'), { recursive: true });
   await cp(glbPath, join(outDir, 'public', 'model.glb'));
+
+  const names = await meshNodeNames(glbPath);
 
   // Sibling LOD files (from `glbforge optimize --lods`) ride along automatically.
   const lodBase = glbPath.replace(/\.glb$/i, '');
@@ -102,6 +128,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 // Transcoder wasm is copied into public/basis by the postinstall script.
 const ktx2Loader = new KTX2Loader().setTranscoderPath('/basis/');
 
+${nodeNamesComment(names)}
 ${lods.length ? modelWithLods(lods) : `function Model() {
   const gl = useThree((state) => state.gl);
   // drei's useGLTF wires up the meshopt decoder automatically; the extension
@@ -144,6 +171,26 @@ export default function App() {
   for (const [rel, content] of Object.entries(files)) {
     await writeFile(join(outDir, rel), content);
   }
+}
+
+/**
+ * A `useGLTF(...)` call already returns `nodes`/`materials` maps keyed by
+ * name (drei/three-stdlib populate them from the GLB whether or not the
+ * emitted component destructures them) — this only surfaces the names so an
+ * agent reading the generated file can reach for one part without opening
+ * the GLB again first.
+ */
+function nodeNamesComment(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) {
+    return `// This asset's one mesh node is named "${names[0]}".`;
+  }
+  return `// This asset has ${names.length} named mesh nodes: ${names.join(', ')}.
+// useGLTF's return also carries \`nodes\`/\`materials\` maps keyed by these
+// names — to hook up interaction on one part instead of the whole scene,
+// destructure them alongside \`scene\` and render that node directly:
+//   const { scene, nodes, materials } = useGLTF(...);
+//   <primitive object={nodes['${names[0]}']} material={materials['${names[0]}']} onPointerOver={...} />`;
 }
 
 /** Model component source for scaffold output when LOD siblings exist. */
