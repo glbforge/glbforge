@@ -102,7 +102,7 @@ lets an agent do once it does build, and neither of `#29`'s two diffs
 (`KTX2Loader` import source, the printed `--ignore-workspace` flag) touches
 the `Model()`/`App.tsx` body this pass changes.
 
-### L12 · `fixed` · `glbforge scaffold`'s emitted viewer named none of the asset's mesh nodes, so hooking up one part needed a separate `inspect` call the tool never suggested
+### L15 · `fixed` · `glbforge scaffold`'s emitted viewer named none of the asset's mesh nodes, so hooking up one part needed a separate `inspect` call the tool never suggested
 
 Fixed in `packages/cli/src/scaffold.ts`: `scaffoldViewer` now reads the
 input GLB with `@glbforge/core`'s `createNodeIO()` (already a workspace
@@ -136,9 +136,9 @@ clean afterward (core 177/3skip, meshy clean, studio 2/2, cli 7/5skip —
 an MCP tool, so the probe's surface doesn't move) — no baseline
 regressions.
 
-### L13 · `open` · `glbforge scaffold` still has no typed, destructured per-node access — the comment names the gap, it doesn't close it
+### L16 · `open` · `glbforge scaffold` still has no typed, destructured per-node access — the comment names the gap, it doesn't close it
 
-L12 tells an agent the names exist and the one-line pattern to use them;
+L15 tells an agent the names exist and the one-line pattern to use them;
 it does not generate the typed `nodes`/`materials` shape or rewrite
 `<primitive object={scene} />` into one `<mesh>` per node the way gltfjsx
 does. Doing that properly means picking valid TS identifiers for
@@ -170,7 +170,7 @@ running is better served by `glbforge scaffold`.
 
 ## Left open
 
-- L13 above — full typed per-node access, deferred as a larger feature.
+- L16 above — full typed per-node access, deferred as a larger feature.
 - Didn't test either tool against a KTX2-compressed asset (none of the
   non-LFS fixtures are KTX2-encoded, and generating one is out of scope for
   a comparison pass) — `glbforge scaffold`'s KTX2 wiring is asserted from
