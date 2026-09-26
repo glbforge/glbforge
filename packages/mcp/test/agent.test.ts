@@ -84,6 +84,17 @@ describe('tool descriptions carry the contract', () => {
     expect(Object.keys(index.tools).sort()).toEqual(tools.map((t) => t.name).sort());
     expect(existsSync(join(root, 'docs', 'error-codes.md'))).toBe(true);
   });
+
+  it('extrude_image warns that curve fidelity is bounded by raster source resolution', async () => {
+    // Measured: a circle traced from a 128px source deviates ~2.7% of its
+    // radius from true round; a 1024px source still ~0.25%. SVG input already
+    // gets a 300dpi rasterize before tracing to dodge this — nothing told an
+    // agent that a raster PNG/JPEG/WebP has no such floor and traces at its
+    // own pixel size.
+    const tool = (await client.listTools()).tools.find((t) => t.name === 'extrude_image')!;
+    expect(tool.description).toMatch(/resolution/i);
+    expect(tool.description).toMatch(/facet/i);
+  });
 });
 
 describe('failure-mode fixtures → code + prim_path', () => {

@@ -687,6 +687,10 @@ export function createServer(): McpServer {
       'image silhouette and projects the source image back on as texture. USE THIS instead of ' +
       'generation for flat artwork: logos, wordmarks, icons, stickers. Use generation for ' +
       'photographic or dimensional subjects. Supports a signage-style bevel on the rims. ' +
+      'Curve fidelity is bounded by source resolution: SVG input is rasterized at 300dpi ' +
+      'before tracing, but a PNG/JPEG/WebP is traced at its own pixel size, so a round or ' +
+      'curved silhouette under ~500px across measurably facets (a few percent of its radius) ' +
+      '— export raster art at 512px+ if a logo has curves. ' +
       'Returns the mesh stats, diff (the prims created), post_validation, and a thumbnail of the forged piece. dry_run=true writes nothing.',
     inputSchema: {
       path: z.string().describe('Absolute path to a PNG/JPEG/WebP with transparent or white background'),

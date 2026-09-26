@@ -270,7 +270,7 @@ const matteTuning = (value: number | 'auto' | undefined) =>
 
 program
   .command('extrude')
-  .description('Deterministic logo/graphic -> extruded 3D GLB (no AI). Traces the image silhouette and projects the source image back on as texture.')
+  .description('Deterministic logo/graphic -> extruded 3D GLB (no AI). Traces the image silhouette and projects the source image back on as texture. Curve fidelity is bounded by source resolution: SVG is rasterized at 300dpi before tracing, but a raster PNG/JPEG/WebP traces at its own pixel size — a round or curved silhouette under ~500px across measurably facets (a few percent of its radius), so export raster art at 512px+ if the logo has curves.')
   .argument('<image>', 'PNG/JPEG/WebP/SVG with transparent or white background')
   .option('-o, --out <file>', 'output GLB path (default: <name>.glb)')
   .option('--mode <mode>', 'solid-pixel test: alpha | luma (auto-detected)')
