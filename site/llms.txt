@@ -12,8 +12,10 @@
 > 28-tool MCP server, and a GitHub Action.
 
 Key facts (September 2026, in step with the repository's main branch — the
-0.9.0 line; `npm view glbforge version` says what is published. This file is
-updated with the code: anything not listed here is not shipped):
+0.8.0 line. Main can carry work that is merged but not yet released, so
+`npm view glbforge version` says what is published and the CHANGELOG's
+Unreleased section says what is waiting. This file is updated with the code:
+anything not listed here is not shipped):
 
 - Positioning: generation is commoditized; GLBForge is the deterministic layer
   AFTER generation. Budgets are contracts — `glbforge analyze` exits non-zero
@@ -185,8 +187,10 @@ updated with the code: anything not listed here is not shipped):
 - npx glbforge init   (agent-ready project: CLAUDE.md section, glb:* npm scripts, MCP server in .mcp.json; idempotent)
 - npx glbforge audit ./public/models --recursive   (every GLB vs budget, non-zero exit on failures)
 - npx glbforge verify model.web.glb model.glb   (SSIM visual fidelity, exit code vs profile floor)
+- npx glbforge animate model.web.glb --preset idle   (looping idle/bob/spin/sway/breathe/hop baked without a rig; deterministic, idempotent)
+- npx glbforge companion model.web.glb   (macOS desktop character: plays its clips, gazes at the cursor, answers typed messages; HTTP + MCP surface)
 - npx glbforge stl model.glb --size 80
-- npx glbforge usdz model.web.glb   (iOS AR Quick Look; UsdPreviewSurface, PNG/JPEG, aligned store-only zip; static)
+- npx glbforge usdz model.web.glb   (iOS AR Quick Look; UsdPreviewSurface, PNG/JPEG, aligned store-only zip; node animation baked as time samples)
 - npx glbforge scaffold model.web.glb -o viewer
 - npx glbforge ui
 
