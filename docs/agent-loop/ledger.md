@@ -12,14 +12,13 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**2 open** · 11 closed · 13 passes
+**1 open** · 13 closed · 13 passes
 
 ## Open
 
 | id | state | finding | first seen | last touched |
 |---|---|---|---|---|
 | `L4` | open | `site/llms.txt` claims main is "the 0.9.0 line"; every package is 0.8.0 | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
-| `L13` | open | `glbforge scaffold` still has no typed, destructured per-node access — the comment names the gap, it doesn't close it | [2026-09-26](passes/2026-09-26-rival-scaffold-node-names.md) | [2026-09-26](passes/2026-09-26-rival-scaffold-node-names.md) |
 
 ## Closed
 
@@ -35,7 +34,9 @@ mention wins, and this index is regenerated from all of them.
 | `L9` | fixed | the live check died on a branch switch and said nothing for 17 hours | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
 | `L10` | fixed | `.gltf`/`.usda` external resource URIs could escape the asset directory and read arbitrary host files, byte-exact | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | `L11` | fixed | `site/llms.txt` said "27-tool MCP server" in its own summary line while its own tool table said 28 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
-| `L12` | fixed | `glbforge scaffold`'s emitted viewer named none of the asset's mesh nodes, so hooking up one part needed a separate `inspect` call the tool never suggested | [2026-09-26](passes/2026-09-26-rival-scaffold-node-names.md) | [2026-09-26](passes/2026-09-26-rival-scaffold-node-names.md) |
+| `L12` | fixed | the Forge section still told visitors the forge only eats flat artwork | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
+| `L13` | fixed | USDZ export card omitted node animation, next to a card promising it | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
+| `L14` | fixed | `glbforge companion --hooks` existed only in the CHANGELOG | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
 
 ## Roles
 
@@ -44,6 +45,7 @@ Least recently used first. A pass takes the top one — see
 
 | role | passes | last used |
 |---|---|---|
+| rival | 0 | **never** |
 | integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
@@ -51,11 +53,10 @@ Least recently used first. A pass takes the top one — see
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
-| rival | 1 | [2026-09-26](passes/2026-09-26-rival-scaffold-node-names.md) |
 
 ## Passes
 
-- **2026-09-26** — [2026-09-26-rival-scaffold-node-names](passes/2026-09-26-rival-scaffold-node-names.md) — *rival* — `8b223a6` — `L12` fixed, `L13` open
+- **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
 - **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — *saboteur* — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix

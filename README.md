@@ -224,7 +224,7 @@ preserved, weights normalized, deterministic).
 
 ```bash
 npx glbforge animate model.web.glb       # → model.idle.glb (looping idle clip, no rig; -p spin|bob|sway|breathe|hop)
-npx glbforge companion model.idle.glb    # a talking desktop character (Electron via npx -y @glbforge/companion; --mcp registers its bridge)
+npx glbforge companion model.idle.glb    # a talking desktop character (Electron via npx -y @glbforge/companion; --mcp registers its bridge, --hooks puts every Claude Code session on its face)
 npx glbforge usdz model.web.glb          # → model.usdz (PNG textures; --jpeg for smaller)
 ```
 

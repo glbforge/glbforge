@@ -161,8 +161,12 @@ If `ledger.md` ever conflicts on a merge, do not resolve it by hand: take
 either side and re-run `pnpm ledger`.
 
 Keep `ROADMAP.md`, `README.md`, `site/llms.txt`, `packages/mcp/README.md` in
-sync when scope changed; `CLAUDE.md` lists these as the docs that must move
-together.
+sync when scope changed, and run `pnpm docs:check` before you open the PR — CI
+runs it and it fails on a stale tool count, an undocumented CLI verb, or a
+generated page that no longer matches its source. `pnpm docs:sync` writes the
+generated ones. Describing a new capability well on the landing page is the
+info pass's job (`.claude/skills/glbforge-info-pass/`), not yours; making sure
+you did not leave a *wrong* claim behind is yours.
 
 ## 7. Open the PR
 

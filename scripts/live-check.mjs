@@ -114,14 +114,42 @@ function mainCopy(path) {
   } catch { return null; }
 }
 
+/**
+ * The three pages whose content is a claim about the product. `/llms.txt` is
+ * what an agent acts on; `/` and `/budgets/` are what a person reads, and the
+ * budgets page is generated from docs/BUDGETS.md, so a stale deploy of it
+ * means the published rationale is not the one the tool reports.
+ */
+const DRIFT = [['/llms.txt', 'site/llms.txt'], ['/', 'site/index.html'], ['/budgets/', 'site/budgets/index.html']];
+
 async function checkDrift() {
-  const deployed = await get(`${ORIGIN}/llms.txt`);
-  if (!deployed.ok) return { compared: false, reason: 'could not fetch' };
-  const ref = mainCopy('site/llms.txt');
-  if (ref === null) return { compared: false, reason: 'origin/main not available — run git fetch' };
-  const same = deployed.body.trim() === ref.trim();
-  if (!same) note(`deployed llms.txt differs from origin/main (${deployed.body.trim().length} vs ${ref.trim().length} bytes) — the site is not serving what was merged`);
-  return { compared: true, against: 'origin/main', same, deployedBytes: deployed.body.trim().length, mainBytes: ref.trim().length };
+  const rows = [];
+  for (const [route, path] of DRIFT) {
+    const deployed = await get(ORIGIN + route);
+    if (!deployed.ok) { rows.push({ route, compared: false, reason: `could not fetch (${deployed.error ?? deployed.status})` }); continue; }
+    const ref = mainCopy(path);
+    if (ref === null) { rows.push({ route, compared: false, reason: 'origin/main not available — run git fetch' }); continue; }
+    const same = deployed.body.trim() === ref.trim();
+    if (!same) note(`deployed ${route} differs from origin/main:${path} (${deployed.body.trim().length} vs ${ref.trim().length} bytes) — the site is not serving what was merged`);
+    rows.push({ route, path, compared: true, against: 'origin/main', same, deployedBytes: deployed.body.trim().length, mainBytes: ref.trim().length });
+  }
+  const compared = rows.filter((r) => r.compared);
+  return { routes: rows, compared: compared.length > 0, same: compared.length > 0 && compared.every((r) => r.same) };
+}
+
+/**
+ * One phrase for the content routes. It names how many of them drifted, not
+ * how many were looked at: the first wording said "3/3 content routes DRIFTED"
+ * whenever any single one had, which reads as all three and is a claim the
+ * check never measured.
+ */
+function driftLine(drift) {
+  const compared = drift.routes.filter((r) => r.compared);
+  if (!compared.length) return 'content routes not compared';
+  const drifted = compared.filter((r) => !r.same);
+  const scope = `${compared.length} content route${compared.length === 1 ? '' : 's'}`;
+  if (!drifted.length) return `${scope} in step with main`;
+  return `${drifted.length}/${scope} DRIFTED from main (${drifted.map((r) => r.route).join(', ')})`;
 }
 
 async function checkVersions() {
@@ -178,7 +206,7 @@ async function main() {
     console.log(`  ${report.pages.length} pages, ${report.worker.length} worker routes, ${report.studioAssets.checked} studio assets`
       + `  ·  slowest ${slowest?.url.replace(ORIGIN, '') ?? '?'} ${slowest?.ms ?? '?'}ms`
       + `  ·  npm ${report.versions.npm ?? '?'} / repo ${report.versions.repo ?? '?'}`
-      + `  ·  llms.txt ${report.drift.compared ? (report.drift.same ? 'in step with main' : 'DRIFTED from main') : 'not compared'}`);
+      + `  ·  ${driftLine(report.drift)}`);
     for (const p of report.problems) console.log(`  ✗ ${p}`);
     if (!changed && !report.ok) console.log('  (unchanged since the last run)');
   }

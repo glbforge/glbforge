@@ -39,6 +39,19 @@ jobs:
       - name: Agent-loop ledger is in sync
         run: node scripts/ledger.mjs --check
 
+      # The information surface is read before the code is ever run — by a
+      # person on glbforge.dev and by an agent on /llms.txt — so a stale claim
+      # is a defect, not a typo. This regenerates nothing: it fails when the
+      # generated pages (docs/BUDGETS.md's profile tables, site/budgets/) are
+      # not what the registries and the Markdown say they are, or when a
+      # counted fact in the prose (tool count, CLI verbs, package versions,
+      # profile/pack versions) disagrees with the code. `pnpm docs:sync`
+      # fixes everything mechanical. It runs AFTER the build on purpose: it
+      # reads the published registries from packages/core/dist and exits 2
+      # rather than skipping if that is missing.
+      - name: Docs and site in step with the code
+        run: pnpm docs:check
+
       # The advice gate. `pnpm -r test` proves each tool answers correctly;
       # this proves that an agent which FOLLOWS the answer gets a better
       # asset. It executes every nextActions entry against the fixture that
