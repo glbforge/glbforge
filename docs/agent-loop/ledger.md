@@ -12,13 +12,11 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**1 open** · 13 closed · 13 passes
+**0 open** · 14 closed · 14 passes
 
 ## Open
 
-| id | state | finding | first seen | last touched |
-|---|---|---|---|---|
-| `L4` | open | `site/llms.txt` claims main is "the 0.9.0 line"; every package is 0.8.0 | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
+Nothing open.
 
 ## Closed
 
@@ -27,6 +25,7 @@ mention wins, and this index is regenerated from all of them.
 | `L1` | fixed | `nextActions.resolves` promised repairs the optimizer has no step for | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
 | `L2` | fixed | `optimize_glb` dedups instanced meshes into an arrangement it then cannot join | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-instanced-draw-calls.md) |
 | `L3` | fixed | `site/llms.txt` advertised a profile version the server does not serve | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-21](passes/2026-09-21-bootstrap.md) |
+| `L4` | fixed | `site/llms.txt` claims main is "the 0.9.0 line"; every package is 0.8.0 | [2026-09-21](passes/2026-09-21-bootstrap.md) | [2026-09-26](passes/2026-09-26-info-l4-mechanized.md) |
 | `L5` | fixed | `site/llms.txt` listed a tool that does not exist | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
 | `L6` | fixed | the scheduled sandbox cannot push, so a pass cannot open its PR | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
 | `L7` | fixed | the scheduled sandbox cannot reach glbforge.dev | [2026-09-21](passes/2026-09-21-llms-tool-names.md) | [2026-09-21](passes/2026-09-21-llms-tool-names.md) |
@@ -57,6 +56,7 @@ Least recently used first. A pass takes the top one — see
 ## Passes
 
 - **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
+- **2026-09-26** — [2026-09-26-info-l4-mechanized](passes/2026-09-26-info-l4-mechanized.md) — `cdccee8, scheduled, cloud sandbox` — `L4` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
 - **2026-09-23** — [2026-09-23-gltf-path-traversal](passes/2026-09-23-gltf-path-traversal.md) — *saboteur* — `8495329` — `L10` fixed, `L11` fixed
 - **2026-09-23** — [2026-09-23-companion-reply-id](passes/2026-09-23-companion-reply-id.md) — *newcomer-to-new-code* — `56a5e59 (agent-loop/2026-09-21-bootstrap)` — nothing to fix
