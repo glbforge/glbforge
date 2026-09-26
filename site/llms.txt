@@ -104,7 +104,10 @@ anything not listed here is not shipped):
   gazes at the cursor, answers typed messages with a Claude agent on the
   Claude CLI login (body + glbforge inspect tools only, no shell), or lets
   any MCP client be the character (`companion_listen` / `companion_reply`);
-  every call returns the body's state after it.
+  every call returns the body's state after it. `--hooks` installs Claude Code
+  hooks (user settings; `--hooks-project` for one repo, `--no-hooks-install`
+  to remove) so every session on the machine shows its start, permission
+  prompts and finish on the companion.
 - USDZ export (`glbforge usdz`, MCP `export_usdz`): iOS AR Quick Look output
   with a binary usdc (crate 0.8.0) layer written in pure TypeScript and
   verified against Pixar's reader, UsdPreviewSurface materials, PNG/JPEG
