@@ -80,9 +80,10 @@ describe('USDZ export', () => {
     expect(a.warnings).toEqual([]);
   }, 60_000);
 
-  it('matches Pixar USD\'s reading of the usda twin exactly (oracle; needs GLBFORGE_PXR_PYTHON)', async () => {
-    const python = process.env.GLBFORGE_PXR_PYTHON;
-    if (!python) return; // pip install usd-core, then GLBFORGE_PXR_PYTHON=/path/to/python
+  // skipIf, not an early return: a spec that returns reports PASSED while
+  // having verified nothing, which is exactly how the oracle stayed dark.
+  it.skipIf(!process.env.GLBFORGE_PXR_PYTHON)('matches Pixar USD\'s reading of the usda twin exactly (oracle; needs GLBFORGE_PXR_PYTHON)', async () => {
+    const python = process.env.GLBFORGE_PXR_PYTHON!; // pip install usd-core, then GLBFORGE_PXR_PYTHON=/path/to/python
     const { doc } = await extrudeImage(await ringPng(), { pillow: 0.03, preset: 'enamel', layers: 2 });
     await optimize(doc, { profile: getProfile('mobile-hero'), targetTriangles: 2000, verify: false });
     const dir = await mkdtemp(join(tmpdir(), 'glbforge-usd-'));

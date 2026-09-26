@@ -64,7 +64,7 @@ describe('UsdSkel export', () => {
     expect(usda).toMatch(/30: \[\(1, 0, 0, 0\), \(0\.7071068, 0, 0, 0\.7071068\)\]/); // usda prints (w, x, y, z)
   });
 
-  it('packs both layer formats deterministically and the oracle agrees (needs GLBFORGE_PXR_PYTHON)', async () => {
+  it('packs both layer formats deterministically', async () => {
     const doc = makeRiggedCylinder();
     const a = await toUsdz(doc, { textureEncoder: async ({ bytes }) => ({ bytes, mimeType: 'image/png' }) });
     const b = await toUsdz(doc, { textureEncoder: async ({ bytes }) => ({ bytes, mimeType: 'image/png' }) });
@@ -72,9 +72,14 @@ describe('UsdSkel export', () => {
     expect(a.skeletons).toBe(1);
     expect(a.frames).toBe(31);
     expect(listZip(a.usdz)[0].name).toBe('model.usdc');
+  });
 
-    const python = process.env.GLBFORGE_PXR_PYTHON;
-    if (!python) return;
+  // Split from the determinism half and skipped explicitly: folding the two
+  // together meant an absent oracle reported PASSED while checking nothing.
+  it.skipIf(!process.env.GLBFORGE_PXR_PYTHON)('the oracle agrees with both layer formats (needs GLBFORGE_PXR_PYTHON)', async () => {
+    const doc = makeRiggedCylinder();
+    const a = await toUsdz(doc, { textureEncoder: async ({ bytes }) => ({ bytes, mimeType: 'image/png' }) });
+    const python = process.env.GLBFORGE_PXR_PYTHON!;
     const txt = await toUsdz(doc, { format: 'usda', textureEncoder: async ({ bytes }) => ({ bytes, mimeType: 'image/png' }) });
     const dir = await mkdtemp(join(tmpdir(), 'glbforge-skel-'));
     try {

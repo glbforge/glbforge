@@ -99,6 +99,9 @@ the same registration into another checkout.
   older as deprecated. Validate changes with `test/usd-oracle.py`: `pip install
   usd-core` in a venv and run core tests with `GLBFORGE_PXR_PYTHON=<venv>/bin/python`.
   `USD_WRITE_NEW_USDC_FILES_AS_VERSION=0.8.0` + `Sdf.Layer.Export` gives byte references.
+  Without that variable the three oracle specs skip, so `pnpm -r test` alone never
+  checks USD against Pixar's reader; `.github/workflows/usd-oracle.yml` runs them
+  in CI when a USD writer or its specs change, and fails if they skipped.
 - **The Studio is built twice, differently.** `packages/studio/dist` (served by
   `glbforge ui`, shipped in the npm package) comes from `pnpm build`; the
   committed `site/studio/` that glbforge.dev serves comes from `pnpm build:site`,

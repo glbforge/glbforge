@@ -1,0 +1,87 @@
+name: USD oracle
+
+# Pixar's own USD is the only independent check on the crate writer and the
+# UsdSkel export — everything else in this repo reads those files back with the
+# same assumptions that wrote them, so a self-consistent mistake passes. The
+# specs that use it are opt-in behind GLBFORGE_PXR_PYTHON and therefore skip
+# silently in `pnpm -r test`, which is how a UsdSkel change once shipped with
+# the oracle never having run.
+#
+# usd-core is a ~200MB wheel and the oracle only has an opinion about USD, so
+# this runs when the USD writers or their specs move rather than on every PR,
+# plus on demand from the Actions tab. It is deliberately a separate workflow:
+# branch protection can require it for USD work without making every other PR
+# wait on a Python install.
+on:
+  pull_request:
+    paths: &usd-paths
+      - 'packages/core/src/usdc.ts'
+      - 'packages/core/src/usdz.ts'
+      - 'packages/core/src/usd-skel.ts'
+      - 'packages/core/src/usd-ir.ts'
+      - 'packages/core/src/inspect/from-usd.ts'
+      - 'packages/core/test/usd*'
+      - '.github/workflows/usd-oracle.yml'
+  push:
+    branches: [main]
+    paths: *usd-paths
+  workflow_dispatch:
+
+jobs:
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      # As in ci.yml, LFS stays unpulled; the oracle specs build their
+      # documents in memory and never touch the Meshy fixtures.
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node@22
+          cache: true
+          install: false
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm -r build
+
+      # 3.11 because usd-core publishes wheels for it; a newer interpreter can
+      # fall through to a source build that will not finish on a runner.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Unpinned on purpose: this job blocks nobody, so letting it track the
+      # current usd-core is how we hear about an upstream change in USD's own
+      # reading of our files rather than finding out at release.
+      - run: pip install usd-core
+
+      - name: Core specs with the Pixar oracle enabled
+        working-directory: packages/core
+        run: |
+          set -euo pipefail
+          GLBFORGE_PXR_PYTHON="$(which python)" \
+            npx vitest run --reporter=json --outputFile=/tmp/vitest.json
+
+      # The whole failure mode this job exists to prevent is the oracle being
+      # wired up wrong and skipping in silence, which still reports green. A
+      # plain "0 skipped" assertion cannot be used here — the LFS-fixture specs
+      # legitimately skip on a runner — so name the oracle specs and require
+      # that they actually ran and passed.
+      - name: The oracle specs really ran
+        run: |
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("/tmp/vitest.json", "utf8"));
+            const all = r.testResults.flatMap((f) => f.assertionResults ?? []);
+            const oracle = all.filter((t) => /oracle/i.test(t.fullName ?? t.title ?? ""));
+            if (oracle.length < 3) {
+              throw new Error(`expected at least 3 oracle specs, saw ${oracle.length} — GLBFORGE_PXR_PYTHON did not reach them:\n` +
+                oracle.map((t) => `  ${t.status}  ${t.fullName}`).join("\n"));
+            }
+            const notRun = oracle.filter((t) => t.status !== "passed");
+            if (notRun.length) {
+              throw new Error("oracle specs did not pass:\n" + notRun.map((t) => `  ${t.status}  ${t.fullName}`).join("\n"));
+            }
+            console.log(`Pixar oracle: ${oracle.length} specs passed`);
+            for (const t of oracle) console.log(`  ✓ ${t.fullName}`);
+          '
