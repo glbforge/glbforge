@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>GLBForge — the web-readiness layer for AI-generated 3D</title>
-  <meta name="description" content="GLBForge is the deterministic layer after 3D generation: inspect a mesh in tens of milliseconds while you are still editing it, diff what the last edit broke, optimize it 90%+ smaller against a versioned performance budget, and export GLB, STL or USDZ — CLI, in-browser Studio, 27-tool MCP server, GitHub Action." />
+  <meta name="description" content="GLBForge is the deterministic layer after 3D generation: inspect a mesh in tens of milliseconds while you are still editing it, diff what the last edit broke, optimize it 90%+ smaller against a versioned performance budget, and export GLB, STL or USDZ — CLI, in-browser Studio, 28-tool MCP server, GitHub Action." />
   <meta property="og:title" content="GLBForge" />
   <meta property="og:description" content="Inspect, diff, and ship 3D assets. Raw AI mesh in, budget-gated asset out. npx glbforge ship model.glb" />
   <meta property="og:url" content="https://glbforge.dev" />
@@ -175,6 +175,8 @@
         <div class="card"><h3><span class="ico">⬇</span>Export</h3><p>Web-ready GLB, print-ready STL (mm-scaled, watertightness verdict), and USDZ for iOS AR Quick Look — binary crate written in pure TypeScript, UsdPreviewSurface materials, UsdSkel skeletons and blend shapes. Plus a React Three Fiber viewer scaffold with LOD switching.</p></div>
         <div class="card"><h3><span class="ico">✓</span>Budgets as contracts</h3><p><code>mobile-hero</code>, <code>desktop-hero</code>, <code>product-configurator</code> — opinionated, <a href="/budgets/">versioned caps with a published methodology</a>; pin <code>mobile-hero@1</code> in CI and it never moves under you.</p></div>
         <div class="card"><h3><span class="ico">⛭</span>Animated assets</h3><p>Skinned meshes and morph targets simplify bone-aware: the simplifier sees skin weights and morph deltas as attributes, dominant-joint boundaries are locked, and skins, inverse bind matrices and clips survive — into GLB and into UsdSkel.</p></div>
+        <div class="card"><h3><span class="ico">↻</span>Animate</h3><p>A looping idle, bob, spin, sway, breathe or hop baked into any GLB <em>without a rig</em>: a pivot at the base centre carries the motion, your nodes are untouched, and re-running replaces the clip instead of stacking. Deterministic keys, and USDZ bakes them as time samples so AR Quick Look plays it.</p></div>
+        <div class="card"><h3><span class="ico">☻</span>Desktop companion</h3><p>The finished asset as a talking character on your desktop: transparent always-on-top window, plays its clips, gazes at the cursor, and answers typed messages — with a Claude agent on your CLI login, or with any MCP client driving it.</p></div>
       </div>
     </section>
 
@@ -250,6 +252,7 @@ Shells 1 → 44: 43 new separate pieces.
 <span class="a">npx glbforge analyze</span> model.glb --profile mobile-hero
 <span class="a">npx glbforge optimize</span> model.glb --ktx2 --lods 40000,10000
 <span class="a">npx glbforge extrude</span> logo.png --layers auto --pillow 0.03 --preset enamel
+<span class="a">npx glbforge animate</span> model.web.glb --preset idle
 <span class="a">npx glbforge stl</span> model.glb --size 80
 <span class="a">npx glbforge usdz</span> model.web.glb
 <span class="a">npx glbforge init</span>   <span class="c"># wire it into a project: scripts, MCP, CLAUDE.md</span></pre>
@@ -257,7 +260,7 @@ Shells 1 → 44: 43 new separate pieces.
 
     <section id="agents">
       <h2>Built for agents and CI, not just humans</h2>
-      <p class="lede">The same pipeline is an MCP server — 27 tools, published in the official registry as <code>dev.glbforge/glbforge</code> — so Claude Code, Cursor and friends can inspect, diff, fix and ship an asset inside one conversation, looking at rendered previews of their own output. Every tool answers one envelope (<code>ok, summary, duration_ms, errors[], data</code>) where each diagnostic carries a stable code, a severity and the prim path it refers to; every response validates against a published schema; mutating tools take <code>dry_run</code> and return a diff plus a re-validation, so nothing changes silently. And a GitHub Action posts report cards on pull requests and opens a PR with the optimized, perceptually verified files.</p>
+      <p class="lede">The same pipeline is an MCP server — 28 tools, published in the official registry as <code>dev.glbforge/glbforge</code> — so Claude Code, Cursor and friends can inspect, diff, fix and ship an asset inside one conversation, looking at rendered previews of their own output. Every tool answers one envelope (<code>ok, summary, duration_ms, errors[], data</code>) where each diagnostic carries a stable code, a severity and the prim path it refers to; every response validates against a published schema; mutating tools take <code>dry_run</code> and return a diff plus a re-validation, so nothing changes silently. And a GitHub Action posts report cards on pull requests and opens a PR with the optimized, perceptually verified files.</p>
       <div class="duo">
         <pre><span class="c"># MCP server (Claude Code):</span>
 <span class="a">claude mcp add glbforge</span> -- npx -y @glbforge/mcp
@@ -290,10 +293,13 @@ Shells 1 → 44: 43 new separate pieces.
             <li><code>analyze</code> + versioned budget profiles</li>
             <li><code>optimize</code> with SSIM-gated fidelity</li>
             <li><code>ship</code>: one call, any input, budget-gated</li>
-            <li>forge (2D → watertight 3D), STL, USDZ</li>
+            <li>forge (2D → watertight 3D, <code>--matte auto</code> lifts a subject off its background), STL, USDZ</li>
             <li>generation: Meshy 7, Hunyuan3D-2, TRELLIS, TripoSR</li>
             <li>skinned + morph-target assets, end to end</li>
-            <li>Studio (browser and local), 27-tool MCP server, GitHub Action, <code>init</code>, <code>audit</code></li>
+            <li><code>animate</code>: looping motion without a rig, into GLB and USDZ</li>
+            <li>reading GLB, glTF, USDZ, USDA and USDC — pure TypeScript, no Pixar runtime</li>
+            <li>desktop companion; local opt-in <code>usage</code> counter</li>
+            <li>Studio (browser and local), 28-tool MCP server, GitHub Action, <code>init</code>, <code>audit</code></li>
           </ul>
         </div>
         <div class="card">

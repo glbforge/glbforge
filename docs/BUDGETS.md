@@ -64,40 +64,40 @@ Score = 100 − penalties, floored at 0.
 
 | cap | value | why |
 |---|---|---|
-| maxTriangles | 150,000 | A mid-range phone GPU (2019+ Adreno 6xx / Mali-G7x / Apple A12 class) rasterizes 150k triangles in well under a millisecond; the binding constraint is payload. 150k welded, quantized, meshopt-compressed triangles land around 1–2MB, which leaves room for textures inside the file cap. It is also where our fixtures stop losing visible detail (the Meshy 7 hero measures SSIM 0.964 at 150k). |
-| maxDrawCalls | 4 | Every primitive is a draw call with its own state changes plus scene-graph cost on the JS side, and a hero shares the frame with the page itself. One to four is a hero; more is a scene. |
+| maxTriangles | 150,000 | A mid-range phone GPU (2019+ Adreno 6xx / Mali-G7x / Apple A12 class) rasterizes 150k triangles in well under a millisecond; the binding constraint is payload. 150k welded, quantized, meshopt-compressed triangles land around 1-2MB, which is what leaves room for textures inside the file cap. Counted over the scene: a mesh placed by five nodes costs its triangles five times, because that is what is drawn. |
+| maxDrawCalls | 4 | Counted as one call per primitive per node that places it — the floor a renderer without instancing support pays. Four keeps the per-frame state changes inside the budget of a mid-range mobile GPU driver; merging primitives that share a material is the cheapest way down. |
 | maxTextureSize | 2048 px | A 2K RGBA8 texture with mipmaps is ~21MB of GPU memory; a color/normal/ORM set of three fits the VRAM cap. 4K quadruples that and rarely reads sharper on a phone-sized viewport. |
 | maxTextureBytes | 4 MB | Compressed image payload inside the GLB. WebP at quality 82 (near-lossless for normal maps) keeps three 2K maps around 1–3MB. |
-| maxTextureVramBytes | 128 MB | Decoded, mipmapped GPU memory; leaves headroom for framebuffers, the DOM, and a second asset. KTX2 counts at its GPU-compressed size. |
-| maxFileBytes | 6 MB | About 3–5 seconds on a typical 4G link — the most a hero can hide behind a poster image before it reads as broken; under a second on Wi-Fi or 5G. |
+| maxTextureVramBytes | 128 MB | Decoded, mipmapped GPU memory. Mobile browsers share GPU memory with the OS and drop WebGL contexts that get greedy; 128MB leaves headroom for framebuffers, the DOM, and a second asset. KTX2/BasisU counts at its GPU-compressed size (~4–8x less), which is why the KTX2 path exists. |
+| maxFileBytes | 6 MB | About 3–5 seconds on a typical 4G link (10–15Mbps effective) — the most a hero can hide behind a poster image before it reads as broken; under a second on Wi-Fi or 5G. |
 | maxMaterials | 2 | Materials multiply shader variants and texture sets. A hero is one material, two when a glass or emissive part is unavoidable. |
-| minSsim | 0.94 | Calibrated on the Meshy 7 fixture: budget pass 0.964 (4K textures; 0.979 at 2K), 40k-triangle version 0.913 with visibly merged hair. The floor sits between them. |
+| minSsim | 0.94 | Weakest of four fixed-camera views (256px, 2x supersampled, smooth shading, textured) before vs after optimization. Calibrated on the Meshy 7 fixture: the budget pass measures 0.964 with 4K source textures (0.979 with 2K), a 40k-triangle version 0.913 with visibly merged hair strands. The floor sits between them. |
 
 ### desktop-hero@3 — hero asset on a desktop-first marketing page
 
 | cap | value | why |
 |---|---|---|
-| maxTriangles | 500,000 | Integrated desktop GPUs handle 500k triangles per frame comfortably; beyond that, payload and parse time on first load dominate. |
-| maxDrawCalls | 8 | Desktop browsers absorb more state changes per frame, and a desktop hero is often a small assembly (product + stand + shadow catcher). |
-| maxTextureSize | 4096 px | Justifiable on a large viewport where the hero fills half the screen; a 4K RGBA8 with mips is ~85MB decoded, so only the color map should be 4K. |
+| maxTriangles | 500,000 | Integrated desktop GPUs handle 500k triangles per frame comfortably; beyond that, payload and parse time on first load dominate, not raster cost. Counted over the scene, so instanced placements each cost their triangles. |
+| maxDrawCalls | 8 | Desktop browsers absorb more state changes per frame, and a desktop hero is often a small assembly (product + stand + shadow catcher). Counted as one call per primitive per node that places it. |
+| maxTextureSize | 4096 px | A 4K color map can be justified on a large viewport where the hero fills half the screen; a 4K RGBA8 with mips is ~85MB decoded, so only the color map should be 4K. |
 | maxTextureBytes | 12 MB | One 4K color map plus 2K normal/ORM maps in WebP. |
-| maxTextureVramBytes | 256 MB | Plentiful but shared with tabs and the compositor; keeps a two-asset page under half a gigabyte. |
+| maxTextureVramBytes | 256 MB | Desktop GPU memory is plentiful but shared with tabs and the compositor; 256MB keeps a two-asset page under half a gigabyte. |
 | maxFileBytes | 20 MB | About 3 seconds on a 50Mbps connection; desktop visitors tolerate a progressive reveal behind a placeholder up to that. |
-| maxMaterials | 4 | Body, glass, metal trim, screen — a typical product hero without a material zoo. |
-| minSsim | 0.96 | Viewed larger, so stricter than mobile; the budget pass to 500k measures 0.986–0.993 on our fixtures. |
+| maxMaterials | 4 | Four materials cover a typical product hero (body, glass, metal trim, screen) without turning into a material zoo. |
+| minSsim | 0.96 | Desktop heroes are viewed larger, so the floor is stricter than mobile: the budget pass to 500k measures 0.986–0.993 on our fixtures, clearing it either way. |
 
-### product-configurator@3 — interactive product viewer; many assets coexist
+### product-configurator@3 — interactive product viewer; many assets may coexist
 
 | cap | value | why |
 |---|---|---|
-| maxTriangles | 250,000 | Several variants stay resident and the camera gets close; balances close-up fidelity against three or four assets loaded at once. |
-| maxDrawCalls | 12 | Swappable parts are separate meshes by design (a draw call each) — a dozen, not a hundred. |
-| maxTextureSize | 2048 px | Keeps a multi-variant texture set inside the shared VRAM cap; the camera moves and materials swap, so 4K rarely pays. |
-| maxTextureBytes | 8 MB | A full PBR set at 2K in WebP plus one variant map. |
-| maxTextureVramBytes | 128 MB | Same ceiling as mobile because a configurator page often is on mobile, and several assets share it. |
-| maxFileBytes | 12 MB | Loaded on demand behind an explicit user action, so larger than a hero that must appear on first paint. |
-| maxMaterials | 8 | Colorways and finishes are the point; eight covers realistic part counts while keeping shader compilation bounded. |
-| minSsim | 0.95 | Close-up viewing argues strict, coexistence argues lenient; the midpoint, and the budget pass to 250k measures 0.977–0.987 on our fixtures. |
+| maxTriangles | 250,000 | Configurators keep several variants resident and the camera gets close; 250k per asset balances close-up fidelity against having three or four assets loaded at once. Counted over the scene, so instanced placements each cost their triangles. |
+| maxDrawCalls | 12 | Swappable parts are separate meshes by design (a draw call each), so the cap is higher than a hero — but still a dozen, not a hundred. Counted as one call per primitive per node that places it. |
+| maxTextureSize | 2048 px | 2K keeps a multi-variant texture set inside the shared VRAM cap; configurators rarely benefit from 4K because the camera moves and materials swap. |
+| maxTextureBytes | 8 MB | Room for a full PBR set (color, normal, ORM) at 2K in WebP plus one variant map. |
+| maxTextureVramBytes | 128 MB | Same ceiling as mobile because a configurator page often IS on mobile, and several assets share it. |
+| maxFileBytes | 12 MB | Configurator assets load on demand behind an explicit user action, so a slightly larger file is acceptable than a hero that must appear on first paint. |
+| maxMaterials | 8 | Materials are the point of a configurator (colorways, finishes); eight covers realistic part counts while keeping shader compilation bounded. |
+| minSsim | 0.95 | Close-up viewing argues for strict, coexistence argues for lenient; 0.95 is the midpoint, and the budget pass to 250k measures 0.977–0.987 on our fixtures. |
 
 ## Changing a cap
 

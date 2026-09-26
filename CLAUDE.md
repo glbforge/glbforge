@@ -115,5 +115,20 @@ the same registration into another checkout.
   Inspector without re-analysis — a report shape change needs a `SCHEMA` bump
   there or stale IndexedDB rows crash the app on load with no UI left to clear
   them.
-- **Docs to keep in sync when scope changes**: `README.md`, `site/llms.txt`
-  (AI-facing scope statement), `packages/mcp/README.md`, `ROADMAP.md`.
+- **The information surface is generated or gated, never remembered.**
+  `pnpm docs:sync` writes what is derivable and `pnpm docs:check` (CI, after
+  the build) fails on the rest. **Generated — never edit by hand:** the
+  `## Profiles (current versions)` tables in `docs/BUDGETS.md` (from
+  `PROFILE_VERSIONS`, so the published rationale and
+  `list_profiles rationale=true` cannot disagree) and all of
+  `site/budgets/index.html` (rendered from `docs/BUDGETS.md` through
+  `scripts/markdown.mjs` into `scripts/templates/budgets.html`). **Checked,
+  written by hand:** `README.md`, `site/llms.txt` (AI-facing scope statement;
+  its `## Commands` list must have a line per CLI verb — add internal-only
+  verbs to `UNLISTED_VERBS` with a reason), `site/index.html`,
+  `packages/mcp/README.md`, `ROADMAP.md`. The checker counts facts (tool
+  count, verbs, the six package versions, profile/pack versions); it cannot
+  tell whether a new capability is *described*. That is the scheduled info
+  pass (`.claude/skills/glbforge-info-pass/`), which also deploys the site.
+  `scripts/markdown.mjs` throws on any construct it does not render, so a new
+  one in a generated doc is a deliberate addition there.

@@ -25,6 +25,8 @@ following the loop had no exit from it.
 | `docs/agent-loop/ROLES.md` | The eight stances a pass can take, and what each counts as success |
 | `.claude/skills/glbforge-pass/SKILL.md` | What a pass does, start to finish |
 | `scripts/live-check.mjs` | glbforge.dev from outside, on a machine that can reach it |
+| `scripts/docs-sync.mjs` | What the project SAYS vs what it does. `pnpm docs:check` (CI), `pnpm docs:sync` |
+| `.claude/skills/glbforge-info-pass/SKILL.md` | The daily pass over the information surface; shares this ledger, takes no role |
 
 ## Running it
 
@@ -89,10 +91,15 @@ It checks the six static routes; the two free unauthenticated Worker routes
 throws); **every script and style the deployed Studio page references**,
 because a hashed bundle has raced the build into a deploy whose `index.html`
 pointed at files that were not there — invisible to a 200 on the page itself;
-deployed `llms.txt` against **`origin/main`**, not the working tree, since a
-feature branch is ahead of the deploy by definition and comparing the tree
-would hold it red for the life of every PR; and npm `latest` against the
-packages here.
+the three content routes — `/llms.txt`, `/` and `/budgets/` — against
+**`origin/main`**, not the working tree, since a feature branch is ahead of
+the deploy by definition and comparing the tree would hold it red for the
+life of every PR; and npm `latest` against the packages here.
+
+Those three routes are the last link of the information chain. `pnpm
+docs:check` (CI, and the info pass below) proves the repo's claims match the
+code; this proves glbforge.dev is serving the repo. A merged docs PR that was
+never deployed shows up here and nowhere else.
 
 Quiet by design: it notifies only when the state *changes*. A site down for
 six hours earns one notification, and so does the recovery. Nothing paid is
