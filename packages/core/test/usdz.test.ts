@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createNodeIO } from '../src/io.js';
 import { extrudeImage, getProfile, optimize, toUsdz } from '../src/index.js';
 import { Document } from '@gltf-transform/core';
 import { readFloat } from '../src/accessors.js';
@@ -103,6 +105,45 @@ describe('USDZ export', () => {
       await rm(dir, { recursive: true, force: true });
     }
   }, 120_000);
+
+  it.each(['plush.glb', 'cat.glb', 'neon.glb'])(
+    "%s: toUsdz()'s own reported summary matches Pixar USD's independent count (oracle; needs GLBFORGE_PXR_PYTHON)",
+    async (fixture) => {
+      const python = process.env.GLBFORGE_PXR_PYTHON;
+      if (!python) return; // pip install usd-core, then GLBFORGE_PXR_PYTHON=/path/to/python
+      // Every other oracle test here builds a small hand-made document. This one
+      // runs a real production asset (glbforge.dev's own showcase models, already
+      // multi-mesh/multi-material, cat.glb also multi-texture) through the actual
+      // export path, so a bug that only shows up at real-asset shape or scale — not
+      // in a synthetic fixture — has a chance to surface.
+      const io = await createNodeIO();
+      const path = join(dirname(fileURLToPath(import.meta.url)), '../../../site/models', fixture);
+      const doc = await io.read(path);
+      const dir = await mkdtemp(join(tmpdir(), 'glbforge-usd-summary-'));
+      try {
+        const result = await toUsdz(doc);
+        expect(result.warnings).toEqual([]);
+        await writeFile(join(dir, 'model.usdz'), result.usdz);
+        let out = '';
+        try {
+          out = execFileSync(python, [new URL('./usd-summary-oracle.py', import.meta.url).pathname, join(dir, 'model.usdz')], { encoding: 'utf8' });
+        } catch (err) {
+          const e = err as { stdout?: string; stderr?: string };
+          throw new Error(`usd-summary-oracle failed:\n${e.stdout ?? ''}\n${(e.stderr ?? '').split('\n').slice(-6).join('\n')}`);
+        }
+        const pxr = JSON.parse(out) as { meshes: number; triangles: number; materials: number; textures: number };
+        expect(pxr).toEqual({
+          meshes: result.meshes,
+          triangles: result.triangles,
+          materials: result.materials,
+          textures: result.textures,
+        });
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+    60_000,
+  );
 
   it('rejects KTX2 textures with guidance and exports skins as a SkelRoot', async () => {
     const { doc } = await extrudeImage(await ringPng(), { texture: false });
