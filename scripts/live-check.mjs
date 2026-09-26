@@ -137,6 +137,21 @@ async function checkDrift() {
   return { routes: rows, compared: compared.length > 0, same: compared.length > 0 && compared.every((r) => r.same) };
 }
 
+/**
+ * One phrase for the content routes. It names how many of them drifted, not
+ * how many were looked at: the first wording said "3/3 content routes DRIFTED"
+ * whenever any single one had, which reads as all three and is a claim the
+ * check never measured.
+ */
+function driftLine(drift) {
+  const compared = drift.routes.filter((r) => r.compared);
+  if (!compared.length) return 'content routes not compared';
+  const drifted = compared.filter((r) => !r.same);
+  const scope = `${compared.length} content route${compared.length === 1 ? '' : 's'}`;
+  if (!drifted.length) return `${scope} in step with main`;
+  return `${drifted.length}/${scope} DRIFTED from main (${drifted.map((r) => r.route).join(', ')})`;
+}
+
 async function checkVersions() {
   let repo = null;
   try { repo = JSON.parse(readFileSync(join(root, 'packages', 'core', 'package.json'), 'utf8')).version; } catch { /* not fatal */ }
@@ -191,7 +206,7 @@ async function main() {
     console.log(`  ${report.pages.length} pages, ${report.worker.length} worker routes, ${report.studioAssets.checked} studio assets`
       + `  ·  slowest ${slowest?.url.replace(ORIGIN, '') ?? '?'} ${slowest?.ms ?? '?'}ms`
       + `  ·  npm ${report.versions.npm ?? '?'} / repo ${report.versions.repo ?? '?'}`
-      + `  ·  ${report.drift.routes.filter((r) => r.compared).length}/${report.drift.routes.length} content routes ${report.drift.compared ? (report.drift.same ? 'in step with main' : 'DRIFTED from main') : 'not compared'}`);
+      + `  ·  ${driftLine(report.drift)}`);
     for (const p of report.problems) console.log(`  ✗ ${p}`);
     if (!changed && !report.ok) console.log('  (unchanged since the last run)');
   }
