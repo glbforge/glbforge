@@ -265,7 +265,16 @@ export function applyPerceptualVerdict(
     report.findings.push({
       ruleId: PERCEPTUAL_RULE,
       severity: 'info',
-      message: `Visual fidelity SSIM ${pct(verdict.ssimMean)} (weakest view ${pct(verdict.ssimMin)} @ ${verdict.worstView}) — above the ${pct(verdict.threshold)} floor: no visible loss by measurement.`,
+      // `textured: false` means base-color textures never got decoded for
+      // this comparison — every optimize({ textureFormat: 'ktx2' }) run, since
+      // sharp cannot decode KTX2 and both sides render flat/factor-only for a
+      // fair comparison (see optimize.ts). Saying "no visible loss" without
+      // qualifying that overclaims what was actually measured — a texture
+      // whose KTX2 encode introduced real banding or chroma loss scores
+      // identically to one that changed not at all.
+      message: verdict.textured
+        ? `Visual fidelity SSIM ${pct(verdict.ssimMean)} (weakest view ${pct(verdict.ssimMin)} @ ${verdict.worstView}) — above the ${pct(verdict.threshold)} floor: no visible loss by measurement.`
+        : `Geometry/shading SSIM ${pct(verdict.ssimMean)} (weakest view ${pct(verdict.ssimMin)} @ ${verdict.worstView}) — above the ${pct(verdict.threshold)} floor. Textures were not decoded for this comparison (KTX2 output can't be decoded to compare), so texture-encode quality was not measured.`,
       data,
     });
     return report;

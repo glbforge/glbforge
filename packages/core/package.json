@@ -24,6 +24,7 @@
   "devDependencies": {
     "@types/earcut": "^3.0.0",
     "@types/node": "^22.20.1",
+    "ssim.js": "^3.5.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   },
@@ -37,7 +38,7 @@
     "README.md",
     "LICENSE"
   ],
-  "description": "Inspect, diff, analyze, optimize, forge, and export 3D assets for the web \u2014 semantic mesh reads, versioned budgets, lint rules, SSIM verification, KTX2, LODs, STL, USDZ.",
+  "description": "Inspect, diff, analyze, optimize, forge, and export 3D assets for the web — semantic mesh reads, versioned budgets, lint rules, SSIM verification, KTX2, LODs, STL, USDZ.",
   "keywords": [
     "gltf",
     "glb",
