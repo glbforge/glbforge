@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**0 open** · 14 closed · 14 passes
+**0 open** · 15 closed · 15 passes
 
 ## Open
 
@@ -36,6 +36,7 @@ Nothing open.
 | `L12` | fixed | the Forge section still told visitors the forge only eats flat artwork | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
 | `L13` | fixed | USDZ export card omitted node animation, next to a card promising it | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
 | `L14` | fixed | `glbforge companion --hooks` existed only in the CHANGELOG | [2026-09-26](passes/2026-09-26-info.md) | [2026-09-26](passes/2026-09-26-info.md) |
+| `L100` | fixed | pinned budget profiles never said a newer version existed | [2026-09-27](passes/2026-09-27-archaeologist-pinned-profile-staleness.md) | [2026-09-27](passes/2026-09-27-archaeologist-pinned-profile-staleness.md) |
 
 ## Roles
 
@@ -47,14 +48,15 @@ Least recently used first. A pass takes the top one — see
 | rival | 0 | **never** |
 | integrator | 0 | **never** |
 | performance | 0 | **never** |
-| archaeologist | 0 | **never** |
 | newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| archaeologist | 1 | [2026-09-27](passes/2026-09-27-archaeologist-pinned-profile-staleness.md) |
 
 ## Passes
 
+- **2026-09-27** — [2026-09-27-archaeologist-pinned-profile-staleness](passes/2026-09-27-archaeologist-pinned-profile-staleness.md) — *archaeologist* — `bcab2a4` — `L100` fixed
 - **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
 - **2026-09-26** — [2026-09-26-info-l4-mechanized](passes/2026-09-26-info-l4-mechanized.md) — `cdccee8, scheduled, cloud sandbox` — `L4` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed

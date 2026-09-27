@@ -3,7 +3,7 @@
  * lines for a textured asset; agents need the verdict, the numbers that
  * drive decisions, and a pointer to drill down — not every texture row.
  */
-import { PERCEPTUAL_RULE, type AnalysisResult, type Finding, type Severity } from '@glbforge/core';
+import { PERCEPTUAL_RULE, latestProfileVersion, type AnalysisResult, type Finding, type Severity } from '@glbforge/core';
 import type { ImageBlock } from './preview.js';
 
 const SEVERITY_RANK: Record<Severity, number> = { error: 0, warn: 1, info: 2 };
@@ -78,10 +78,16 @@ export function compact(r: AnalysisResult) {
   const fidelity = visualFidelityOf(r);
   const errors = r.findings.filter((f) => f.severity === 'error');
   const resolves = optimizerResolves(errors);
+  const latestProfile = latestProfileVersion(r.profile.name);
   return {
     file: r.file.path,
     profile: r.profile.name,
     profileVersion: r.profile.version,
+    // A pinned version is otherwise silent forever after; say once, here,
+    // when a newer one now exists.
+    ...(latestProfile !== undefined && latestProfile !== r.profile.version
+      ? { profileLatestVersion: latestProfile }
+      : {}),
     score: r.score,
     passed: r.passed,
     verdict: r.passed ? 'within budget' : 'over budget',
