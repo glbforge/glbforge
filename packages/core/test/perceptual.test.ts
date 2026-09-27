@@ -90,6 +90,121 @@ describe('perceptual verification', () => {
 });
 
 /**
+ * `harness/render.ts` shades one term: Lambertian diffuse from
+ * `baseColorFactor * baseColorTexture`. It never decodes a metallicRoughness
+ * or emissive texture and has no specular or emissive term at all — so
+ * `optimize()`'s own lossy re-encode of those two slots (the same
+ * `quality: 82` WebP pass that touches base color, `optimize.ts`'s
+ * `slots: /^(?!normalTexture)/`) is invisible to the SSIM gate no matter how
+ * badly it damages them. This is a distinct gap from the normal-map one: that
+ * texture *is* sampled, just re-encoded at a quality this harness can't
+ * verify; these two are never sampled at all, in any format.
+ */
+async function solidPng(r: number, g: number, b: number): Promise<Uint8Array> {
+  const sharp = (await import('sharp')).default;
+  const size = 64;
+  const rgba = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    rgba[i * 4] = r; rgba[i * 4 + 1] = g; rgba[i * 4 + 2] = b; rgba[i * 4 + 3] = 255;
+  }
+  return new Uint8Array(await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+}
+
+async function noisePng(seed: number): Promise<Uint8Array> {
+  const sharp = (await import('sharp')).default;
+  const size = 64;
+  const rgba = Buffer.alloc(size * size * 4);
+  let s = seed;
+  const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  for (let i = 0; i < size * size; i++) {
+    rgba[i * 4] = Math.floor(rnd() * 255);
+    rgba[i * 4 + 1] = Math.floor(rnd() * 255);
+    rgba[i * 4 + 2] = Math.floor(rnd() * 255);
+    rgba[i * 4 + 3] = 255;
+  }
+  return new Uint8Array(await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+}
+
+/** One UV sphere, shaded enough (unlike a flat quad) to show a texture pattern. */
+function sphereDoc(configureMaterial: (mat: import('@gltf-transform/core').Material, doc: Document) => void): Document {
+  const doc = new Document();
+  const buffer = doc.createBuffer();
+  const lat = 16, lon = 16;
+  const positions: number[] = [], normals: number[] = [], uvs: number[] = [], indices: number[] = [];
+  for (let y = 0; y <= lat; y++) {
+    const theta = (y / lat) * Math.PI;
+    for (let x = 0; x <= lon; x++) {
+      const phi = (x / lon) * Math.PI * 2;
+      const nx = Math.sin(theta) * Math.cos(phi), ny = Math.cos(theta), nz = Math.sin(theta) * Math.sin(phi);
+      positions.push(nx, ny, nz); normals.push(nx, ny, nz); uvs.push(x / lon, y / lat);
+    }
+  }
+  for (let y = 0; y < lat; y++) for (let x = 0; x < lon; x++) {
+    const a = y * (lon + 1) + x, b = a + lon + 1;
+    indices.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const pos = doc.createAccessor().setType('VEC3').setArray(new Float32Array(positions)).setBuffer(buffer);
+  const nrm = doc.createAccessor().setType('VEC3').setArray(new Float32Array(normals)).setBuffer(buffer);
+  const uv = doc.createAccessor().setType('VEC2').setArray(new Float32Array(uvs)).setBuffer(buffer);
+  const idx = doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(indices)).setBuffer(buffer);
+  const material = doc.createMaterial('mat').setBaseColorFactor([0.8, 0.8, 0.8, 1]);
+  configureMaterial(material, doc);
+  const prim = doc.createPrimitive()
+    .setAttribute('POSITION', pos).setAttribute('NORMAL', nrm).setAttribute('TEXCOORD_0', uv)
+    .setIndices(idx).setMaterial(material);
+  doc.createScene().addChild(doc.createNode('n').setMesh(doc.createMesh('m').addPrimitive(prim)));
+  return doc;
+}
+
+describe('the SSIM gate has no shading term for metallicRoughness or emissive', () => {
+  it('scores a mirror-smooth metallicRoughness map and full RGB noise as pixel-identical', async () => {
+    const mrMaterial = (mat: import('@gltf-transform/core').Material, doc: Document) => {
+      const tex = doc.createTexture('mr').setMimeType('image/png');
+      mat.setMetallicRoughnessTexture(tex).setMetallicFactor(1).setRoughnessFactor(1);
+    };
+    const clean = sphereDoc(mrMaterial);
+    const damaged = sphereDoc(mrMaterial);
+    (clean.getRoot().listTextures()[0]).setImage(await solidPng(0, 0, 0));
+    (damaged.getRoot().listTextures()[0]).setImage(await noisePng(1));
+
+    const score = await perceptualDiff(clean, damaged, { size: 128, textureDecoder: sharpTextureDecoder() });
+    // A real PBR shader would show a smooth matte sphere vs. a mottled,
+    // specular-flecked one; this harness has no metallic/roughness term to
+    // see it with, even with a texture decoder wired in.
+    expect(score.ssimMin).toBe(1);
+  });
+
+  it('scores no emissive glow and a solid full-brightness emissive glow as pixel-identical', async () => {
+    const dark = sphereDoc((mat, doc) => {
+      mat.setEmissiveTexture(doc.createTexture('em').setMimeType('image/png')).setEmissiveFactor([1, 1, 1]);
+    });
+    const glowing = sphereDoc((mat, doc) => {
+      mat.setEmissiveTexture(doc.createTexture('em').setMimeType('image/png')).setEmissiveFactor([1, 1, 1]);
+    });
+    (dark.getRoot().listTextures()[0]).setImage(await solidPng(0, 0, 0));
+    (glowing.getRoot().listTextures()[0]).setImage(await solidPng(255, 0, 0));
+
+    const score = await perceptualDiff(dark, glowing, { size: 128, textureDecoder: sharpTextureDecoder() });
+    expect(score.ssimMin).toBe(1);
+  });
+
+  it('a real optimize() run reports "passed" on an asset whose only difference is in these two slots', async () => {
+    const profile = getProfile('mobile-hero');
+    const withNoiseMr = sphereDoc((mat, doc) => {
+      const tex = doc.createTexture('mr').setMimeType('image/png');
+      mat.setMetallicRoughnessTexture(tex).setMetallicFactor(1).setRoughnessFactor(1);
+    });
+    (withNoiseMr.getRoot().listTextures()[0]).setImage(await noisePng(2));
+    const verdict = await optimize(withNoiseMr, { profile, targetTriangles: 10_000, compress: false });
+    // optimize() re-encodes the metallicRoughness texture at the same lossy
+    // WebP quality as every non-normal slot; the verdict has no way to see
+    // whether that landed cleanly or turned the map to mush.
+    expect(verdict.perceptual?.passed).toBe(true);
+    expect(verdict.perceptual?.ssimMin).toBe(1);
+  }, 60_000);
+});
+
+/**
  * glTF stores base color in two slots with two encodings — a LINEAR
  * `baseColorFactor` and an sRGB-encoded texture — and the pipeline moves
  * colour between them on its own: `prune()` folds a texture that is one solid
