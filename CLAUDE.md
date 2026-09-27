@@ -78,6 +78,13 @@ the same registration into another checkout.
   own: re-measure the calibration points on the LFS fixtures, republish the
   profiles (see the versioned-budgets rule) and record the before/after table
   in `docs/BUDGETS.md`. Done once so far, for the 0.9.0 colour-space fix.
+  The gate skips textures entirely whenever `textureFormat: 'ktx2'` is
+  requested — sharp can't decode KTX2, so both renders go factor-only for a
+  fair comparison (`optimize.ts`'s `decoder` ternary) — and it triggers on the
+  requested format alone, before `ktx2Compress` ever runs, so `textures: false`
+  does not save it. `PerceptualResult.textured` records which case ran; a
+  `false` verdict's message says textures weren't measured rather than
+  claiming "no visible loss" — keep that distinction if you touch the message.
 - **The renderer shades in linear light and writes sRGB** (`harness/render.ts`).
   glTF stores base color in two encodings — `baseColorFactor` is linear, a
   base-color texture is sRGB bytes — and base color is `factor * texture`, not

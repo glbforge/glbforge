@@ -87,6 +87,100 @@ describe('perceptual verification', () => {
     expect(passing.findings.find((f) => f.ruleId === PERCEPTUAL_RULE)!.severity).toBe('info');
     expect(passing.passed).toBe(true);
   });
+
+  it('never claims "no visible loss" for a passing verdict that never decoded textures', async () => {
+    // ktx2 output can't be decoded by sharp, so optimize() passes
+    // textureDecoder: undefined for BOTH renders and PerceptualResult comes
+    // back with textured: false — see optimize.ts's decoder ternary. The
+    // message must say textures went unmeasured rather than claim a blanket
+    // "no visible loss": a KTX2 encode that introduced real banding would
+    // score identically to one that changed nothing at all.
+    const doc = await ring();
+    const profile = getProfile('mobile-hero');
+    const base = { ssimMean: 0.995, ssimMin: 0.99, worstView: 'verify_135', views: [], size: 256, threshold: 0.95, passed: true };
+
+    const untextured = applyPerceptualVerdict(analyze(doc, { profile }), { ...base, textured: false });
+    const untexturedMsg = untextured.findings.find((f) => f.ruleId === PERCEPTUAL_RULE)!.message;
+    expect(untexturedMsg).not.toContain('no visible loss');
+    expect(untexturedMsg.toLowerCase()).toContain('not decoded');
+
+    const textured = applyPerceptualVerdict(analyze(doc, { profile }), { ...base, textured: true });
+    const texturedMsg = textured.findings.find((f) => f.ruleId === PERCEPTUAL_RULE)!.message;
+    expect(texturedMsg).toContain('no visible loss');
+  });
+});
+
+/**
+ * `optimize({ textureFormat: 'ktx2' })` disables texture decoding entirely
+ * for its own SSIM gate (sharp can't decode KTX2, and comparing a textured
+ * reference against an untextured candidate would score a real texture
+ * change as silhouette-only shading noise) — so a passing verdict there
+ * means "geometry and shading held", never "the texture survived". This
+ * pins how surprising that is: it fires on the requested format alone,
+ * before ktx2Compress ever touches a pixel, and an outside SSIM
+ * implementation run directly on the same texture bitmaps sees exactly the
+ * large, real difference GLBForge's own gate was blind to.
+ */
+describe('KTX2 disables texture verification, not just KTX2-specific loss', () => {
+  it("optimize()'s decoder-skip triggers on the requested format alone, even when textures are left untouched", async () => {
+    const doc = await ring();
+    const profile = getProfile('mobile-hero');
+    // textures: false means the texture is never even looked at — still the
+    // original, perfectly sharp-decodable PNG the whole run through. Nothing
+    // about it is actually undecodable here.
+    const summary = await optimize(doc, {
+      profile, textureFormat: 'ktx2', textures: false, compress: false, targetTriangles: 4000,
+    });
+    expect(summary.perceptual).not.toBeNull();
+    expect(summary.perceptual!.textured).toBe(false);
+  }, 60_000);
+
+  it('an independent SSIM oracle sees the texture-only difference this blind spot cannot', async () => {
+    const sharp = (await import('sharp')).default;
+    const { ssim } = await import('ssim.js');
+    const size = 64;
+
+    // Same opaque-disc silhouette, wildly different colour content: a coarse
+    // stripe pattern vs. pseudo-random noise, so the two textures are as
+    // perceptually different as a real KTX2 ETC1S/UASTC artifact could make
+    // one, without needing basisu/toktx (not installed in this sandbox).
+    const build = (paint: (x: number, y: number) => [number, number, number]) => {
+      const rgba = Buffer.alloc(size * size * 4);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        const i = (y * size + x) * 4;
+        const [r, g, b] = paint(x, y);
+        rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b;
+        rgba[i + 3] = Math.hypot(x - size / 2, y - size / 2) < size * 0.4 ? 255 : 0;
+      }
+      return rgba;
+    };
+    const stripesRgba = build((x) => (Math.floor(x / 4) % 2 === 0 ? [230, 230, 230] : [20, 20, 20]));
+    const noiseRgba = build((x, y) => {
+      const n = (x * 97 + y * 57) % 256;
+      return [n, (n * 3) % 256, (n * 7) % 256];
+    });
+    const stripesPng = new Uint8Array(await sharp(stripesRgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+    const noisePng = new Uint8Array(await sharp(noiseRgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+
+    const a = (await extrudeImage(stripesPng, { texture: true })).doc;
+    const b = (await extrudeImage(noisePng, { texture: true })).doc;
+
+    // Mirrors optimize.ts's own ktx2 branch exactly: no textureDecoder on
+    // either side, both renders fall back to the flat base-color factor.
+    const blind = await perceptualDiff(a, b, { size: 128 });
+    expect(blind.textured).toBe(false);
+    expect(blind.ssimMin).toBe(1); // "no visible loss" — the texture was never compared
+
+    // Independent oracle, applied directly to the texture pixels the gate
+    // above never looked at.
+    const decodeRgba = async (png: Uint8Array) => {
+      const { data, info } = await sharp(Buffer.from(png)).ensureAlpha().raw()
+        .toBuffer({ resolveWithObject: true });
+      return { data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.byteLength), width: info.width, height: info.height };
+    };
+    const { mssim } = ssim(await decodeRgba(stripesPng), await decodeRgba(noisePng));
+    expect(mssim).toBeLessThan(0.3); // real, large perceptual loss the ktx2 gate reports as SSIM 1.0
+  }, 60_000);
 });
 
 /**
