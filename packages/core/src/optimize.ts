@@ -72,9 +72,13 @@ export interface OptimizeSummary {
    * Which constraint decided where simplification stopped. 'budget' — the
    * triangle target was reached. 'fidelity' — going further would have
    * dropped below the profile's SSIM floor, so the asset stays over budget
-   * on purpose. null — no simplification was needed, or it ran out of rungs.
+   * on purpose. 'locked' — a skinned/morphing primitive's joint-boundary
+   * vertex locks set a floor the error ladder cannot cross at any tolerance
+   * (see `simplifyDeformingPrimitive`'s `lockedVertices`); the asset stays
+   * over the requested target because collapsing further would shear the
+   * rig. null — no simplification was needed.
    */
-  boundBy: 'budget' | 'fidelity' | null;
+  boundBy: 'budget' | 'fidelity' | 'locked' | null;
   /**
    * Which stage spent the fidelity when the floor was missed: 'geometry'
    * (simplification), or 'textures' (the re-encode — geometry was still above
@@ -289,8 +293,9 @@ export async function optimize(
   let degenerateDropped = 0;
   let lastRung: GeometrySnapshot | null = null;
   let rungsApplied = 0;
-  let boundBy: 'budget' | 'fidelity' | null = null;
+  let boundBy: 'budget' | 'fidelity' | 'locked' | null = null;
   let geometrySsimMin: number | null = null;
+  let lockedVertices = 0;
   await MeshoptSimplifier.ready;
   for (const error of LADDER) {
     const current = countTriangles(doc);
@@ -302,6 +307,7 @@ export async function optimize(
     rungsApplied++;
     const ratio = target / current;
     deformingPrims = 0;
+    lockedVertices = 0;
     for (const mesh of doc.getRoot().listMeshes()) {
       for (const prim of mesh.listPrimitives()) {
         const mode = prim.getMode();
@@ -310,8 +316,9 @@ export async function optimize(
         if (isDeforming(prim)) {
           // Skinned / morphing: attribute-aware simplification that keeps
           // joint boundaries and remaps every target with the same plan.
-          await simplifyDeformingPrimitive(prim, { ratio, error });
+          const result = await simplifyDeformingPrimitive(prim, { ratio, error });
           deformingPrims++;
+          lockedVertices += result.lockedVertices;
         } else {
           simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio, error });
         }
@@ -369,7 +376,34 @@ export async function optimize(
     }
   }
   lastRung = null;
-  if (boundBy === null && countTriangles(doc) <= target) boundBy = 'budget';
+  {
+    const finalTriangles = countTriangles(doc);
+    if (boundBy === null && finalTriangles <= target) {
+      boundBy = 'budget';
+    } else if (
+      boundBy === null &&
+      rungsApplied === LADDER.length &&
+      deformingPrims > 0 &&
+      lockedVertices > 0
+    ) {
+      // The ladder ran every rung up to its loosest error tolerance and
+      // still landed over target with joint-boundary vertices locked in the
+      // final rung (locked so a collapse can't shear the rig — see
+      // simplifyDeformingPrimitive). Looser error tolerance alone can't cross
+      // that floor. Silence here reads as success (the asset can sit well
+      // inside the profile's own triangle budget) while missing the triangle
+      // count the caller actually asked for.
+      boundBy = 'locked';
+      steps.push(
+        `stopped short of target: ${finalTriangles.toLocaleString()} vs ${target.toLocaleString()} triangles ` +
+        `— ${lockedVertices.toLocaleString()} joint-boundary vertices are locked to protect the rig and can't be collapsed further`,
+      );
+      log(
+        `bone-aware simplify stopped short: ${finalTriangles.toLocaleString()} vs requested ${target.toLocaleString()} ` +
+        `triangles — joint-boundary vertex locks set a floor the error ladder can't cross`,
+      );
+    }
+  }
 
   if (addedNormals) steps.push('smooth-normals');
 

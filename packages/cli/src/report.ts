@@ -90,7 +90,7 @@ export function printDiff(
   steps: string[],
   perceptual: PerceptualVerdict | null = null,
   fidelityBound = 0,
-  boundBy: 'budget' | 'fidelity' | null = null,
+  boundBy: 'budget' | 'fidelity' | 'locked' | null = null,
   fidelityLostAt: 'geometry' | 'textures' | null = null,
   geometrySsimMin: number | null = null,
 ): void {
@@ -123,6 +123,11 @@ export function printDiff(
     console.log(pc.yellow(
       `  the texture re-encode spent it, not the simplification: geometry alone measured ${pct(geometrySsimMin)}, above the floor.`,
     ) + pc.dim('\n    Raise texture quality (--texture-format ktx2, or a roomier profile) — simplifying less will not help.'));
+  }
+  if (boundBy === 'locked') {
+    console.log(pc.yellow(
+      `  ✗ missed the triangle target: ${fmt(after.geometry.triangles)} delivered, well above what was asked for.`,
+    ) + pc.dim('\n    Joint-boundary vertices in a bone-aware simplify are locked so a collapse can\'t shear the rig — no error tolerance crosses that floor. See the last "stopped short of target" step above.'));
   }
   const savings = 1 - after.file.bytes / Math.max(1, before.file.bytes);
   // The fidelity floor is not a budget row: an asset can sit inside every cap
