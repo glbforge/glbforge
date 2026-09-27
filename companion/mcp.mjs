@@ -101,7 +101,7 @@ server.tool('companion_listen',
   wrap(async ({ timeout }) => out(await call('GET', `/listen?timeout=${timeout}`, undefined, (timeout + 5) * 1000))));
 
 server.tool('companion_reply',
-  'Answer an item from companion_listen: shows your text in the bubble and marks the message answered (id optional: the oldest unanswered). Keep it short; gesture with companion_emote if it fits.',
+  'Answer an item from companion_listen: shows your text in the bubble and marks the message answered (id optional: the oldest unanswered). Errors if id is given but no longer pending — already answered or never existed — rather than silently answering a different item. Keep it short; gesture with companion_emote if it fits.',
   { id: z.number().int().optional(), text: z.string().max(280), seconds: z.number().positive().max(60).optional() }, { title: 'Reply', ...RW },
   wrap(async (args) => out(await call('POST', '/reply', args))));
 
