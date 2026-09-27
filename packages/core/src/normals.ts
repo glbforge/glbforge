@@ -60,6 +60,23 @@ export function canonicalByPosition(pos: Float32Array, vertexCount: number): Uin
     const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
     const bx = x === 0 ? 0 : bits[i * 3], by = y === 0 ? 0 : bits[i * 3 + 1], bz = z === 0 ? 0 : bits[i * 3 + 2];
     let h = (Math.imul(bx, 73856093) ^ Math.imul(by, 19349663) ^ Math.imul(bz, 83492791)) >>> 0;
+    // Multiplication mod 2^32 only mixes each output bit from input bits at
+    // or below it, so the *low* bits of an XOR-of-products carry only the
+    // low-bit entropy of the inputs — fine for scattered organic geometry,
+    // and silently not for quantized/regularly-spaced positions (the
+    // KHR_mesh_quantization-decoded case `readFloat()` exists for), whose
+    // float32 bit patterns are structured rather than random in their low
+    // bits. Masking those low bits straight into a bucket index then
+    // clusters most vertices into a handful of buckets — measured ~150-300
+    // average probes per lookup (expected ~1-2) on a quantized grid, the
+    // same failure `analyze/geometry.ts`'s own weld hash had. A MurmurHash3
+    // finalizer (fmix32) spreads entropy from every input bit across all 32
+    // output bits before the mask, independent of where it started.
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x85ebca6b) >>> 0;
+    h ^= h >>> 13;
+    h = Math.imul(h, 0xc2b2ae35) >>> 0;
+    h ^= h >>> 16;
     h &= mask;
     for (;;) {
       const j = table[h];
