@@ -1,5 +1,6 @@
 import type { DiffReport, InspectReport, PerceptualVerdict, RuleFinding } from '@glbforge/core';
 import pc from 'picocolors';
+import { latestProfileVersion } from '@glbforge/core';
 import type { AnalysisResult } from '@glbforge/core';
 
 const fmt = (n: number) => n.toLocaleString('en-US');
@@ -21,9 +22,13 @@ export function printReport(r: AnalysisResult): void {
   console.log(line);
 
   const scoreColor = r.score >= 80 ? pc.green : r.score >= 50 ? pc.yellow : pc.red;
+  const latestProfile = latestProfileVersion(r.profile.name);
+  const pinnedNote = latestProfile !== undefined && latestProfile !== r.profile.version
+    ? pc.yellow(` (v${latestProfile} available)`)
+    : '';
   console.log(
     `  ${pc.bold('Score')} ${scoreColor(pc.bold(String(r.score)))}${pc.dim('/100')}` +
-    `   ${pc.bold('Profile')} ${r.profile.name}@${r.profile.version}` +
+    `   ${pc.bold('Profile')} ${r.profile.name}@${r.profile.version}${pinnedNote}` +
     `   ${r.passed ? pc.green('✓ within budget') : pc.red('✗ over budget')}`,
   );
   // A skipped rule cannot fire, so it lifts the score. Say so next to the

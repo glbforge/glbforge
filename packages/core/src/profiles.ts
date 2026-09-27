@@ -239,6 +239,17 @@ export function getProfile(spec: string): Profile {
   return hit;
 }
 
+/**
+ * Newest published version number for a profile name, or `undefined` for an
+ * unknown name. `getProfile('mobile-hero@1')` pins CI to a contract on
+ * purpose, but the pin itself is otherwise silent forever after — nothing
+ * about the resolved `Profile` says whether a newer version now exists.
+ * Report surfaces use this to say so next to the pinned label.
+ */
+export function latestProfileVersion(name: string): number | undefined {
+  return PROFILE_VERSIONS[name]?.at(-1)?.version;
+}
+
 /** Every cap key a rationale must cover. */
 export const CAP_KEYS: Array<keyof ProfileRationale> = [
   'maxTriangles', 'maxDrawCalls', 'maxTextureSize', 'maxTextureBytes',

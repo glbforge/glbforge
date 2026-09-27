@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CAP_KEYS, PROFILES, PROFILE_VERSIONS, getProfile, profileLabel } from '../src/index.js';
+import { CAP_KEYS, PROFILES, PROFILE_VERSIONS, getProfile, latestProfileVersion, profileLabel } from '../src/index.js';
 
 describe('versioned budget profiles', () => {
   it('resolves latest and pinned versions', () => {
@@ -8,6 +8,13 @@ describe('versioned budget profiles', () => {
     expect(profileLabel(getProfile('desktop-hero'))).toMatch(/^desktop-hero@\d+$/);
     expect(() => getProfile('mobile-hero@99')).toThrow(/no version 99/);
     expect(() => getProfile('nope')).toThrow(/Unknown profile/);
+  });
+
+  it('names the newest published version, so a caller pinned to an old one can tell', () => {
+    for (const [name, versions] of Object.entries(PROFILE_VERSIONS)) {
+      expect(latestProfileVersion(name)).toBe(versions.at(-1)!.version);
+    }
+    expect(latestProfileVersion('nope')).toBeUndefined();
   });
 
   it('publishes a rationale for every cap of every version', () => {

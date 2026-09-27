@@ -92,6 +92,17 @@ describe('agent-friendly MCP surface', () => {
     expect(image(r)).toBeUndefined();
   });
 
+  it('names the pinned profile as stale once a newer version exists, and says nothing when it is already latest', async () => {
+    const pinned = parse((await client.callTool({ name: 'analyze_glb', arguments: { path: glb, preview: 'none', profile: 'mobile-hero@1' } })) as Result);
+    expect(pinned.profileVersion).toBe(1);
+    expect(pinned.profileLatestVersion).toBe(getProfile('mobile-hero').version);
+    expect(pinned.profileLatestVersion).toBeGreaterThan(1);
+
+    const latest = parse((await client.callTool({ name: 'analyze_glb', arguments: { path: glb, preview: 'none', profile: 'mobile-hero' } })) as Result);
+    expect(latest.profileVersion).toBe(getProfile('mobile-hero').version);
+    expect(latest.profileLatestVersion).toBeUndefined();
+  });
+
   it('inspect_report drills into sections and filters findings', async () => {
     const topo = parse((await client.callTool({ name: 'inspect_report', arguments: { path: glb, section: 'topology' } })) as Result);
     expect(topo.topology.boundaryEdges).toBe(0);
