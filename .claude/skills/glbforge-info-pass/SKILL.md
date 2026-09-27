@@ -28,6 +28,13 @@ only read this end up with the right expectation?**
 
 ## 0. Nothing else is already on it
 
+**Run this command.** Not a PR-listing tool — `gh` filters server-side and
+returns three fields, where a generic "list pull requests" call returns every
+open PR with its entire body. This repo keeps fifteen-odd agent-loop PRs open
+with long descriptions: the 2026-09-27 run's call came back at 150KB, blew the
+token limit, and cost six turns of `grep` and `python3` against a saved dump
+to recover a list of branch names.
+
 ```bash
 gh pr list --state open --json number,title,headRefName \
   --jq '.[] | select(.headRefName | startswith("info-pass/") or startswith("agent-loop/"))'
@@ -35,6 +42,10 @@ gh pr list --state open --json number,title,headRefName \
 
 Anything open is claimed — including an agent-loop PR that already touches the
 docs for the feature it shipped. Do not open a rival.
+
+The same reflex applies for the rest of the pass: reach for `gh` or `git` with
+a filter or a format flag before a tool that returns whole objects. You are
+reading this repo to find one difference, not to load it.
 
 ## 1. The mechanical floor
 
