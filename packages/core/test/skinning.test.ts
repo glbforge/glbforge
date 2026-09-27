@@ -67,6 +67,30 @@ describe('skinning + morph targets through optimization', () => {
     };
     expect(await run()).toEqual(await run());
   });
+
+  // A rival pass (rigged.glb vs. gltfpack -si -sa on the same asset) found
+  // that GLBForge's error ladder tops out at error=0.1 (LADDER's last rung),
+  // but the joint-boundary vertices simplifyDeformingPrimitive locks form a
+  // hard floor no error tolerance crosses — confirmed directly by calling it
+  // with error values up to 1000 and seeing the triangle count stop moving.
+  // Below that floor, optimize() used to say nothing: boundBy stayed null,
+  // the returned triangle count could land 10x over the requested target,
+  // and a caller checking the profile budget alone (150,000 triangles) would
+  // see a clean pass on an asset that missed its actual ask badly. gltfpack
+  // has no such lock and lands close to any target it's given.
+  it('says so, instead of silently missing the target, when a low target would shear the rig', async () => {
+    const doc = makeRiggedCylinder();
+    const summary = await optimize(doc, {
+      profile: getProfile('mobile-hero'),
+      targetTriangles: 20,
+      textures: false,
+      compress: false,
+      verify: false,
+    });
+    expect(summary.trianglesAfter).toBeGreaterThan(20);
+    expect(summary.boundBy).toBe('locked');
+    expect(summary.steps.some((s) => s.includes('stopped short of target'))).toBe(true);
+  });
 });
 
 describe('skinned quantization', () => {
