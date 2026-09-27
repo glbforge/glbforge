@@ -86,6 +86,15 @@ the same registration into another checkout.
   into the factor, so a correct optimization scored as visible loss. Transfer
   functions live in `core/src/color.ts`; normal/ORM maps are linear data and
   must never be decoded through them.
+- **The verification renderer only shades base color.** It has no
+  metallic/roughness/specular or emissive term, and never decodes the
+  metallicRoughness or emissive texture at all — only `baseColorTexture` is
+  ever passed to a decoder. `optimize()`'s own lossy texture pass compresses
+  every slot but `normalTexture` at the same quality, so damage to those two
+  slots is invisible to the SSIM gate regardless of format or how severe it
+  is (`core/test/perceptual.test.ts`, "the SSIM gate has no shading term for
+  metallicRoughness or emissive"). A real PBR shading term is a
+  `verifyRig()`-calibration change, not a drive-by fix.
 - **Isomorphic core.** `sharp` and `node:*` are imported lazily inside Node-only
   paths; the Studio stubs `sharp` out. Browser paths get decoders/encoders
   injected (`textureEncoder`, `textureDecoder`).
