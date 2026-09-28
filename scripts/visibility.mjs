@@ -1,0 +1,169 @@
+#!/usr/bin/env node
+/**
+ * Fold the visibility-probe runs into docs/visibility/ledger.md.
+ *
+ * The question this apparatus answers is not "is GLBForge described correctly"
+ * (that is the info pass, docs-sync) but "is GLBForge FOUND at all" — does it
+ * enter the answer when an agent or a person asks an AI engine an undirected
+ * question in the words they would actually use ("what optimizes GLB files",
+ * "glb to usdz", "gltf linter for CI"), without naming the tool.
+ *
+ * The 2026-09-28 baseline was stark: named queries retrieved glbforge.dev and
+ * described the pipeline accurately (the content surface is good), but SIX of
+ * six undirected discovery queries surfaced competitors and never GLBForge —
+ * even the one niche where GLBForge is in the official MCP registry. You cannot
+ * fix what you cannot watch, so this turns each probe run into a number that
+ * moves.
+ *
+ * Same shape as scripts/ledger.mjs, and for the same reason: runs/ is
+ * append-only — one file per run, and a new file never conflicts with a run
+ * happening beside it — and this regenerates the trend from it. A run file is
+ * evidence captured at a moment; the trend is reconstructed, never hand-edited.
+ *
+ * A run file:
+ *
+ *   # Visibility run — YYYY-MM-DD — <slug>
+ *   **Engines:** perplexity, google
+ *
+ *   <one paragraph: what was asked and what the ground looked like>
+ *
+ *   ## Scores
+ *   | metric | value | note |
+ *   |---|---|---|
+ *   | undirected_surfaced | 0/6 | GLBForge in the answer at all |
+ *   | undirected_recommended | 0/6 | named among the recommended tools |
+ *   | named_correct | 2/2 | substantially accurate feature account |
+ *
+ *   ## Results
+ *   | query | category | engine | surfaced | cited | notes |
+ *   ...
+ *
+ * Only the `## Scores` `metric | k/n` rows drive the trend; everything else is
+ * the human-readable evidence the number is accountable to. A metric value that
+ * is not `k/n` (an integer over an integer) is ignored, so a run can carry
+ * prose rows in the same table.
+ *
+ *   node scripts/visibility.mjs            # regenerate the ledger
+ *   node scripts/visibility.mjs --check    # exit 1 if the committed ledger is stale (CI)
+ *
+ * On a merge conflict in ledger.md, do not resolve it by hand: take either side
+ * and re-run this.
+ */
+import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const runsDir = join(root, 'docs', 'visibility', 'runs');
+const ledgerPath = join(root, 'docs', 'visibility', 'ledger.md');
+const CHECK = process.argv.includes('--check');
+
+/** Parse one `k/n` cell into a fraction, or null if it is not one. */
+function fraction(s) {
+  const m = /^(\d+)\s*\/\s*(\d+)$/.exec(s.trim());
+  return m ? { k: Number(m[1]), n: Number(m[2]) } : null;
+}
+
+/** Pull the scores table out of one run file. */
+function parseRun(name, text) {
+  const h1 = /^#\s+Visibility run\s+—\s+(\d{4}-\d{2}-\d{2})\s+—\s+(.+?)\s*$/m.exec(text);
+  if (!h1) throw new Error(`${name}: no "# Visibility run — YYYY-MM-DD — <slug>" heading`);
+  const [, date, slug] = h1;
+  const engines = (/^\*\*Engines:\*\*\s*(.+?)\s*$/m.exec(text)?.[1] ?? '')
+    .split(',').map((e) => e.trim()).filter(Boolean);
+
+  // The `## Scores` region up to the next `## ` heading.
+  const scoresBlock = /^##\s+Scores\s*$([\s\S]*?)(?=^##\s|\Z)/m.exec(text)?.[1] ?? '';
+  const scores = new Map();
+  for (const line of scoresBlock.split('\n')) {
+    const cells = line.split('|').map((c) => c.trim());
+    // A table row is `| a | b | ... |`, so split yields a leading/trailing ''.
+    if (cells.length < 4 || cells[0] !== '') continue;
+    const metric = cells[1];
+    const frac = fraction(cells[2]);
+    if (!metric || metric === 'metric' || /^-+$/.test(metric) || !frac) continue;
+    scores.set(metric, frac);
+  }
+  if (!scores.size) throw new Error(`${name}: "## Scores" has no "metric | k/n" rows`);
+  return { file: name, date, slug, engines, scores };
+}
+
+function pct({ k, n }) {
+  return n === 0 ? '—' : `${Math.round((100 * k) / n)}%`;
+}
+
+function render(runs) {
+  // Chronological; a stable slug tiebreak keeps regeneration deterministic.
+  runs.sort((a, b) => (a.date === b.date ? a.slug.localeCompare(b.slug) : a.date.localeCompare(b.date)));
+
+  // Column labels: the date, disambiguated by slug only when a date repeats.
+  const dateCounts = new Map();
+  for (const r of runs) dateCounts.set(r.date, (dateCounts.get(r.date) ?? 0) + 1);
+  const label = (r) => (dateCounts.get(r.date) > 1 ? `${r.date} · ${r.slug}` : r.date);
+
+  // Union of metrics, first-seen order.
+  const metrics = [];
+  for (const r of runs) for (const m of r.scores.keys()) if (!metrics.includes(m)) metrics.push(m);
+
+  const out = [];
+  out.push('# Visibility ledger');
+  out.push('');
+  out.push('> GENERATED by `node scripts/visibility.mjs` from `docs/visibility/runs/*.md`.');
+  out.push('> Do not edit by hand — add a run file and regenerate. This tracks whether');
+  out.push('> GLBForge is *found* on undirected AI/search queries, not whether it is');
+  out.push('> described correctly (that is `pnpm docs:check` + the info pass).');
+  out.push('');
+
+  if (!runs.length) {
+    out.push('_No runs recorded yet. See [README.md](README.md) and run the');
+    out.push('`glbforge-visibility` skill to record the first one._');
+    out.push('');
+    return out.join('\n');
+  }
+
+  const latest = runs[runs.length - 1];
+  out.push(`**Latest:** ${latest.date} — ${latest.slug} (${latest.engines.join(', ') || 'engines unstated'}) · [run](runs/${latest.file})`);
+  out.push('');
+
+  // Trend table: metric rows × run columns, each cell k/n and its percentage.
+  out.push('## Trend');
+  out.push('');
+  out.push(`| metric | ${runs.map(label).join(' | ')} |`);
+  out.push(`|${'---|'.repeat(runs.length + 1)}`);
+  for (const m of metrics) {
+    const cells = runs.map((r) => {
+      const f = r.scores.get(m);
+      return f ? `${f.k}/${f.n} (${pct(f)})` : '–';
+    });
+    out.push(`| ${m} | ${cells.join(' | ')} |`);
+  }
+  out.push('');
+
+  // The run log, newest first, so the reader sees the current picture on top.
+  out.push('## Runs');
+  out.push('');
+  for (const r of [...runs].reverse()) {
+    const scoreLine = [...r.scores.entries()].map(([m, f]) => `${m} ${f.k}/${f.n}`).join(' · ');
+    out.push(`- **${r.date}** — [${r.slug}](runs/${r.file}) — ${r.engines.join(', ') || 'engines unstated'} — ${scoreLine}`);
+  }
+  out.push('');
+  return out.join('\n');
+}
+
+const files = (await readdir(runsDir).catch(() => []))
+  .filter((f) => f.endsWith('.md') && f !== 'ledger.md');
+const runs = [];
+for (const f of files) runs.push(parseRun(f, await readFile(join(runsDir, f), 'utf8')));
+const wanted = render(runs);
+
+if (CHECK) {
+  const current = await readFile(ledgerPath, 'utf8').catch(() => '');
+  if (current !== wanted) {
+    console.error('docs/visibility/ledger.md is stale — run `node scripts/visibility.mjs`');
+    process.exit(1);
+  }
+  console.log(`visibility ledger in step · ${runs.length} run(s)`);
+} else {
+  await writeFile(ledgerPath, wanted, 'utf8');
+  console.log(`wrote docs/visibility/ledger.md · ${runs.length} run(s)`);
+}

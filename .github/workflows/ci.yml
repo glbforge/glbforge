@@ -39,6 +39,12 @@ jobs:
       - name: Agent-loop ledger is in sync
         run: node scripts/ledger.mjs --check
 
+      # docs/visibility/ledger.md is generated from docs/visibility/runs/, same
+      # append-only reason as the agent-loop ledger: a stale index means a run
+      # file was added without regenerating, or the index was hand-edited.
+      - name: Visibility ledger is in sync
+        run: node scripts/visibility.mjs --check
+
       # The information surface is read before the code is ever run — by a
       # person on glbforge.dev and by an agent on /llms.txt — so a stale claim
       # is a defect, not a typo. This regenerates nothing: it fails when the

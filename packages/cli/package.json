@@ -50,7 +50,20 @@
     "meshopt",
     "draco",
     "ai",
-    "webgl"
+    "webgl",
+    "usdz",
+    "gltf-optimizer",
+    "glb-optimizer",
+    "glb-compression",
+    "gltf-validator",
+    "gltf-lint",
+    "3d-optimization",
+    "3d-asset-pipeline",
+    "image-to-3d",
+    "svg-to-3d",
+    "ar-quick-look",
+    "stl",
+    "3d-printing"
   ],
   "repository": {
     "type": "git",
