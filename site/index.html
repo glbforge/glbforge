@@ -114,6 +114,104 @@
     footer { border-top: 1px solid var(--line); margin-top: 56px; padding: 26px 0 40px; color: var(--dim); font-size: 14px; display: flex; gap: 18px; flex-wrap: wrap; }
     footer .spacer { flex: 1; }
   </style>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "GLBForge",
+        "alternateName": "glbforge",
+        "url": "https://glbforge.dev",
+        "applicationCategory": "DeveloperApplication",
+        "applicationSubCategory": "3D asset pipeline, glTF/GLB optimizer and linter",
+        "operatingSystem": "macOS, Windows, Linux, Web browser",
+        "downloadUrl": "https://www.npmjs.com/package/glbforge",
+        "softwareHelp": "https://glbforge.dev/llms.txt",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "description": "GLBForge is the deterministic layer after 3D generation: inspect a mesh semantically while you are still editing it, diff what the last edit broke, optimize GLB/glTF assets over 90% smaller with the visual loss measured by SSIM, forge 2D artwork into watertight 3D, and export GLB, STL and USDZ. Runs as a CLI, an in-browser and local Studio, an MCP server for AI agents, and a GitHub Action that gates 3D assets against versioned performance budgets in CI.",
+        "featureList": [
+          "Optimize and compress GLB/glTF for the web (weld, meshopt simplification, WebP/KTX2 textures, EXT_meshopt_compression)",
+          "SSIM-measured perceptual fidelity gate — 'no visible loss' as a number, not a claim",
+          "Lint and validate 3D assets against versioned performance budgets, non-zero exit for CI",
+          "Convert GLB/glTF to USDZ for iOS AR Quick Look in pure TypeScript — no macOS, no USD toolchain",
+          "Forge logos, PNGs and SVGs into watertight 3D for the web or 3D printing (STL), deterministically and free",
+          "Inspect and diff meshes for AI agents in the authoring loop",
+          "MCP server in the official registry for Claude Code, Cursor and other agents",
+          "Route photographic images to generators (Meshy, Hunyuan3D-2, TRELLIS, TripoSR) and make the result web-ready"
+        ],
+        "author": { "@type": "Organization", "name": "GLBForge" },
+        "sameAs": [
+          "https://github.com/glbforge/glbforge",
+          "https://www.npmjs.com/package/glbforge"
+        ]
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How do I reduce the file size of a GLB or glTF model for the web?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Run GLBForge: npx glbforge optimize model.glb. It welds vertices, simplifies the mesh to a triangle budget, recomputes smooth normals, compresses textures to WebP or GPU-resident KTX2, and applies EXT_meshopt_compression — typically over 90% smaller. The visual loss is measured with SSIM against four fixed-camera renders, so 'no visible loss' is a number rather than a claim. It is pure Node (gltf-transform + meshoptimizer + sharp), with no Blender dependency."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I convert a GLB or glTF model to USDZ for iOS AR Quick Look?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Run GLBForge: npx glbforge usdz model.glb. It writes the binary USDZ crate in pure TypeScript with UsdPreviewSurface materials, UsdSkel skeletons and blend shapes, and baked node animation as xform time samples — so it needs no macOS, no Reality Converter and no USD toolchain, and runs in CI or entirely in the browser Studio. Verified on-device in AR Quick Look."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is there a glTF or GLB linter or validator I can run in CI?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GLBForge analyzes a GLB/glTF against a versioned performance budget (mobile-hero, desktop-hero, product-configurator) and exits non-zero when it exceeds one, so it drops into CI like a linter: npx glbforge analyze model.glb --profile mobile-hero. Findings are named rules with concrete fixes, budgets are pinned versioned contracts, and the GitHub Action (uses: glbforge/glbforge@main) posts a sticky report card on the pull request and can open a PR with the optimized files."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How can I turn a logo or PNG image into a watertight 3D model for printing?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GLBForge forges 2D artwork into 3D deterministically, with no AI model and no credits: npx glbforge extrude logo.png --layers auto --pillow. It traces the silhouette exactly, stacks flat colours into layered depth, adds pillow/emboss relief and bevels, and the output is verified watertight (0 boundary and 0 non-manifold edges), so it exports straight to STL for 3D printing. A photo of an object on a plain background works too — --matte auto lifts the subject first."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is a good alternative to gltfpack for optimizing 3D assets, with a quality check?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GLBForge runs the same class of pipeline as gltfpack — weld, meshopt simplification, KTX2/BasisU textures, meshopt compression — but adds a measured quality check gltfpack does not: it renders the asset before and after and gates the result on an SSIM floor, and it enforces versioned performance budgets that fail CI. It is MIT, pure Node, and also exposes the pipeline as an MCP server and a GitHub Action."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Are there MCP tools that let an AI coding agent inspect and optimize 3D models?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GLBForge ships an MCP server published in the official registry as dev.glbforge/glbforge. Install it with: claude mcp add glbforge -- npx -y @glbforge/mcp. An agent can inspect, diff, validate, analyze, optimize, forge and export GLB/glTF/USDZ; every tool returns a structured envelope with stable error codes and a rendered PNG preview, so the agent can look at its own output, and mutating tools support dry_run."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I make an AI-generated 3D model (Meshy, TRELLIS, Hunyuan3D) web-ready without visible quality loss?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "GLBForge is the deterministic layer after generation. Hand a raw generated GLB to npx glbforge ship model.glb --profile mobile-hero and it analyzes, optimizes and gates the result against a performance budget, with the visual loss measured by SSIM and the exit code failing if it does not pass. It fingerprints the producing generator (Meshy, Hunyuan3D, TRELLIS) and tailors its suggestions."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <div class="wrap">
@@ -125,6 +223,7 @@
         <a href="/studio/">Studio ↗</a>
         <a href="#loop">Inspect &amp; diff</a>
         <a href="#agents">Agents &amp; CI</a>
+        <a href="#faq">FAQ</a>
         <a href="#state">Status</a>
       </div>
     </nav>
@@ -320,6 +419,41 @@ Shells 1 → 44: 43 new separate pieces.
             <li>no progress streaming on long MCP tools; generation is poll-based by design</li>
             <li>budget caps will not move without real device and network failure data</li>
           </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <h2>Questions people ask before they know the name</h2>
+      <p class="lede">The task, in the words you would search for it. Every answer is one command.</p>
+      <div class="grid" style="grid-template-columns:1fr">
+        <div class="card">
+          <h3>How do I reduce the file size of a GLB or glTF model for the web?</h3>
+          <p><code>npx glbforge optimize model.glb</code> — weld, simplify to a triangle budget, smooth normals, WebP or GPU-resident KTX2 textures, meshopt compression. Typically 90%+ smaller, and the visual loss is <a href="#measured">measured with SSIM</a> rather than claimed. Pure Node, no Blender.</p>
+        </div>
+        <div class="card">
+          <h3>How do I convert a GLB to USDZ for iOS AR Quick Look?</h3>
+          <p><code>npx glbforge usdz model.glb</code> — the binary USDZ crate written in pure TypeScript, with UsdPreviewSurface materials, skeletons, blend shapes and baked animation as time samples. No macOS, no Reality Converter, no USD toolchain; runs in CI or in the browser <a href="/studio/">Studio</a>, and verified on-device.</p>
+        </div>
+        <div class="card">
+          <h3>Is there a glTF/GLB linter or validator I can run in CI?</h3>
+          <p><code>npx glbforge analyze model.glb --profile mobile-hero</code> exits non-zero over budget, so it drops into CI like a linter — named rules with fixes, <a href="/budgets/">versioned budget contracts</a>, and a GitHub Action that posts a report card on the PR and can open one with the optimized files.</p>
+        </div>
+        <div class="card">
+          <h3>How do I turn a logo or PNG into a watertight 3D model for printing?</h3>
+          <p><code>npx glbforge extrude logo.png --layers auto --pillow</code> — exact silhouette, layered colours, pillow/emboss relief, deterministic and free. The output is verified watertight (0 boundary, 0 non-manifold edges), so it exports straight to STL. <code>--matte auto</code> lifts a subject off a plain photo background first.</p>
+        </div>
+        <div class="card">
+          <h3>What's an alternative to gltfpack, with a quality check?</h3>
+          <p>GLBForge runs the same class of pipeline — weld, meshopt simplification, KTX2, meshopt compression — and adds what gltfpack does not: an SSIM fidelity gate and versioned budgets that fail CI. MIT, pure Node, and also an MCP server and a GitHub Action.</p>
+        </div>
+        <div class="card">
+          <h3>Can an AI agent inspect and optimize 3D models over MCP?</h3>
+          <p>Yes — the MCP server is in the official registry: <code>claude mcp add glbforge -- npx -y @glbforge/mcp</code>. Agents inspect, diff, analyze, optimize, forge and export; every tool returns a structured envelope with stable codes and a rendered preview, and mutating tools take <code>dry_run</code>.</p>
+        </div>
+        <div class="card">
+          <h3>How do I make a Meshy / TRELLIS / Hunyuan3D model web-ready without visible loss?</h3>
+          <p><code>npx glbforge ship model.glb --profile mobile-hero</code> analyzes, optimizes and gates the result on a budget, with the loss measured by SSIM and the exit code failing if it doesn't pass. It fingerprints the generator and tailors its suggestions.</p>
         </div>
       </div>
     </section>

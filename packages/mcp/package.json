@@ -53,7 +53,15 @@
     "ai",
     "webgl",
     "mcp",
-    "model-context-protocol"
+    "model-context-protocol",
+    "ai-agent",
+    "claude",
+    "usdz",
+    "gltf-optimizer",
+    "glb-optimizer",
+    "gltf-validator",
+    "3d-asset-pipeline",
+    "image-to-3d"
   ],
   "repository": {
     "type": "git",

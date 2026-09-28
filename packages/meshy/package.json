@@ -39,7 +39,14 @@
     "meshopt",
     "draco",
     "ai",
-    "webgl"
+    "webgl",
+    "image-to-3d",
+    "text-to-3d",
+    "hunyuan3d",
+    "trellis",
+    "triposr",
+    "fal",
+    "ai-3d-generation"
   ],
   "repository": {
     "type": "git",
