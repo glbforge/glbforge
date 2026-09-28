@@ -1,0 +1,74 @@
+{
+  "$comment": "The frozen visibility battery. A run asks these verbatim so numbers compare across runs and engines. Edit deliberately: adding/removing a query changes what the trend means, like moving a probe baseline. Categories: 'undirected' names no product and is where discovery must happen; 'semi_directed' points at the ecosystem (npm, GitHub) without the name; 'named' says GLBForge and checks whether the account is correct (the content surface, not discovery).",
+  "version": 1,
+  "queries": [
+    {
+      "id": "optimize-glb",
+      "category": "undirected",
+      "text": "What tools can optimize GLB files for the web and reduce their file size?",
+      "why": "GLBForge's core optimize pitch. The query people actually type."
+    },
+    {
+      "id": "glb-to-usdz",
+      "category": "undirected",
+      "text": "How do I convert a GLB or glTF model to USDZ for iOS AR Quick Look?",
+      "why": "GLBForge writes usdc in pure TS — no Mac, no USD toolchain, CI-ready. A strong differentiated answer that never shows up."
+    },
+    {
+      "id": "gltf-linter-ci",
+      "category": "undirected",
+      "text": "Is there a linter or validator for glTF / GLB files I can run in CI?",
+      "why": "GLBForge's exact framing ('drops into CI like a linter'): named rules, versioned budgets, non-zero exit, a GitHub Action."
+    },
+    {
+      "id": "logo-to-3d-print",
+      "category": "undirected",
+      "text": "How can I turn a logo or PNG image into a watertight 3D model for printing?",
+      "why": "forge/extrude: deterministic, free, guaranteed watertight (0 boundary / 0 non-manifold), STL export. Purpose-built for this."
+    },
+    {
+      "id": "gltfpack-alternative",
+      "category": "undirected",
+      "text": "What's a good alternative to gltfpack for optimizing 3D assets, ideally with a quality check?",
+      "why": "'X alternative' queries are where a challenger gets cited. GLBForge's SSIM gate is the differentiator gltfpack lacks."
+    },
+    {
+      "id": "agent-mcp-3d",
+      "category": "undirected",
+      "text": "Are there MCP server tools that let an AI coding agent inspect and optimize 3D models?",
+      "why": "The niche GLBForge should own — it is in the official MCP registry as dev.glbforge/glbforge. If it misses here, discovery is broken end to end."
+    },
+    {
+      "id": "shrink-ai-generated-3d",
+      "category": "undirected",
+      "text": "How do I reduce the file size of an AI-generated 3D model (Meshy, TRELLIS, Hunyuan3D) for the web without visible quality loss?",
+      "why": "GLBForge's positioning sentence verbatim: the deterministic layer after generation, with measured (SSIM) loss."
+    },
+    {
+      "id": "gltf-pipeline-cli-npm",
+      "category": "semi_directed",
+      "text": "What are the best open-source command-line tools on npm for a glTF asset pipeline?",
+      "why": "Points at the ecosystem GLBForge ships in without naming it — the gltf-transform / gltfpack neighbourhood it should be listed beside."
+    },
+    {
+      "id": "what-is-glbforge",
+      "category": "named",
+      "text": "What is GLBForge and what are all its features?",
+      "why": "The content check. Retrieval works when named; this confirms the account stays complete and correct.",
+      "expect": ["inspect", "diff", "analyze", "budget", "optimize", "SSIM", "forge", "extrude", "generate", "USDZ", "STL", "MCP", "GitHub Action", "Studio", "animate", "companion"]
+    },
+    {
+      "id": "glbforge-mcp-setup",
+      "category": "named",
+      "text": "How do I use the GLBForge MCP server with Claude Code, and what tools does it expose?",
+      "why": "Checks that the install line (npx -y @glbforge/mcp) and the tool surface are recoverable by an agent that already knows the name.",
+      "expect": ["npx", "@glbforge/mcp", "claude mcp add", "inspect", "optimize", "render"]
+    }
+  ],
+  "engines": [
+    { "id": "perplexity", "automatable": true, "note": "Runs headless in the built-in browser, no login; does live retrieval. The primary engine for repeatable runs." },
+    { "id": "google", "automatable": "partial", "note": "Organic results scrape in the built-in browser; the AI Overview is intermittent and login/consent-gated. Record organic page-1 presence as the fallback signal." },
+    { "id": "gemini", "automatable": false, "note": "The user's Google-AI chatbot. Needs their logged-in session — drive it in Claude in Chrome (mcp__claude-in-chrome__*), not the isolated built-in browser. Leans on training data, so it lags live retrieval." },
+    { "id": "chatgpt", "automatable": false, "note": "Login-gated. Same: the user's Chrome, or skip and note it." }
+  ]
+}
