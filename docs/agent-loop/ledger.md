@@ -12,7 +12,7 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**0 open** · 14 closed · 14 passes
+**0 open** · 14 closed · 15 passes
 
 ## Open
 
@@ -48,13 +48,14 @@ Least recently used first. A pass takes the top one — see
 | integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
-| newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| newcomer | 2 | [2026-09-28](passes/2026-09-28-newcomer-animate-to-ar.md) |
 
 ## Passes
 
+- **2026-09-28** — [2026-09-28-newcomer-animate-to-ar](passes/2026-09-28-newcomer-animate-to-ar.md) — *newcomer* — `289eacd` — nothing to fix
 - **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
 - **2026-09-26** — [2026-09-26-info-l4-mechanized](passes/2026-09-26-info-l4-mechanized.md) — `cdccee8, scheduled, cloud sandbox` — `L4` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
