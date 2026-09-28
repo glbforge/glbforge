@@ -8,7 +8,7 @@ import {
   type SceneIR,
 } from '../src/index.js';
 import { makeRiggedCylinder } from './fixtures.js';
-import { blendShapeUndriven, meshNoMaterial, skeletonNoBoundMesh, USDA_FIXTURES, USDA_SKELETON_UNBOUND, USDA_TEXTURE_BROKEN, centimeterScale } from './agent-fixtures.js';
+import { blendShapeUndriven, meshNoMaterial, skeletonNoBoundMesh, USDA_FIXTURES, USDA_SKELETON_UNBOUND, USDA_TEXTURE_BROKEN, centimeterScale, transmissiveMaterialScene } from './agent-fixtures.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -212,6 +212,20 @@ describe('inspectors on the built-in rig', () => {
     expect(p.budget_check.pass).toBe(true);
     expect(p.file_size_bytes).toBe(1234);
     expect(() => resolvePerformanceProfile('nope')).toThrow(/Unknown performance profile/);
+  });
+
+  it('flags that draw_call_estimate does not count a transmissive material\'s real renderer cost', () => {
+    const plain = analyzePerformance(fromGltf(centimeterScale(), { format: 'glb' }), resolvePerformanceProfile('ios_ar'));
+    expect(plain.diagnostics.map((d) => d.code)).not.toContain('TRANSMISSION_DRAW_COST_UNCOUNTED');
+
+    const glass = analyzePerformance(fromGltf(transmissiveMaterialScene(), { format: 'glb' }), resolvePerformanceProfile('ios_ar'));
+    const found = glass.diagnostics.find((d) => d.code === 'TRANSMISSION_DRAW_COST_UNCOUNTED');
+    expect(found).toBeDefined();
+    expect(found!.severity).toBe('info');
+    expect(found!.data).toEqual({ materials: ['glass'] });
+    // The count itself is unaffected — one primitive is still one estimated draw call;
+    // the diagnostic exists precisely because that number understates the real cost.
+    expect(glass.draw_call_estimate).toBe(1);
   });
 
   it('validate flags AR Quick Look problems and the diff sees mutations', async () => {

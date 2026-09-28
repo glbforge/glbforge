@@ -4,6 +4,7 @@
  * .usda text files. `writeAgentFixtures(dir)` materializes all of them.
  */
 import { Document } from '@gltf-transform/core';
+import { KHRMaterialsTransmission } from '@gltf-transform/extensions';
 import { createNodeIO } from '../src/index.js';
 
 /** Grid mesh: (n+1)^2 vertices, 2n^2 triangles, optional UVs / normals, size in metres. */
@@ -39,6 +40,18 @@ export function centimeterScale(): Document {
   const mesh = makeGrid(doc, 4, 0.005, { uvs: true, normals: true });
   mesh.listPrimitives()[0].setMaterial(basicMaterial(doc));
   doc.createScene().addChild(doc.createNode('tiny').setMesh(mesh));
+  return doc;
+}
+
+/** A single primitive with a KHR_materials_transmission material — the forge's 'acrylic' preset. */
+export function transmissiveMaterialScene(): Document {
+  const doc = new Document();
+  const mesh = makeGrid(doc, 4, 1, { uvs: true, normals: true });
+  const material = basicMaterial(doc, 'glass');
+  const transmission = doc.createExtension(KHRMaterialsTransmission);
+  material.setExtension('KHR_materials_transmission', transmission.createTransmission().setTransmissionFactor(0.85));
+  mesh.listPrimitives()[0].setMaterial(material);
+  doc.createScene().addChild(doc.createNode('pane').setMesh(mesh));
   return doc;
 }
 
