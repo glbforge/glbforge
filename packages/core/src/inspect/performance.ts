@@ -97,6 +97,17 @@ export function analyzePerformance(ir: SceneIR, profile: PerformanceProfile): Pe
     diagnostics.push(diag('INSTANCING_CANDIDATE', c.prims[0], `${c.copies} separate copies of the same ${c.triangle_count}-triangle geometry: ${c.prims.join(', ')}.`, { data: { prims: c.prims, copies: c.copies } }));
   }
 
+  // Transmission (the 'acrylic' forge preset) is invisible to drawCalls: a real
+  // renderer pays for it with an extra pass over the scene's *other* opaque
+  // objects, a cost this asset's own primitive count can never predict.
+  const transmissiveMaterials = [...new Set(ir.meshes.filter((m) => m.triangleCount > 0 && m.material !== null).map((m) => m.material!))]
+    .filter((mi) => ir.materials[mi]?.unsupportedFeatures.includes('transmission'));
+  if (transmissiveMaterials.length > 0) {
+    const names = transmissiveMaterials.map((mi) => ir.materials[mi].name);
+    const worst = ir.meshes.find((m) => m.material !== null && transmissiveMaterials.includes(m.material))?.path ?? rootPath;
+    diagnostics.push(diag('TRANSMISSION_DRAW_COST_UNCOUNTED', worst, `${names.join(', ')} use KHR_materials_transmission: draw_call_estimate = ${drawCalls} counts only this asset's own primitives, not the extra opaque-scene render pass a real renderer adds for it.`, { data: { materials: names } }));
+  }
+
   const values: Record<PerformanceLimitKey, { value: number; worst: string }> = {
     max_triangles: { value: tris, worst: heaviest.path },
     max_vertices: { value: verts, worst: heaviest.path },
