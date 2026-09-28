@@ -66,6 +66,11 @@ anything not listed here is not shipped):
   scored, gated on the profile's minSsim floor (a failing SSIM fails the
   report card and the exit code, like any budget rule). "No visible loss" is
   a measured number, reported as the `fidelity/perceptual` finding.
+  EXT_meshopt_compression is on by default and most glTF loaders need a
+  decoder wired in before they'll load the result — `<model-viewer>`:
+  `ModelViewerElement.meshoptDecoderLocation = '.../meshoptimizer@0.22.0/meshopt_decoder.js'`;
+  three.js: `gltfLoader.setMeshoptDecoder(MeshoptDecoder)`. The tool/CLI
+  report this in `hint`; `compress: false` / `--no-compress` skips it.
 - Forge (deterministic 2D→3D, no AI, instant, free): marching-squares tracing
   with angle-aware smoothing, layered color extrusion with the source artwork
   projected on, pillow/emboss relief (double-sided, triangle-capped), bevels,

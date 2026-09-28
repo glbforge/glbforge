@@ -17,7 +17,7 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
-import { alignmentScore, analyze, animate, ANIMATE_PRESETS, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
+import { alignmentScore, analyze, animate, ANIMATE_PRESETS, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, MESHOPT_DECODER_HINT, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
 import { resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
@@ -79,6 +79,8 @@ async function optimizeFile(
   // fails the budget like any perf/* rule.
   if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
   if (!extra.json && !extra.silent) printDiff(before, after, summary.steps, summary.perceptual, summary.fidelityBound, summary.boundBy, summary.fidelityLostAt, summary.geometrySsimMin);
+  const compressed = extra.compress !== false;
+  if (compressed && !extra.json && !extra.silent) console.log(`\n  ${MESHOPT_DECODER_HINT}`);
 
   // Optional LOD chain: simplify further from the already-optimized doc.
   const lodFiles: Array<{ path: string; bytes: number; triangles: number; target: number; method: string }> = [];
@@ -107,6 +109,7 @@ async function optimizeFile(
     after,
     savedPct: Math.round((1 - outBytes.byteLength / bytes.byteLength) * 1000) / 10,
     lods: lodFiles,
+    ...(compressed ? { hint: MESHOPT_DECODER_HINT } : {}),
   };
   if (extra.json && !extra.silent) console.log(JSON.stringify(report, null, 2));
   return { passed: after.passed, report };
