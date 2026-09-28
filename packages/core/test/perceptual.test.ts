@@ -169,6 +169,68 @@ describe('base color transfer curves', () => {
   });
 });
 
+describe('normal map sampling', () => {
+  async function solidPng(rgb: [number, number, number], size = 16): Promise<Uint8Array> {
+    const sharp = (await import('sharp')).default;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let i = 0; i < size * size; i++) { rgba[i * 4] = rgb[0]; rgba[i * 4 + 1] = rgb[1]; rgba[i * 4 + 2] = rgb[2]; rgba[i * 4 + 3] = 255; }
+    return new Uint8Array(await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+  }
+
+  async function noisePng(size = 16): Promise<Uint8Array> {
+    const sharp = (await import('sharp')).default;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let i = 0; i < size * size * 4; i += 4) {
+      rgba[i] = Math.floor(Math.random() * 256);
+      rgba[i + 1] = Math.floor(Math.random() * 256);
+      rgba[i + 2] = Math.floor(Math.random() * 256);
+      rgba[i + 3] = 255;
+    }
+    return new Uint8Array(await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer());
+  }
+
+  async function quad(normalMap: Uint8Array): Promise<Document> {
+    const doc = new Document();
+    doc.createBuffer();
+    const buffer = doc.getRoot().listBuffers()[0];
+    const base = doc.createTexture('base').setImage(await solidPng([180, 180, 180])).setMimeType('image/png');
+    const normal = doc.createTexture('normal').setImage(normalMap).setMimeType('image/png');
+    const material = doc.createMaterial('m').setBaseColorTexture(base).setNormalTexture(normal)
+      .setRoughnessFactor(0.5).setMetallicFactor(0);
+    const positions = new Float32Array([-0.4, -0.4, 0, 0.4, -0.4, 0, -0.4, 0.4, 0, 0.4, 0.4, 0]);
+    const normals = new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]);
+    const uvs = new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]);
+    const indices = new Uint16Array([0, 1, 2, 2, 1, 3]);
+    const prim = doc.createPrimitive()
+      .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(positions).setBuffer(buffer))
+      .setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(normals).setBuffer(buffer))
+      .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(uvs).setBuffer(buffer))
+      .setIndices(doc.createAccessor().setType('SCALAR').setArray(indices).setBuffer(buffer))
+      .setMaterial(material);
+    doc.createScene('scene').addChild(doc.createNode('quad').setMesh(doc.createMesh('quad').addPrimitive(prim)));
+    return doc;
+  }
+
+  /**
+   * `optimize()` re-encodes normal maps at quality 95 specifically because,
+   * per its own comment, lossy artifacts there "show up as shading noise" —
+   * language that only makes sense if the perceptual gate can see it. It
+   * can't: the rasterizer shades from the vertex NORMAL attribute only
+   * (`harness/render.ts` never calls `getNormalTexture`), so a flat normal
+   * map and pure RGB noise render byte-identical, and `perceptualDiff` scores
+   * them ssim 1 either way. A future renderer change that starts sampling
+   * `normalTexture` is exactly the kind of shading change CLAUDE.md calls a
+   * deliberate pass of its own (frozen `verifyRig`, LFS recalibration) — this
+   * test should fail the day that happens, which is the point of it.
+   */
+  it('is invisible to the perceptual gate: SSIM cannot tell a flat normal map from pure noise', async () => {
+    const flat = await quad(await solidPng([128, 128, 255]));
+    const noisy = await quad(await noisePng());
+    const r = await perceptualDiff(flat, noisy, { size: 128, textureDecoder: sharpTextureDecoder() });
+    expect(r.ssimMin).toBe(1);
+  }, 60_000);
+});
+
 describe('readFloat', () => {
   it('denormalizes KHR_mesh_quantization integer accessors', () => {
     const doc = new Document();

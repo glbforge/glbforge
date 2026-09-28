@@ -86,6 +86,16 @@ the same registration into another checkout.
   into the factor, so a correct optimization scored as visible loss. Transfer
   functions live in `core/src/color.ts`; normal/ORM maps are linear data and
   must never be decoded through them.
+- **The renderer never samples `normalTexture`.** Shading is Gouraud from the
+  vertex `NORMAL` attribute only (`computeSmoothNormals` when the mesh has
+  none) — a material's normal map affects nothing `harness/render.ts` draws.
+  So `optimize()`'s SSIM gate cannot see a normal map getting worse: a flat
+  normal map and pure RGB noise render byte-identical (`test/perceptual.test.ts`,
+  "normal map sampling"). `optimize.ts` compresses normal maps at quality 95
+  specifically because artifacts there would "show up as shading noise" —
+  true of a real PBR renderer, not of this one. Adding normal-map sampling is
+  a shading change, so it falls under the frozen-`verifyRig()` rule above:
+  a deliberate pass of its own, not a drive-by fix.
 - **Isomorphic core.** `sharp` and `node:*` are imported lazily inside Node-only
   paths; the Studio stubs `sharp` out. Browser paths get decoders/encoders
   injected (`textureEncoder`, `textureDecoder`).
