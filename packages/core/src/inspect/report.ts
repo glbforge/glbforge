@@ -14,6 +14,7 @@
 import { CATEGORY_SIZES, parseExpectation, type Expectation, type ParsedExpectation } from '../packs/intent.js';
 import { runPacks, type RunPacksOptions } from '../packs/registry.js';
 import type { PackRunResult, RuleFinding } from '../packs/types.js';
+import { inspectAnimation } from './animation.js';
 import { classifyOrigin, sceneExtent, type OriginLandmark } from './extent.js';
 import type { SceneIR } from './ir.js';
 import { meshTopology, type MeshTopology } from './topology.js';
@@ -112,6 +113,14 @@ export interface InspectReport {
     /** Top-level node names, first eight. */
     root_names: string[];
   };
+  /** Whether this asset moves on its own; drill into inspect_animation (MCP) / inspectAnimation for skeletons, blend shapes, causes. */
+  animation: {
+    has_animation: boolean;
+    clip_count: number;
+    /** Clips whose channels actually change value, not just carry keys. */
+    moving_clip_count: number;
+    duration_seconds: number;
+  };
   findings: RuleFinding[];
   skipped: PackRunResult['skipped'];
 }
@@ -184,6 +193,10 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
   for (const r of ir.roots) visit(r, 1);
   const root_names = ir.roots.slice(0, 8).map((i) => ir.nodes[i].name);
 
+  // --- animation (facts only; skeletons/blend shapes/causes are inspect_animation's job) ---
+  const anim = inspectAnimation(ir);
+  const movingClips = anim.clips.filter((c) => c.has_motion).length;
+
   // --- plausibility: only with a declared category (table prior) or explicit range ---
   let plausibility: Plausibility = 'unknown';
   let plausibility_basis: InspectReport['scale']['plausibility_basis'] = null;
@@ -221,6 +234,7 @@ export function inspectScene(ir: SceneIR, opts: InspectOptions = {}): InspectRep
       offset_to_base_center_m: placement?.offset_to_base_center_m ?? null,
     },
     hierarchy: { nodes: realNodes.length, mesh_nodes: realNodes.filter((n) => n.meshes.length).length, depth, unapplied_transforms: unapplied, non_uniform_scale: nonUniform, mirrored, root_names },
+    animation: { has_animation: anim.has_animation, clip_count: anim.clips.length, moving_clip_count: movingClips, duration_seconds: anim.duration_seconds },
     findings: run.findings,
     skipped: run.skipped,
   };
@@ -258,6 +272,12 @@ export function summarize(r: InspectReport): string {
   if (hx.mirrored.length) bits.push(`${plural(hx.mirrored.length, 'mirrored node')}`);
   if (hx.non_uniform_scale.length) bits.push(`${plural(hx.non_uniform_scale.length, 'node')} with non-uniform scale`);
   parts.push(`${plural(hx.nodes, 'node')}${hx.depth > 1 ? ` (depth ${hx.depth})` : ''}${bits.length ? ': ' + bits.join(', ') : ', transforms applied'}.`);
+
+  if (r.animation.has_animation) {
+    const { clip_count, moving_clip_count, duration_seconds } = r.animation;
+    const moving = moving_clip_count === clip_count ? 'all moving' : moving_clip_count === 0 ? 'none moving' : `${plural(moving_clip_count, 'clip')} moving`;
+    parts.push(`${plural(clip_count, 'clip')}, ${duration_seconds.toFixed(1)} s, ${moving}.`);
+  }
 
   parts.push(r.orientation.front_source === 'declared' ? `Front: ${r.orientation.front} (declared, not measured).` : 'Front: unknown (declare it with an expectation).');
 

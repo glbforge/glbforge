@@ -213,6 +213,13 @@ export function printInspect(r: InspectReport, path: string, durationMs: number)
     console.log(pc.dim(`      ${t.name.padEnd(20)} ${parts.join('  ')}${t.dequantization ? '   (quantization encoding, not an edit)' : '   unapplied'}`));
   }
   if (h.mirrored.length) console.log(pc.dim(`      mirrored: ${h.mirrored.join(', ')}`));
+
+  if (r.animation.has_animation) {
+    const a = r.animation;
+    console.log(pc.bold('  Animation'));
+    console.log(`    clips          ${fmt(a.clip_count)} (${fmt(a.moving_clip_count)} moving)   duration ${a.duration_seconds.toFixed(1)} s${pc.dim('  — see inspect_animation (MCP) for skeletons, blend shapes, causes')}`);
+  }
+
   console.log(line);
 
   printFindings(r.findings);

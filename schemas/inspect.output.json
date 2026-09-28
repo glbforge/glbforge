@@ -843,6 +843,32 @@
               ],
               "additionalProperties": false
             },
+            "animation": {
+              "type": "object",
+              "properties": {
+                "has_animation": {
+                  "type": "boolean"
+                },
+                "clip_count": {
+                  "type": "integer"
+                },
+                "moving_clip_count": {
+                  "type": "integer",
+                  "description": "Clips whose channels actually change value, not just carry keys"
+                },
+                "duration_seconds": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "has_animation",
+                "clip_count",
+                "moving_clip_count",
+                "duration_seconds"
+              ],
+              "additionalProperties": false,
+              "description": "Whether this asset moves on its own; call inspect_animation for skeletons, blend shapes and causes"
+            },
             "findings": {
               "type": "array",
               "items": {
@@ -1115,6 +1141,7 @@
             "expectation",
             "origin",
             "hierarchy",
+            "animation",
             "findings",
             "skipped",
             "sha256"

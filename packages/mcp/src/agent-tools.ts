@@ -81,13 +81,14 @@ export function registerAgentTools(server: McpServer): void {
       'Call this after EVERY edit to a mesh — each bpy script, boolean, join, export — before deciding what to do next. ' +
       'In one sub-second call it answers what is easy to get wrong blind: is it one connected shell or several floating pieces; is it a closed solid (watertight) ' +
       'or are there holes / overlapping faces; how big it is in real metres; which way is up; where the origin sits (base centre, centre, or floating off the object); ' +
-      'whether node transforms are applied or mirrored. Read `summary` first. Every finding names a versioned rule (e.g. topo/open-edges from core-geometry@1), ' +
+      'whether node transforms are applied or mirrored; whether the asset moves on its own (clip count, how many actually change a value, total duration) — ' +
+      'so a call right after `animate` or a rig edit shows the clip landed, not just a node count. Read `summary` first. Every finding names a versioned rule (e.g. topo/open-edges from core-geometry@1), ' +
       'says whether it was measured, and carries a likely cause with its confidence plus a concrete fix; the same findings appear in errors[] with alias codes. ' +
       '`front` is always unknown (no honest heuristic exists) unless you declare it. Pass `expect` with what you meant to make ' +
       '("chair, Z-up, meters, single-shell, 0.4-1.2m tall, front -Y, watertight, origin base") and it is checked as a contract: shell count, watertight, size range, origin ' +
       'are measured and fail as errors; a bare category gives a plausibility warning from a size table with a confidence. profile decides severities: authoring (default: topology problems are warnings, ' +
       'because they are most likely the last edit\'s doing) or a web budget such as mobile-hero (topology is informational). ' +
-      'For per-mesh detail behind a finding use inspect_geometry; for materials, animation and budgets use inspect_all.',
+      'For per-mesh detail behind a finding use inspect_geometry; for skeletons, blend shapes and root motion use inspect_animation; for materials and budgets use inspect_all.',
     inputSchema: {
       path: PATH,
       expect: z.union([z.string(), ExpectationSchema]).optional().describe('What you meant to make, free text ("chair, Z-up, single-shell, 0.4-1.2m tall, front -Y") or structured. Adds the intent@1 pack; unparsed tokens are reported'),
