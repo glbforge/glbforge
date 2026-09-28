@@ -113,6 +113,9 @@ describe('agent-friendly MCP surface', () => {
     expect(res.fidelity.passed).toBeTypeOf('boolean');
     expect(res.after.visualFidelity.ssimMin).toBe(res.fidelity.ssimMin);
     expect(image(r)).toBeDefined();
+    // compress defaults to true (EXT_meshopt_compression) — <model-viewer> and plain
+    // three.js don't decode it without extra wiring, so the reply says so.
+    expect(res.hint).toMatch(/meshopt/i);
   }, 60_000);
 
   it('render_preview returns a deterministic 2x2 turntable and can save it', async () => {
@@ -163,6 +166,7 @@ describe('agent-friendly MCP surface', () => {
     const r = (await client.callTool({ name: 'optimize_glb', arguments: { path: glb, out, targetTriangles: 120, compress: false } })) as Result;
     const res = parse(r);
     expect(res.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(res.hint).toBeUndefined(); // compress:false skips meshopt, so there's no decoder to wire in
     if (!res.fidelity.passed) {
       const png = Buffer.from(image(r)!.data!, 'base64');
       expect(png.readUInt32BE(16)).toBe(256 * 3);

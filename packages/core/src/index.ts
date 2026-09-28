@@ -2,7 +2,7 @@ export * from './types.js';
 export { PROFILES, PROFILE_VERSIONS, CAP_KEYS, BUDGET_METHODOLOGY_URL, getProfile, profileLabel } from './profiles.js';
 export { analyze, type AnalyzeOptions } from './analyze/index.js';
 export { runRules, RULE_IDS } from './rules.js';
-export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncoder } from './optimize.js';
+export { optimize, type OptimizeOptions, type OptimizeSummary, type TextureEncoder, MESHOPT_DECODER_HINT } from './optimize.js';
 export { createNodeIO } from './io.js';
 export { extrudeImage, extrudeFromRgba, previewMatte, parseHexColor, type ExtrudeOptions, type ExtrudeResult, type LayerInfo } from './extrude/index.js';
 export { measureFlatness, type Flatness } from './extrude/layers.js';

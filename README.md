@@ -147,6 +147,16 @@ dedup → weld → meshopt-simplify to budget (error ladder) → fill missing
 normals → texture resize + WebP (normal maps near-lossless) → prune →
 EXT_meshopt_compression → **perceptual verification**.
 
+Compression is on by default, and the output needs a decoder wired in on the
+consuming side or it never renders: `<model-viewer>` and plain three.js
+`GLTFLoader` both throw `setMeshoptDecoder must be called before loading
+compressed files` on a `.web.glb` otherwise. `<model-viewer>`:
+`ModelViewerElement.meshoptDecoderLocation =
+'https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_decoder.js'`.
+three.js: `import { MeshoptDecoder } from 'meshoptimizer';
+gltfLoader.setMeshoptDecoder(MeshoptDecoder)`. `optimize`/`optimize_glb`
+report this in `hint`; `--no-compress` (`compress: false`) skips it.
+
 ### "No visible loss" is measured, not claimed
 
 Every `optimize`/`ship` renders the asset from four fixed cameras before and

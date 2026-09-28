@@ -21,6 +21,22 @@ import { analyzeGeometry, sceneDrawCalls, sceneTriangles } from './analyze/geome
 import { isDeforming, simplifyDeformingPrimitive } from './skinning.js';
 
 /**
+ * `optimize()` compresses geometry with EXT_meshopt_compression by default
+ * (`compress: false` to opt out). Neither <model-viewer> nor a plain
+ * three.js GLTFLoader decode that extension out of the box — both throw
+ * "setMeshoptDecoder must be called before loading compressed files" and
+ * never render the asset unless the host page wires a decoder in first.
+ * Surfaced from the CLI and MCP tool output so an agent sees it before it
+ * ships a file that silently fails to load in its own stated target.
+ */
+export const MESHOPT_DECODER_HINT =
+  'Compressed with EXT_meshopt_compression: <model-viewer> and plain three.js need a decoder wired in before ' +
+  'this will load, or GLTFLoader throws "setMeshoptDecoder must be called". <model-viewer>: ' +
+  "ModelViewerElement.meshoptDecoderLocation = 'https://cdn.jsdelivr.net/npm/meshoptimizer@0.22.0/meshopt_decoder.js'. " +
+  "three.js: import { MeshoptDecoder } from 'meshoptimizer'; gltfLoader.setMeshoptDecoder(MeshoptDecoder). " +
+  'Pass compress:false to skip compression instead.';
+
+/**
  * Environment-specific texture recompressor. Given the encoded source image
  * and its material slots, return re-encoded bytes (resized to maxSize) or
  * null to leave the texture untouched. Node's default uses sharp; browsers
