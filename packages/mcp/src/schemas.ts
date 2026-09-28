@@ -237,6 +237,10 @@ export const InspectDataSchema = z.object({
     unapplied_transforms: z.array(z.object({ prim_path: z.string(), name: z.string(), translation: vec3, rotation_deg: z.number(), scale: vec3, dequantization: z.boolean().describe('true = the KHR_mesh_quantization encoding, not an unapplied edit') })),
     non_uniform_scale: z.array(z.string()), mirrored: z.array(z.string()), root_names: z.array(z.string()),
   }),
+  animation: z.object({
+    has_animation: z.boolean(), clip_count: z.number().int(), moving_clip_count: z.number().int().describe('Clips whose channels actually change value, not just carry keys'),
+    duration_seconds: z.number(),
+  }).describe('Whether this asset moves on its own; call inspect_animation for skeletons, blend shapes and causes'),
   findings: z.array(RuleFindingSchema).describe('Problems only, errors first; the same items appear in errors[] as diagnostics'),
   skipped: z.array(z.object({ rule: z.string(), reason: z.string() })).describe('Rules not evaluated (e.g. topology disabled) — never silently absent'),
   sha256: z.string(),

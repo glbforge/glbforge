@@ -68,9 +68,14 @@ answers everything in tens of ms).
   (first walk: T1–T10, three fixed); the companion has an embedded Claude
   Agent SDK brain and an external-brain channel so any MCP client can be the
   character
-- [ ] From the first task walk: `inspect` should say an asset moves (T1);
-  USDZ node counts include material prims (T4); pinned profiles are silent
-  about newer versions (T5); no CLI verb reaches the companion (T7)
+- [x] `inspect` says an asset moves (T1, 2026-09-28): `inspectScene` now also
+  runs `inspectAnimation` and reports clip count / how many actually change a
+  value / total duration, both in the one-paragraph summary and as a CLI
+  `Animation` section; skeletons, blend shapes and root motion stay
+  `inspect_animation`'s job
+- [ ] From the first task walk, still open: USDZ node counts include
+  material prims (T4); pinned profiles are silent about newer versions (T5);
+  no CLI verb reaches the companion (T7)
 - [ ] Pipeline tickets from the dogfood table: forge wall winding vs normals
   disagree on 100% of wall faces; ~~layered forge stacks by node translation~~
   (baked into vertices 2026-09-11, layer nodes are identity);

@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Document } from '@gltf-transform/core';
-import { createNodeIO, fromGltf, getProfile, inspectScene, profileLabel, runPacks } from '../src/index.js';
+import { animate, createNodeIO, fromGltf, getProfile, inspectScene, profileLabel, runPacks } from '../src/index.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -160,5 +160,17 @@ describe('inspectScene facts', () => {
     expect(r.provenance.optimized).toBe(true);
     expect(r.summary).toMatch(/^1 mesh, 150,000 triangles, 1\.43 × 1\.90 × 1\.28 m, Y-up\. One shell, not watertight\. Origin at the bounding-box centre, 0\.95 m above the base\. 1 node: 1 quantized mesh node \(node transform is the encoding\)\. Front: unknown/);
     expect(r.summary).toMatch(/WARNING topo\/non-manifold: mesh has 152 non-manifold edges/);
+  });
+
+  it('says whether the asset moves: silent on a static mesh, clip count/moving/duration once animate() bakes a clip (T1)', () => {
+    const doc = sceneDoc([{ name: 'box', mesh: cube([-0.5, 0, -0.5]) }]);
+    const staticReport = inspectScene(fromGltf(doc, { format: 'glb' }));
+    expect(staticReport.animation).toEqual({ has_animation: false, clip_count: 0, moving_clip_count: 0, duration_seconds: 0 });
+    expect(staticReport.summary).not.toMatch(/clip/);
+
+    animate(doc, { preset: 'idle', duration: 2 });
+    const animatedReport = inspectScene(fromGltf(doc, { format: 'glb' }));
+    expect(animatedReport.animation).toEqual({ has_animation: true, clip_count: 1, moving_clip_count: 1, duration_seconds: 2 });
+    expect(animatedReport.summary).toMatch(/1 clip, 2\.0 s, all moving\./);
   });
 });

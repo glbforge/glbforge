@@ -47,7 +47,7 @@ Timings, from the tools' own `duration_ms` (MCP) or `time` (CLI):
 
 ## Findings
 
-### T1 · `open` · `inspect` does not say the asset moves
+### T1 · `fixed` (2026-09-28) · `inspect` does not say the asset moves
 
 Step 5: the inspect summary lists the new root `GLBForge_Pivot` and 3 nodes,
 but never that the file now carries two clips. An agent that just ran
@@ -56,7 +56,10 @@ at — sees nothing changed except a node count. The CLI has no animation read
 at all (`inspect_animation` exists on the MCP only). The `animate` command
 now says so in its `next:` line, but the honest fix is one sentence in the
 inspect summary: "2 clips, 6.0 s, all moving" when `has_animation`, and a
-`--animation` section on the CLI.
+`--animation` section on the CLI. Fixed 2026-09-28: `inspectScene` now runs
+`inspectAnimation` and adds exactly that sentence, plus an unconditional
+`Animation` section in the CLI's text output (no new flag — the fact is
+cheap enough to always compute, matching Topology/Hierarchy).
 
 ### T2 · `fixed` · `ROOT_MOTION` fired on a closed-loop bob and advised deleting it
 
