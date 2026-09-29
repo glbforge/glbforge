@@ -17,8 +17,27 @@ async function createIO(): Promise<NodeIO> {
       'meshopt.encoder': MeshoptEncoder,
     });
 }
+
+/**
+ * `io.readBinary` on its own throws whatever gltf-transform (or a
+ * malformed-input crash inside it, e.g. a zero-length binary chunk) hands
+ * back — no filename, no indication it was a parse failure. Every command
+ * used to let that propagate straight to the top-level `.catch`, which
+ * prints only `err.message`: "Cannot read properties of undefined (reading
+ * 'buffer')" with no clue which file or that it was even about reading a
+ * GLB. `loadScene` (used by `inspect`/`diff`) already frames the same class
+ * of failure as "<file> could not be parsed as glb: <reason>"; this gives
+ * every other command that same framing instead of reimplementing it.
+ */
+async function readGlb(io: NodeIO, bytes: Uint8Array, path: string) {
+  try {
+    return await io.readBinary(bytes);
+  } catch (err) {
+    throw new Error(`${basename(path)} could not be parsed as glb: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 import { alignmentScore, analyze, animate, ANIMATE_PRESETS, applyPerceptualVerdict, auditDirectory, buildLod, cliSession, clearUsage, diffAssets, extrudeImage, previewMatte, getProfile, inspectScene, loadScene, optimize, OUTPUT_PATTERN, PACK_VERSIONS, parseHexColor, perceptualDiff, PROFILES, recordUsage, renderViews, RULE_PROFILE_VERSIONS, setUsageEnabled, sharpTextureDecoder, toStl, toUsdz, usageSummary } from '@glbforge/core';
-import { resolve as resolvePath } from 'node:path';
+import { basename, resolve as resolvePath } from 'node:path';
 
 /** Opt-in local usage event (see core/usage.ts); never throws, never networked. */
 const usage = (tool: string, path: string, extra: { sha256?: string | null; edge?: { from: string; to: string } | null; lineage?: string | null; duration_ms: number; ok: boolean }) =>
@@ -51,7 +70,7 @@ async function optimizeFile(
   const profile = getProfile(profileName);
   const bytes = await readFile(input);
   const io = await createIO();
-  const doc = await io.readBinary(new Uint8Array(bytes));
+  const doc = await readGlb(io, new Uint8Array(bytes), input);
   doc.setLogger(new Logger(Logger.Verbosity.ERROR));
 
   // Topology runs on both sides: the report card this prints must equal what
@@ -72,7 +91,7 @@ async function optimizeFile(
   await writeFile(output, outBytes);
 
   // Re-analyze the actual written file so the diff reflects reality.
-  const after = analyze(await io.readBinary(outBytes), {
+  const after = analyze(await readGlb(io, outBytes, output), {
     profile, filePath: output, fileBytes: outBytes.byteLength,
   });
   // The measured visual verdict is part of the report card: a failing SSIM
@@ -85,7 +104,7 @@ async function optimizeFile(
   if (extra.lods) {
     const targets = extra.lods.split(',').map((t) => parseInt(t.trim(), 10));
     for (let i = 0; i < targets.length; i++) {
-      const lodDoc = await io.readBinary(outBytes);
+      const lodDoc = await readGlb(io, outBytes, output);
       lodDoc.setLogger(new Logger(Logger.Verbosity.ERROR));
       const lod = await buildLod(lodDoc, targets[i], { profile, compress: extra.compress });
       const lodPath = output.replace(/\.glb$/i, `.lod${i + 1}.glb`);
@@ -140,7 +159,7 @@ program
     const bytes = await readFile(file);
 
     const io = await createIO();
-    const doc = await io.readBinary(new Uint8Array(bytes));
+    const doc = await readGlb(io, new Uint8Array(bytes), file);
 
     const result = analyze(doc, {
       profile,
@@ -651,8 +670,8 @@ program
     profile: string; minSsim?: number; size: number; textures: boolean; json?: boolean;
   }) => {
     const io = await createIO();
-    const candDoc = await io.readBinary(new Uint8Array(await readFile(candidate)));
-    const refDoc = await io.readBinary(new Uint8Array(await readFile(reference)));
+    const candDoc = await readGlb(io, new Uint8Array(await readFile(candidate)), candidate);
+    const refDoc = await readGlb(io, new Uint8Array(await readFile(reference)), reference);
     const threshold = opts.minSsim ?? getProfile(opts.profile).minSsim;
     const result = await perceptualDiff(refDoc, candDoc, {
       size: opts.size, textureDecoder: opts.textures ? sharpTextureDecoder() : undefined,
@@ -678,8 +697,8 @@ program
   .option('--json', 'emit JSON')
   .action(async (candidate: string, reference: string, opts: { samples: number; json?: boolean }) => {
     const io = await createIO();
-    const candDoc = await io.readBinary(new Uint8Array(await readFile(candidate)));
-    const refDoc = await io.readBinary(new Uint8Array(await readFile(reference)));
+    const candDoc = await readGlb(io, new Uint8Array(await readFile(candidate)), candidate);
+    const refDoc = await readGlb(io, new Uint8Array(await readFile(reference)), reference);
     const score = alignmentScore(candDoc, refDoc, { samples: opts.samples });
     if (opts.json) return void console.log(JSON.stringify(score, null, 2));
     console.log(`  proportion IoU   ${(score.proportion * 100).toFixed(1)}%`);
@@ -705,7 +724,7 @@ program
       const name = basename(file, '.glb');
       const sampleDir = joinPath(opts.out, name);
       await mkdir(sampleDir, { recursive: true });
-      const doc = await io.readBinary(new Uint8Array(await readFile(joinPath(dir, file))));
+      const doc = await readGlb(io, new Uint8Array(await readFile(joinPath(dir, file))), joinPath(dir, file));
       const views = await renderViews(doc, { size: opts.size });
       const cameraIndex: Record<string, unknown> = {};
       for (const view of views) {
@@ -732,7 +751,7 @@ program
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.stl';
     const bytes = await readFile(file);
     const io = await createIO();
-    const doc = await io.readBinary(new Uint8Array(bytes));
+    const doc = await readGlb(io, new Uint8Array(bytes), file);
 
     // Printability check: slicers want watertight geometry.
     const report = analyze(doc, { profile: getProfile('mobile-hero') });
@@ -769,7 +788,7 @@ program
   .action(async (file: string, opts: { out?: string; jpeg?: boolean; usda?: boolean; json?: boolean }) => {
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + '.usdz';
     const io = await createIO();
-    const doc = await io.readBinary(new Uint8Array(await readFile(file)));
+    const doc = await readGlb(io, new Uint8Array(await readFile(file)), file);
     doc.setLogger(new Logger(Logger.Verbosity.ERROR));
     const result = await toUsdz(doc, { colorFormat: opts.jpeg ? 'jpeg' : 'png', format: opts.usda ? 'usda' : 'usdc' });
     await writeFile(outPath, result.usdz);
@@ -797,7 +816,7 @@ program
     const started = Date.now();
     const outPath = opts.out ?? file.replace(/\.glb$/i, '') + `.${opts.preset}.glb`;
     const io = await createIO();
-    const doc = await io.readBinary(new Uint8Array(await readFile(file)));
+    const doc = await readGlb(io, new Uint8Array(await readFile(file)), file);
     doc.setLogger(new Logger(Logger.Verbosity.ERROR));
     const result = animate(doc, { preset: opts.preset as (typeof ANIMATE_PRESETS)[number], duration: opts.duration, amplitude: opts.amplitude, fps: opts.fps, name: opts.name });
     const bytes = await io.writeBinary(doc);
