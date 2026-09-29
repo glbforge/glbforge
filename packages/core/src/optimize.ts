@@ -490,7 +490,7 @@ export async function optimize(
   await doc.transform(prune());
 
   if (opts.compress !== false) {
-    await doc.transform(meshopt({ encoder: MeshoptEncoder, level: 'medium' }));
+    await doc.transform(meshopt({ encoder: MeshoptEncoder, level: 'high' }));
     steps.push('meshopt');
     // meshopt quantizes positions/UVs/normals to int16/uint16, and
     // quantization merges values that were distinct in float space: about

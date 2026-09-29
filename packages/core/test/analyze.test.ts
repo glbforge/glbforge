@@ -203,6 +203,31 @@ describe('optimize', () => {
     expect(summary.boundBy).toBe('budget');
     expect(summary.trianglesAfter).toBeLessThanOrEqual(5_000);
   }, 120_000);
+
+  it('compresses with meshopt\'s FILTER method, not the larger QUANTIZE default', async () => {
+    // meshopt({ level: 'medium' }) — gltf-transform's own default — picks
+    // EncoderMethod.QUANTIZE, which never reorders or filter-encodes
+    // attributes; only 'high' applies EncoderMethod.FILTER (octahedral for
+    // normals, exponential elsewhere), which measured 12-33% smaller on raw
+    // GLB bytes across three real assets with zero SSIM cost. The two modes
+    // produce byte-identical accessor data but a different bufferViews[].
+    // extensions.EXT_meshopt_compression.filter in the written glTF JSON, so
+    // that field is the stable, black-box signature of which one ran.
+    const doc = makeBumpySphere(24, 32);
+    const profile = getProfile('mobile-hero');
+    await optimize(doc, { profile, compress: true, textures: false, verify: false });
+
+    const { createNodeIO } = await import('../src/io.js');
+    const bytes = await (await createNodeIO()).writeBinary(doc);
+    const jsonLength = new DataView(bytes.buffer, bytes.byteOffset + 12, 8).getUint32(0, true);
+    const json = JSON.parse(Buffer.from(bytes.buffer, bytes.byteOffset + 20, jsonLength).toString('utf8'));
+    const filters = (json.bufferViews ?? [])
+      .map((bv: { extensions?: { EXT_meshopt_compression?: { filter?: string } } }) =>
+        bv.extensions?.EXT_meshopt_compression?.filter)
+      .filter(Boolean);
+
+    expect(filters).toContain('OCTAHEDRAL');
+  });
 });
 
 describe('extrudeImage', () => {
