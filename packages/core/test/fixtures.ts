@@ -16,7 +16,9 @@ export function makeRiggedCylinder(rings = 24, segments = 32): Document {
       const i = r * segments + s;
       const a = (s / segments) * Math.PI * 2;
       positions[i * 3] = Math.cos(a) * 0.3; positions[i * 3 + 1] = y; positions[i * 3 + 2] = Math.sin(a) * 0.3;
-      joints[i * 4 + 1] = 1;
+      // Per the glTF convention (and gltf-validator's ACCESSOR_JOINTS_USED_ZERO_WEIGHT check),
+      // a joint index paired with a zero weight must be 0, not just unused.
+      if (w1 > 0) joints[i * 4 + 1] = 1;
       weights[i * 4] = 1 - w1; weights[i * 4 + 1] = w1;
       const k = Math.max(0, 1 - Math.abs(y - 1) / 0.25);
       bulge[i * 3] = Math.cos(a) * 0.15 * k; bulge[i * 3 + 2] = Math.sin(a) * 0.15 * k;
