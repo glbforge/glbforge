@@ -289,7 +289,7 @@ const RULES: Record<string, Rule> = {
       ruleId: 'tex/vram-estimate',
       severity: 'warn',
       message: `Textures decode to ~${mb(r.textureVramTotal)} of GPU memory (file size is not GPU size: WebP/JPEG/PNG upload as raw RGBA). Budget for ${r.profile.name} is ${mb(r.profile.maxTextureVramBytes)}.`,
-      suggestion: 'Use KTX2/BasisU (stays compressed on the GPU, ~8x less memory) or reduce texture dimensions.',
+      suggestion: 'Use KTX2/BasisU (stays compressed on the GPU, ~4-8x less memory) or reduce texture dimensions.',
       data: { vram: r.textureVramTotal, max: r.profile.maxTextureVramBytes },
     };
   },

@@ -64,11 +64,19 @@ export function undecodableTexture(t: { bytes: number; mimeType: string | null; 
   return t.bytes > 0 && !!t.mimeType && SIZEABLE.test(t.mimeType) && t.width === null;
 }
 
-/** Estimated GPU bytes once uploaded: RGBA8 + mips; KTX2 stays ~4bpp. */
-function estimateVram(width: number | null, height: number | null, mimeType: string): number {
+/**
+ * Estimated GPU bytes once uploaded: RGBA8 + mips for anything else; for
+ * KTX2/BasisU it depends on which of the two formats `ktx2Compress` picked
+ * for that slot (see ktx2.ts) — ETC1S (color maps) transcodes to ~4bpp
+ * (BC1/ETC1), UASTC (normal maps, chosen there for quality) to ~8bpp
+ * (BC7/ASTC). Using one bit rate for both overstates color textures by 2x,
+ * exactly the gap `profiles.ts`'s own "~4-8x less" already tells the budget
+ * rationale to expect.
+ */
+function estimateVram(width: number | null, height: number | null, mimeType: string, isNormalMap: boolean): number {
   if (!width || !height) return 0;
-  const base = mimeType === 'image/ktx2' ? width * height : width * height * 4;
-  return Math.round(base * 1.33);
+  const bytesPerPixel = mimeType === 'image/ktx2' ? (isNormalMap ? 1 : 0.5) : 4;
+  return Math.round(width * height * bytesPerPixel * 1.33);
 }
 
 export function analyzeMaterials(doc: Document): {
@@ -84,6 +92,8 @@ export function analyzeMaterials(doc: Document): {
   const materialStats: MaterialStats[] = [];
   // Texture -> "material/slot" references, for the report.
   const textureRefs = new Map<Texture, string[]>();
+  // Textures used as a normal map anywhere — ktx2Compress encodes these UASTC, not ETC1S.
+  const textureIsNormal = new Set<Texture>();
   // Render-state fingerprint -> material names, for duplicate detection.
   const fingerprints = new Map<string, string[]>();
 
@@ -97,6 +107,7 @@ export function analyzeMaterials(doc: Document): {
       const refs = textureRefs.get(tex) ?? [];
       refs.push(`${name}/${slot}`);
       textureRefs.set(tex, refs);
+      if (slot === 'normal') textureIsNormal.add(tex);
     }
     materialStats.push({
       name,
@@ -135,7 +146,7 @@ export function analyzeMaterials(doc: Document): {
     const bytes = image?.byteLength ?? 0;
     textureBytesTotal += bytes;
     const size = imageSize(image, tex.getMimeType());
-    const vramBytes = estimateVram(size?.[0] ?? null, size?.[1] ?? null, tex.getMimeType());
+    const vramBytes = estimateVram(size?.[0] ?? null, size?.[1] ?? null, tex.getMimeType(), textureIsNormal.has(tex));
     textureVramTotal += vramBytes;
     textures.push({
       name: tex.getName() || tex.getURI() || '(embedded)',

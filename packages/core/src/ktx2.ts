@@ -35,7 +35,7 @@ const SRGB_SLOTS = /baseColor|emissive/i;
 const NORMAL_SLOTS = /normal/i;
 
 /**
- * Re-encode every texture as KTX2 (GPU-resident compression, ~8x less video
+ * Re-encode every texture as KTX2 (GPU-resident compression, ~4-8x less video
  * memory than WebP/PNG which upload as raw RGBA). Color maps use ETC1S
  * (smallest); normal maps use UASTC (higher quality — ETC1S artifacts read
  * as shading noise on normals). Marks KHR_texture_basisu as required.
@@ -51,6 +51,15 @@ export async function ktx2Compress(
       '(preferred) or KTX-Software for `toktx`.',
     );
   }
+
+  // `ImageUtils` only knows how to read `image/ktx2` dimensions/VRAM after
+  // this runs — normally a side effect of `NodeIO`/`WebIO` reading a file
+  // that declares the extension. A Document built up in memory and never
+  // round-tripped through either (every caller here: analyze() straight
+  // after this function) never triggers that, and analyze() would silently
+  // report the texture as undecodable — width null, 0 VRAM — right after
+  // this function successfully wrote it.
+  KHRTextureBasisu.register();
 
   const textures = doc.getRoot().listTextures()
     .filter((t) => t.getMimeType() !== 'image/ktx2' && t.getImage());
@@ -75,10 +84,16 @@ export async function ktx2Compress(
       const ktxPath = path.join(workDir, `t${i}.ktx2`);
       await fs.writeFile(pngPath, await image.resize(width, height, { fit: 'fill' }).png().toBuffer());
 
+      // basisu writes its native .basis container by default — `-ktx2` is
+      // required to get an actual KTX2 file; without it, the bytes here
+      // fail the KTX2 identifier check every real loader (three.js
+      // KTX2Loader, Babylon, model-viewer) makes before transcoding, despite
+      // the `.ktx2` filename, the `image/ktx2` mimeType set below, and
+      // KHR_texture_basisu being marked required.
       const args =
         encoder === 'basisu'
           ? [
-              pngPath, '-output_file', ktxPath, '-mipmap',
+              pngPath, '-output_file', ktxPath, '-ktx2', '-mipmap',
               ...(isNormal
                 ? ['-uastc', '-uastc_level', '2', '-uastc_rdo_l', '0.5']
                 : ['-q', '160']),

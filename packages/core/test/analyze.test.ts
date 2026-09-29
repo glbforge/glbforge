@@ -520,6 +520,35 @@ describe('ktx2', () => {
     expect(result.textures[0].width).toBe(64);
     expect(result.textures[0].vramBytes).toBeLessThan(64 * 64 * 4);
   }, 60_000);
+
+  it('estimates a normal map\'s KTX2 VRAM at ~2x a same-size color map\'s: ktx2Compress picks UASTC for one, ETC1S for the other', async () => {
+    const { detectKtx2Encoder, ktx2Compress } = await import('../src/index.js');
+    const encoder = await detectKtx2Encoder();
+    if (!encoder) return; // encoder CLI not installed — skip silently
+
+    const sharp = (await import('sharp')).default;
+    const rgba = Buffer.alloc(64 * 64 * 4);
+    for (let i = 0; i < 64 * 64; i++) {
+      rgba[i * 4] = i % 256; rgba[i * 4 + 1] = (i * 7) % 256;
+      rgba[i * 4 + 2] = 90; rgba[i * 4 + 3] = 255;
+    }
+    const png = new Uint8Array(await sharp(rgba, { raw: { width: 64, height: 64, channels: 4 } }).png().toBuffer());
+
+    const doc = makeDirtyQuad();
+    const colorTex = doc.createTexture('albedo').setImage(png).setMimeType('image/png');
+    const normalTex = doc.createTexture('normal').setImage(png).setMimeType('image/png');
+    const material = doc.createMaterial('m').setBaseColorTexture(colorTex).setNormalTexture(normalTex);
+    doc.getRoot().listMeshes()[0].listPrimitives()[0].setMaterial(material);
+
+    await ktx2Compress(doc, { maxSize: 2048, encoder });
+
+    const result = analyze(doc, { profile: getProfile('mobile-hero'), topology: false });
+    const albedo = result.textures.find((t) => t.name === 'albedo')!;
+    const normal = result.textures.find((t) => t.name === 'normal')!;
+    // ETC1S (color) transcodes to ~4bpp, UASTC (normal, chosen for quality
+    // in ktx2.ts) to ~8bpp — same pixel dimensions, ~2x the estimated VRAM.
+    expect(normal.vramBytes).toBeCloseTo(albedo.vramBytes * 2, -1);
+  }, 60_000);
 });
 
 describe('toStl', () => {

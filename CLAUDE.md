@@ -86,6 +86,25 @@ the same registration into another checkout.
   into the factor, so a correct optimization scored as visible loss. Transfer
   functions live in `core/src/color.ts`; normal/ORM maps are linear data and
   must never be decoded through them.
+- **`basisu` needs `-ktx2` or it silently writes the wrong file** (`core/src/ktx2.ts`).
+  Without that flag it writes its native `.basis` container — not KTX2 — to
+  the `-output_file` path regardless of the `.ktx2` extension you gave it, so
+  the bytes fail every real loader's KTX2 identifier check (three.js
+  `KTX2Loader`, Babylon, model-viewer) despite `image/ktx2` and
+  `KHR_texture_basisu` both being set correctly. No sandbox this loop ran in
+  had `basisu`/`toktx` installed until a rival pass added one from npm
+  (`basisu` the npm package, not Homebrew) — the existing KTX2 test had been
+  silently skipping since it was written, so this shipped uncaught. Separately,
+  `analyze()`'s KTX2 dimension/VRAM read only works after
+  `KHRTextureBasisu.register()` has run, which is normally a side effect of
+  `NodeIO`/`WebIO` reading a file that declares the extension — a `Document`
+  built in memory and never round-tripped through either (exactly what
+  `ktx2Compress` then `analyze()` does) never triggers it on its own, so
+  `ktx2Compress` calls `KHRTextureBasisu.register()` itself now. Also: the
+  "~8x less VRAM than raw RGBA" line only holds for ETC1S (color maps);
+  UASTC (normal maps, chosen there for quality) is ~4x. `estimateVram`
+  (`core/src/analyze/materials.ts`) now charges the two differently instead
+  of pricing every KTX2 texture at UASTC's rate.
 - **Isomorphic core.** `sharp` and `node:*` are imported lazily inside Node-only
   paths; the Studio stubs `sharp` out. Browser paths get decoders/encoders
   injected (`textureEncoder`, `textureDecoder`).

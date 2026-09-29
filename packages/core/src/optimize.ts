@@ -37,7 +37,7 @@ export interface OptimizeOptions {
   targetTriangles?: number;
   /** Skip texture resize/re-encode (geometry-only pass). */
   textures?: boolean;
-  /** 'webp' (default, smallest file) or 'ktx2' (GPU-resident, ~8x less VRAM). */
+  /** 'webp' (default, smallest file) or 'ktx2' (GPU-resident, ~4-8x less VRAM). */
   textureFormat?: 'webp' | 'ktx2';
   /** Custom texture recompressor (browser environments). Overrides the
    *  sharp-based default; ignored when textureFormat is 'ktx2'. */
