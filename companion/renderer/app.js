@@ -5,6 +5,7 @@
  */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
@@ -37,6 +38,17 @@ const clock = new THREE.Clock();
 
 const loader = new GLTFLoader();
 loader.setMeshoptDecoder(MeshoptDecoder);
+// `glbforge optimize --ktx2` / `optimize_glb` with `textureFormat: 'ktx2'`
+// (GLBForge's own "~8x less VRAM" texture path) requires a registered
+// KTX2Loader, or GLTFLoader.parse throws synchronously before rendering
+// anything. The transcoder WASM ships inside the `three` package itself;
+// main.mjs's static server already proxies /node_modules/three/* to that
+// install (see the MeshoptDecoder import above), so no extra files need to
+// be copied in.
+const ktx2Loader = new KTX2Loader()
+  .setTranscoderPath('/node_modules/three/examples/jsm/libs/basis/')
+  .detectSupport(renderer);
+loader.setKTX2Loader(ktx2Loader);
 
 function status(text, ms = 2500) { statusEl.textContent = text; statusEl.classList.add('show'); clearTimeout(status.t); status.t = setTimeout(() => statusEl.classList.remove('show'), ms); }
 function pushState(patch) { window.companion.state(patch); }

@@ -138,8 +138,10 @@ A typical authoring loop: `glbforge` `animate` → `companion_load` →
 ## What it needs from the asset
 
 - Any `.glb` three.js loads: WebP or PNG/JPEG textures, meshopt compression
-  and quantization are fine (the default `optimize` output). KTX2 textures are
-  **not** decoded here — use the `.web.glb`, not the `.ktx2.glb`.
+  and quantization are fine (the default `optimize` output). KTX2 textures
+  (`optimize --ktx2` / `.ktx2.glb`) decode too — the renderer registers a
+  `KTX2Loader` pointed at the transcoder WASM `three` ships, served by this
+  package's own local HTTP server.
 - Clips are optional. Without any, the model still gazes, hops and gestures
   (procedural, on a wrapper group). With a clip named `idle`, it plays on a
   loop; any other clip can be triggered once as a reaction.
