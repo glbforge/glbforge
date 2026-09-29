@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extrudeImage, getProfile, optimize, toUsdz } from '../src/index.js';
+import { animate, extrudeImage, getProfile, optimize, toUsdz } from '../src/index.js';
 import { Document } from '@gltf-transform/core';
 import { readFloat } from '../src/accessors.js';
 import { mul } from '../src/usd-skel.js';
@@ -183,5 +183,35 @@ describe('cloned skins share one Skeleton', () => {
 
     const { skeletons } = await usdaOf(doc);
     expect(skeletons).toBe(2);
+  });
+});
+
+describe('animate() on an already-rigged asset, through toUsdz', () => {
+  // makeRiggedCylinder ships its own "bend" clip, which rotates the `upper`
+  // joint — a node animate() never touches, but one that IS an ancestor of
+  // `upper` once animate() inserts its pivot above the whole scene. Both facts
+  // matter: the skeleton's own clip-selection must not mistake the pivot's
+  // clip for a joint clip, and the node-clip path must not mistake the joint
+  // clip for a plain node clip either — each is the other's decoy.
+
+  it('does not misclassify the pivot clip as also driving the skeleton', async () => {
+    const doc = makeRiggedCylinder();
+    animate(doc, { preset: 'bob', duration: 1, fps: 10 });
+    const { usdz, warnings } = await toUsdz(doc, { format: 'usda' });
+    expect(warnings.join(' ')).not.toMatch(/drive this skeleton/);
+    // "bend" is still the one and only clip UsdSkel carries for the rig.
+    const text = Buffer.from(usdz).toString('utf8');
+    expect(text.match(/def SkelAnimation/g)).toHaveLength(1);
+  });
+
+  it('says plainly that a skinned mesh cannot carry the pivot clip, instead of staying silent', async () => {
+    const doc = makeRiggedCylinder();
+    const result = animate(doc, { preset: 'bob', duration: 1, fps: 10 });
+    expect(result.channels).toBeGreaterThan(0); // the clip really was baked onto the pivot
+    const { warnings } = await toUsdz(doc, { format: 'usda' });
+    const w = warnings.find((m) => m.includes('bob'));
+    expect(w).toBeDefined();
+    expect(w).toMatch(/skinned mesh/);
+    expect(w).toMatch(/not reflected/);
   });
 });

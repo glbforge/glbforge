@@ -216,9 +216,22 @@ export function buildSkeleton(
   const children: UsdPrim[] = [];
   let frames = 0;
 
-  // --- Clip: the first animation that drives a joint, one of its ancestors, or a morph weight.
+  // --- Clip: the first animation that drives a joint, a connector node between two
+  //     joints, or a morph weight. The ancestor walk stops at each joint's own
+  //     topmost joint ancestor: climbing past it into whatever the caller nested the
+  //     whole skin under (animate()'s pivot, say) would credit this skeleton with
+  //     motion the node-clip export path already carries on its own, and starve that
+  //     path of ever being picked (buildUsdLayer's `nodeClips`, packages/core/src/usdz.ts).
+  const topmostJoints = new Set(joints.filter((_, i) => parentJoint[i] === null));
   const chainNodes = new Set<Node>();
-  for (const j of joints) { let n: Node | null = j; while (n) { chainNodes.add(n); n = n.listParents().find((x): x is Node => x instanceof Node) ?? null; } }
+  for (const j of joints) {
+    let n: Node | null = j;
+    while (n) {
+      chainNodes.add(n);
+      if (topmostJoints.has(n)) break;
+      n = n.listParents().find((x): x is Node => x instanceof Node) ?? null;
+    }
+  }
   const morphNodes = new Set(blendSources.map((b) => b.node));
   const drives = (a: Animation) => a.listChannels().some((c) => {
     const n = c.getTargetNode();
