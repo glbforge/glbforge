@@ -229,6 +229,12 @@ export function buildUsdLayer(
 
   // --- Skeletons: one per DISTINCT rig, under a SkelRoot; morph-only meshes get a one-joint skeleton ---
   const skins = root.listSkins();
+  // A channel that targets a joint is already carried by that joint's Skeleton
+  // (buildSkeleton, below) — the node-clip path exists for everything else
+  // (animate()'s pivot chief among them) and must not re-claim joint motion,
+  // or a clip that only moves joints gets misread as "the" node clip while the
+  // one that actually targets a plain node — animate()'s, say — is dropped.
+  const jointNodes = new Set(skins.flatMap((s) => s.listJoints()));
   // quantize() cannot put a skinned mesh's dequantization on its node — glTF
   // ignores a skinned node's transform — so it bakes the scale into the skin's
   // inverse bind matrices and clones the skin once per mesh. A Skeleton per
@@ -288,9 +294,9 @@ export function buildUsdLayer(
   // --- Node (TRS) animation: USD has one timeline, so the first clip that moves a
   //     node is baked as xformOp:transform time samples on every mesh Xform whose
   //     chain it touches (the way animate()'s pivot clip reaches AR Quick Look). ---
-  const nodeClips = root.listAnimations().filter((a) => a.listChannels().some((c) => c.getTargetNode() && c.getTargetPath() !== 'weights'));
+  const nodeClips = root.listAnimations().filter((a) => a.listChannels().some((c) => c.getTargetNode() && c.getTargetPath() !== 'weights' && !jointNodes.has(c.getTargetNode()!)));
   const nodeClip = nodeClips[0] ?? null;
-  const nodeSamplers = nodeClip ? nodeClip.listChannels().filter((c) => c.getTargetNode() && c.getTargetPath() !== 'weights').map((c) => {
+  const nodeSamplers = nodeClip ? nodeClip.listChannels().filter((c) => c.getTargetNode() && c.getTargetPath() !== 'weights' && !jointNodes.has(c.getTargetNode()!)).map((c) => {
     const s = c.getSampler()!;
     return { node: c.getTargetNode()!, path: c.getTargetPath(), times: readFloat(s.getInput()!), values: readFloat(s.getOutput()!), interpolation: s.getInterpolation() };
   }) : [];
@@ -429,8 +435,16 @@ export function buildUsdLayer(
   };
   for (const child of scene.listChildren()) visit(child);
   if (bakedNodes) frames = Math.max(frames, nodeFrames);
-  if (nodeClip && !bakedNodes && !skeletons.size) {
-    warnings.push(`Clip "${nodeClip.getName() || 'clip 0'}" moves no mesh-bearing node (skinned meshes follow their skeleton); the pose is static.`);
+  if (nodeClip && !bakedNodes && skeletons.size) {
+    // A skinned mesh sits directly under its Skeleton with no placement Xform of
+    // its own (glTF ignores a skinned node's transform; see the branch above) —
+    // so a clip that only reaches skinned meshes through their ancestors, like
+    // animate()'s pivot on an already-rigged asset, has nowhere to be baked. Said
+    // plainly rather than silently: the previous wording here described exactly
+    // this case but its condition excluded it, so it could never fire.
+    warnings.push(`Clip "${nodeClip.getName() || 'clip 0'}" moves an ancestor of a skinned mesh; UsdSkel places a skinned mesh directly under its Skeleton with no separate placement transform, so that motion is not reflected in this export.`);
+  } else if (nodeClip && !bakedNodes) {
+    warnings.push(`Clip "${nodeClip.getName() || 'clip 0'}" moves no mesh-bearing node; the pose is static.`);
   } else if (!nodeClip && !skeletons.size && root.listAnimations().length) {
     warnings.push('The animation clips carry only morph weights without a skin; the pose is static.');
   }
