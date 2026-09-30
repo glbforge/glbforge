@@ -28,7 +28,14 @@ export function detectGenerator(doc: Document): GeneratorProfile {
   const hasUVs = prims.some((p) => !!p.getAttribute('TEXCOORD_0'));
 
   if (generator.includes('glbforge')) {
-    return { guess: 'glbforge-forge', confidence: 'high', notes: ['Forged by glbforge extrude — deterministic, watertight by construction.'] };
+    return {
+      guess: 'glbforge-forge', confidence: 'high',
+      notes: [
+        'Forged by glbforge extrude — deterministic. Single-layer extrusions are watertight by ' +
+        'construction; layered or pillowed extrusions can leave a non-manifold seam where two ' +
+        'layer meshes meet — check topology (or export_stl\'s watertight field), not this note.',
+      ],
+    };
   }
 
   // Meshy exports ship through glTF-Transform with canonical texture names.

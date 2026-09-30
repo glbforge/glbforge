@@ -779,8 +779,10 @@ export function createServer(): McpServer {
     annotations: WRITES_FILES,
     description:
       'Export a GLB as binary STL for 3D printing — scaled to millimeters, rotated z-up (both reported as AXIS_CONVERTED / SCALE_CONVERTED). ' +
-      'Reports watertightness (glbforge-extruded assets are watertight by construction; ' +
-      'simplified AI meshes usually are too). Returns a thumbnail of the exported geometry. dry_run=true writes nothing.',
+      'Reports watertightness measured on the merged geometry actually written, so a seam between separately-meshed parts ' +
+      '(e.g. a layered/pillowed forge extrusion) counts even though no single mesh is non-manifold on its own. ' +
+      'Single-layer extrusions and simplified AI meshes are usually watertight; layered or pillowed ones sometimes are not — check the returned field. ' +
+      'Returns a thumbnail of the exported geometry. dry_run=true writes nothing.',
     inputSchema: {
       path: z.string().describe('Absolute path to the .glb'),
       out: z.string().describe('Absolute output path for the .stl'),
@@ -792,10 +794,13 @@ export function createServer(): McpServer {
   }, async ({ path, out, sizeMm, preview, render, dry_run }) => {
     await prepareOut(out, dry_run);
     const { doc, bytes } = await readDoc(path);
-    const report = analyze(doc, { profile: getProfile('mobile-hero') });
-    const topo = report.geometry.topology!;
     const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
-    const { stl, triangles, sizeMm: dims } = toStl(doc, { targetSizeMm: sizeMm });
+    // Watertightness is measured on the merged, printed geometry itself
+    // (toStl's own topology), not per source mesh — a seam between
+    // separately-meshed parts (e.g. glbforge's own layered/pillowed forge
+    // output) can be non-manifold only once merged, which a per-mesh check
+    // never sees.
+    const { stl, triangles, sizeMm: dims, topology: topo } = toStl(doc, { targetSizeMm: sizeMm });
     if (!dry_run) await writeFile(out, stl);
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
     const watertight = topo.boundaryEdges === 0 && topo.nonManifoldEdges === 0;

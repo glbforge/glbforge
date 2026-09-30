@@ -734,11 +734,11 @@ program
     const io = await createIO();
     const doc = await io.readBinary(new Uint8Array(bytes));
 
-    // Printability check: slicers want watertight geometry.
-    const report = analyze(doc, { profile: getProfile('mobile-hero') });
-    const topo = report.geometry.topology!;
-
-    const { stl, triangles, sizeMm } = toStl(doc, { targetSizeMm: opts.size });
+    // Printability check: slicers want watertight geometry. Measured on the
+    // merged, printed geometry itself (not per source mesh), so seams
+    // between separately-meshed parts — e.g. glbforge's own layered/pillowed
+    // forge output — can't hide behind a per-mesh check that never sees them.
+    const { stl, triangles, sizeMm, topology: topo } = toStl(doc, { targetSizeMm: opts.size });
     await writeFile(outPath, stl);
 
     const dims = sizeMm.map((v) => v.toFixed(1)).join(' x ');
