@@ -1,5 +1,7 @@
 import { Document, Node, Primitive } from '@gltf-transform/core';
 import { readFloat } from './accessors.js';
+import { meshTopology, type MeshTopology } from './inspect/topology.js';
+import type { IRMesh } from './inspect/ir.js';
 
 export interface StlOptions {
   /** Scale so the largest dimension prints at this many millimeters. Default 80. */
@@ -13,6 +15,14 @@ export interface StlResult {
   triangles: number;
   /** Final printed dimensions in millimeters. */
   sizeMm: [number, number, number];
+  /**
+   * Topology of the geometry actually written to `stl` — every mesh merged
+   * and world-transformed exactly as printed, not per-source-mesh. A part
+   * built from several meshes (glbforge's own layered/pillowed forge output
+   * among them) can be watertight mesh-by-mesh yet non-manifold once merged,
+   * at the seams between meshes; a per-mesh check never sees that.
+   */
+  topology: MeshTopology;
 }
 
 /** Multiply a column-major mat4 by a point. */
@@ -80,12 +90,19 @@ export function toStl(doc: Document, opts: StlOptions = {}): StlResult {
   );
   view.setUint32(80, triangles, true);
 
+  // Corners as printed, unindexed (one entry per triangle corner) — the
+  // exact geometry `stl` carries, positions truncated to float32 the same
+  // way `setFloat32` below stores them, so the weld the topology check does
+  // matches what a slicer's own vertex weld would find.
+  const printedPositions = new Float32Array(triangles * 9);
+
   let offset = 84;
   for (let t = 0; t < triangles; t++) {
     const i = t * 9;
     const ax = verts[i] * scale, ay = verts[i + 1] * scale, az = verts[i + 2] * scale;
     const bx = verts[i + 3] * scale, by = verts[i + 4] * scale, bz = verts[i + 5] * scale;
     const cx = verts[i + 6] * scale, cy = verts[i + 7] * scale, cz = verts[i + 8] * scale;
+    printedPositions.set([ax, ay, az, bx, by, bz, cx, cy, cz], i);
     // Face normal from winding.
     const ux = bx - ax, uy = by - ay, uz = bz - az;
     const vx = cx - ax, vy = cy - ay, vz = cz - az;
@@ -100,9 +117,23 @@ export function toStl(doc: Document, opts: StlOptions = {}): StlResult {
     offset += 2;
   }
 
+  const printedIndices = new Uint32Array(triangles * 3);
+  for (let i = 0; i < printedIndices.length; i++) printedIndices[i] = i;
+  // meshTopology only reads mode/positions/vertexCount/indices/triangleCount;
+  // the rest of IRMesh describes source authoring this synthetic, merged
+  // mesh has none of.
+  const topology = meshTopology({
+    mode: 'triangles',
+    positions: printedPositions,
+    vertexCount: triangles * 3,
+    indices: printedIndices,
+    triangleCount: triangles,
+  } as unknown as IRMesh)!;
+
   return {
     stl: new Uint8Array(buffer),
     triangles,
     sizeMm: [extent[0] * scale, extent[1] * scale, extent[2] * scale] as [number, number, number],
+    topology,
   };
 }

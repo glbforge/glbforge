@@ -535,12 +535,50 @@ describe('toStl', () => {
     const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
     const { doc } = await extrudeImage(new Uint8Array(png), { texture: false });
 
-    const { stl, triangles, sizeMm } = toStl(doc, { targetSizeMm: 50 });
+    const { stl, triangles, sizeMm, topology } = toStl(doc, { targetSizeMm: 50 });
     // Binary STL: 80B header + u32 count + 50B per triangle.
     expect(stl.byteLength).toBe(84 + triangles * 50);
     const count = new DataView(stl.buffer).getUint32(80, true);
     expect(count).toBe(triangles);
     expect(Math.max(...sizeMm)).toBeCloseTo(50, 1);
+    expect(topology.watertight).toBe(true);
+    expect(topology.boundaryEdges).toBe(0);
+    expect(topology.nonManifoldEdges).toBe(0);
+  });
+
+  it('catches a seam between layer meshes that a per-mesh check cannot see', async () => {
+    // Each color layer of a layered/pillowed extrusion is its own mesh
+    // (analyze()'s topology welds and counts edges per primitive, so a seam
+    // between two meshes never registers there — see the layered-extrusion
+    // describe block below, which is watertight by that same per-mesh
+    // measure precisely because this combination isn't exercised). Merged
+    // and world-transformed the way toStl() actually writes it, this
+    // specific combination (>=2 layers, pillow>0) leaves a non-manifold
+    // seam; toStl()'s own topology is what has to catch it.
+    const { extrudeImage, toStl, analyze, getProfile } = await import('../src/index.js');
+    const sharp = (await import('sharp')).default;
+    const size = 96;
+    const rgba = Buffer.alloc(size * size * 4);
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      if (x > 8 && x < 88 && y > 8 && y < 88) {
+        rgba[i] = 220; rgba[i + 1] = 40; rgba[i + 2] = 40; rgba[i + 3] = 255;
+        if (Math.hypot(x - 48, y - 48) < 20) { rgba[i] = 40; rgba[i + 1] = 60; rgba[i + 2] = 220; }
+      }
+    }
+    const png = await sharp(rgba, { raw: { width: size, height: size, channels: 4 } }).png().toBuffer();
+    const { doc } = await extrudeImage(new Uint8Array(png), { layers: 2, pillow: 0.03, texture: false });
+
+    // The per-mesh check (what export_stl used before this fix) misses it.
+    const legacy = analyze(doc, { profile: getProfile('mobile-hero') }).geometry.topology!;
+    expect(legacy.boundaryEdges).toBe(0);
+    expect(legacy.nonManifoldEdges).toBe(0);
+
+    // toStl()'s own topology, measured on the merged geometry it writes,
+    // catches it.
+    const { topology } = toStl(doc, { targetSizeMm: 70 });
+    expect(topology.nonManifoldEdges).toBeGreaterThan(0);
+    expect(topology.watertight).toBe(false);
   });
 });
 
