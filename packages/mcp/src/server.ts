@@ -27,7 +27,7 @@
  *   minutes and MCP clients time out long calls.
  * - Deterministic: same file + same arguments = same JSON and same pixels.
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -81,7 +81,7 @@ import { registerAgentTools, registerEnvelopeTool } from './agent-tools.js';
 import { compact, section, visualFidelityOf, type ReportSection } from './compact.js';
 import { note, plural, reply as envelopeReply, severityTail } from './envelope.js';
 import { findingsToDiagnostics } from './findings.js';
-import { prepareOut } from './outputs.js';
+import { prepareOut, writeOutAtomic } from './outputs.js';
 import { renderComparison, renderPreview, type ImageBlock, type PreviewKind } from './preview.js';
 import type { ToolName } from './schemas.js';
 
@@ -226,7 +226,7 @@ async function writeLods(
     const lod = await buildLod(lodDoc, lods![i], { profile: prof, compress });
     const lodPath = outPath.replace(/\.glb$/i, `.lod${i + 1}.glb`);
     const lodBytes = await io.writeBinary(lodDoc);
-    if (!dryRun) await writeFile(lodPath, lodBytes);
+    if (!dryRun) await writeOutAtomic(lodPath, lodBytes);
     if (lod.triangles > lods![i] * 1.15) note(diag('LOD_TARGET_MISSED', '/Asset', `LOD ${i + 1} reached ${lod.triangles.toLocaleString('en-US')} triangles against a target of ${lods![i].toLocaleString('en-US')} (${lod.method}).`, { data: { lod: i + 1, target: lods![i], triangles: lod.triangles } }));
     files.push({ path: lodPath, bytes: lodBytes.byteLength, sha256: sha256(lodBytes), target: lods![i], triangles: lod.triangles, method: lod.method });
   }
@@ -504,7 +504,7 @@ export function createServer(): McpServer {
     await prepareOut(out);
     const { doc } = await readDoc(path);
     const preview = (await renderPreview(doc, view, size))!;
-    if (out) await writeFile(out, preview.png);
+    if (out) await writeOutAtomic(out, preview.png);
     return reply({ path, views: preview.views, camera: preview.cameras[0].camera, cameras: preview.cameras, width: preview.width, height: preview.height, ...(out ? { out } : {}) },
       `Rendered ${view} of ${basename(path)} (${preview.width}x${preview.height})${out ? ` → ${out}` : ''}`, { image: preview.image });
   });
@@ -541,7 +541,7 @@ export function createServer(): McpServer {
       const before = beforeIr ? snapshotScene(beforeIr) : EMPTY_SNAPSHOT;
       const summary = await optimize(doc, { profile: prof, textureFormat, verify, targetTriangles, keepViews: true });
       const outBytes = await io.writeBinary(doc);
-      if (!dry_run) await writeFile(outPath, outBytes);
+      if (!dry_run) await writeOutAtomic(outPath, outBytes);
       const afterDoc = quiet(await io.readBinary(outBytes));
       const after = analyze(afterDoc, { profile: prof, filePath: outPath, fileBytes: outBytes.byteLength });
       if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
@@ -654,7 +654,7 @@ export function createServer(): McpServer {
     const beforeSnap = snapshotScene(beforeIr);
     const summary = await optimize(doc, { profile: prof, targetTriangles, textures, compress, textureFormat, verify, keepViews: true });
     const outBytes = await io.writeBinary(doc);
-    if (!dry_run) await writeFile(outPath, outBytes);
+    if (!dry_run) await writeOutAtomic(outPath, outBytes);
     const afterDoc = quiet(await io.readBinary(outBytes));
     const after = analyze(afterDoc, { profile: prof, filePath: outPath, fileBytes: outBytes.byteLength });
     if (summary.perceptual) applyPerceptualVerdict(after, summary.perceptual, { lostAt: summary.fidelityLostAt, geometrySsimMin: summary.geometrySsimMin });
@@ -740,7 +740,7 @@ export function createServer(): McpServer {
     });
     const io = await createNodeIO();
     const outBytes = await io.writeBinary(doc);
-    if (!dry_run) await writeFile(out, outBytes);
+    if (!dry_run) await writeOutAtomic(out, outBytes);
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
     const afterIr = await glbScene(io, outBytes, out);
     const post = postValidation(afterIr);
@@ -796,7 +796,7 @@ export function createServer(): McpServer {
     const topo = report.geometry.topology!;
     const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
     const { stl, triangles, sizeMm: dims } = toStl(doc, { targetSizeMm: sizeMm });
-    if (!dry_run) await writeFile(out, stl);
+    if (!dry_run) await writeOutAtomic(out, stl);
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
     const watertight = topo.boundaryEdges === 0 && topo.nonManifoldEdges === 0;
     const errors: Diagnostic[] = [
@@ -840,7 +840,7 @@ export function createServer(): McpServer {
     const beforeIr = fromGltf(doc, { format: 'glb', sourcePath: path, fileBytes: bytes.byteLength });
     const beforeSnap = snapshotScene(beforeIr);
     const result = await toUsdz(doc, { colorFormat: jpeg ? 'jpeg' : 'png', format });
-    if (!dry_run) await writeFile(out, result.usdz);
+    if (!dry_run) await writeOutAtomic(out, result.usdz);
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
     const { ir: afterIr, container, layer } = usdzScene(result.usdz, out);
     const post = postValidation(afterIr, { container, layer });
@@ -887,7 +887,7 @@ export function createServer(): McpServer {
     const result = animate(doc, { preset: preset as (typeof ANIMATE_PRESETS)[number], duration, amplitude, fps, name });
     const io = await createNodeIO();
     const outBytes = await io.writeBinary(doc);
-    if (!dry_run) await writeFile(out, outBytes);
+    if (!dry_run) await writeOutAtomic(out, outBytes);
     const afterIr = fromGltf(doc, { format: 'glb', sourcePath: out, fileBytes: outBytes.byteLength });
     const animation = inspectAnimation(afterIr);
     const clip = animation.clips.find((c) => c.name === result.clip) ?? null;
@@ -970,7 +970,7 @@ export function createServer(): McpServer {
     if (!out) throw new Error('pass "out" to download the finished model');
     await prepareOut(out, dry_run);
     const bytes = await client.downloadGlb(await client.resultGlbUrl(FAL_MODELS[model], requestId));
-    if (!dry_run) await writeFile(out, bytes);
+    if (!dry_run) await writeOutAtomic(out, bytes);
     const io = await createNodeIO();
     const doc = quiet(await io.readBinary(new Uint8Array(bytes)));
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);
@@ -1067,7 +1067,7 @@ export function createServer(): McpServer {
     }
     await prepareOut(out, dry_run);
     const bytes = await client.downloadModel(task, 'glb');
-    if (!dry_run) await writeFile(out, bytes);
+    if (!dry_run) await writeOutAtomic(out, bytes);
     const io = await createNodeIO();
     const doc = quiet(await io.readBinary(new Uint8Array(bytes)));
     const image = await renderPreview(doc, previewKind(preview, render) as PreviewKind);

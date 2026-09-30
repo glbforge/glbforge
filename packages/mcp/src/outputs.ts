@@ -17,8 +17,9 @@
  * `dry_run` writes nothing, so it creates nothing either: the filesystem is
  * left exactly as it was.
  */
-import { access, mkdir, stat } from 'node:fs/promises';
+import { access, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { dirname, join } from 'node:path';
 
 const unwritable = (message: string) => Object.assign(new Error(message), { code: 'OUTPUT_NOT_WRITABLE' });
@@ -50,5 +51,29 @@ export async function prepareOut(out: string | undefined, dryRun = false): Promi
   const existing = await stat(out).catch(() => null);
   if (existing?.isDirectory()) {
     throw unwritable(`Cannot write ${out}: that path is a directory. Pass "out" as the full file path, e.g. ${join(out, 'model.glb')}.`);
+  }
+}
+
+/**
+ * Write `bytes` to `out` without ever leaving a truncated or partially
+ * written file at that path.
+ *
+ * A plain `writeFile(out, bytes)` opens `out` (truncating it) and streams
+ * the buffer in; a caller killed between those write() calls — a process
+ * that outlived an orchestrator's timeout, an OOM kill, a crashed native
+ * dependency — leaves a corrupt file sitting exactly where the caller's own
+ * `existsSync(out)` check says the job is done. Writing to a sibling temp
+ * file first and renaming it over `out` makes the swap atomic on the same
+ * filesystem: `out` is either the previous complete file or the new one,
+ * never a fragment of either.
+ */
+export async function writeOutAtomic(out: string, bytes: Uint8Array): Promise<void> {
+  const tmp = join(dirname(out), `.${randomBytes(6).toString('hex')}.tmp`);
+  try {
+    await writeFile(tmp, bytes);
+    await rename(tmp, out);
+  } catch (err) {
+    await unlink(tmp).catch(() => {});
+    throw err;
   }
 }
