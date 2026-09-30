@@ -7,7 +7,6 @@
  */
 import { createHash } from 'node:crypto';
 import { basename } from 'node:path';
-import { writeFile } from 'node:fs/promises';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import {
@@ -16,7 +15,7 @@ import {
   type Diagnostic, type LoadedScene, type RawView, type RenderCamera, type SceneIR, type PerformanceProfile,
 } from '@glbforge/core';
 import { note, noteAll, plural, reply, severityTail, withContext } from './envelope.js';
-import { prepareOut } from './outputs.js';
+import { prepareOut, writeOutAtomic } from './outputs.js';
 import { renderContactSheet, renderGif, type Preview } from './preview.js';
 import { envelopeShape, ExpectationSchema, ToolDataSchemas, type ToolName } from './schemas.js';
 
@@ -278,7 +277,7 @@ export function registerAgentTools(server: McpServer): void {
     const r = await renderIR(ir, { cameras, size, time: t, animation, textures });
     const columns = view === 'turntable' ? Math.min(4, angles) : 1;
     const sheet = await renderContactSheet(r.views, r.views.map((v) => (t !== undefined ? `${v.name} @${t.toFixed(2)}s` : v.name)), columns);
-    if (out) await writeFile(out, sheet.png);
+    if (out) await writeOutAtomic(out, sheet.png);
     return reply({
       path, view, camera: cameraOf(r.views[0]), cameras: r.views.map((v) => ({ name: v.name, camera: cameraOf(v) })),
       size, width: sheet.width, height: sheet.height, columns, frame: t ?? null, triangles: r.triangles, ...(out ? { out } : {}),
@@ -332,11 +331,11 @@ export function registerAgentTools(server: McpServer): void {
     }
     const labels = list.map((f) => `f${f.frame} @${f.time_seconds.toFixed(2)}s`);
     const sheet = await renderContactSheet(views, labels, columns);
-    if (out) await writeFile(out, sheet.png);
+    if (out) await writeOutAtomic(out, sheet.png);
     let clip_file: string | null = null;
     if (include_clip) {
       clip_file = (out ?? path).replace(/\.[^.]+$/, '') + '.strip.gif';
-      try { await writeFile(clip_file, await renderGif(views, Math.round(1000 / Math.max(1, Math.min(rate, 12))))); }
+      try { await writeOutAtomic(clip_file, await renderGif(views, Math.round(1000 / Math.max(1, Math.min(rate, 12))))); }
       catch (err) { clip_file = null; note(diag('CLIP_FORMAT_UNSUPPORTED', '', `GIF encoding failed: ${err instanceof Error ? err.message : String(err)}`)); }
       note(diag('CLIP_FORMAT_UNSUPPORTED', '', 'Only animated GIF can be written with this stack (no mp4 encoder); assemble the frames with ffmpeg if you need video.'));
     }

@@ -12,11 +12,13 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**0 open** · 14 closed · 14 passes
+**1 open** · 14 closed · 15 passes
 
 ## Open
 
-Nothing open.
+| id | state | finding | first seen | last touched |
+|---|---|---|---|---|
+| `L15` | watching | MCP output writes were plain `writeFile`, so a process killed mid-write left a truncated file at the exact path a caller's existence check treats as complete | [2026-09-30](passes/2026-09-30-integrator-atomic-output-writes.md) | [2026-09-30](passes/2026-09-30-integrator-atomic-output-writes.md) |
 
 ## Closed
 
@@ -45,16 +47,17 @@ Least recently used first. A pass takes the top one — see
 | role | passes | last used |
 |---|---|---|
 | rival | 0 | **never** |
-| integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
 | newcomer | 1 | [2026-09-22](passes/2026-09-22-pass6-forge-ship-walkthrough.md) |
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| integrator | 1 | [2026-09-30](passes/2026-09-30-integrator-atomic-output-writes.md) |
 
 ## Passes
 
+- **2026-09-30** — [2026-09-30-integrator-atomic-output-writes](passes/2026-09-30-integrator-atomic-output-writes.md) — *integrator* — `289eacd` — `L15` watching
 - **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
 - **2026-09-26** — [2026-09-26-info-l4-mechanized](passes/2026-09-26-info-l4-mechanized.md) — `cdccee8, scheduled, cloud sandbox` — `L4` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
