@@ -12,11 +12,14 @@ One file per pass in [`passes/`](passes/), append-only. A later pass changes
 a finding's state by writing its own heading for that id — the newest
 mention wins, and this index is regenerated from all of them.
 
-**0 open** · 14 closed · 14 passes
+**2 open** · 14 closed · 15 passes
 
 ## Open
 
-Nothing open.
+| id | state | finding | first seen | last touched |
+|---|---|---|---|---|
+| `L15` | open | `optimize()`'s WebP-only texture path loses to AVIF on normal maps specifically, at a steep encode-time cost | [2026-10-01](passes/2026-10-01-rival-webp-vs-avif-textures.md) | [2026-10-01](passes/2026-10-01-rival-webp-vs-avif-textures.md) |
+| `L16` | open | `site/models/cat.glb`'s shipped normal map is ~7.8x larger than what `optimize()`'s current pipeline produces from the same pixels | [2026-10-01](passes/2026-10-01-rival-webp-vs-avif-textures.md) | [2026-10-01](passes/2026-10-01-rival-webp-vs-avif-textures.md) |
 
 ## Closed
 
@@ -44,7 +47,6 @@ Least recently used first. A pass takes the top one — see
 
 | role | passes | last used |
 |---|---|---|
-| rival | 0 | **never** |
 | integrator | 0 | **never** |
 | performance | 0 | **never** |
 | archaeologist | 0 | **never** |
@@ -52,9 +54,11 @@ Least recently used first. A pass takes the top one — see
 | newcomer-to-new-code | 1 | [2026-09-23](passes/2026-09-23-companion-reply-id.md) |
 | saboteur | 1 | [2026-09-23](passes/2026-09-23-gltf-path-traversal.md) |
 | auditor | 9 | [2026-09-23](passes/2026-09-23-live-check-branch-coupling.md) |
+| rival | 1 | [2026-10-01](passes/2026-10-01-rival-webp-vs-avif-textures.md) |
 
 ## Passes
 
+- **2026-10-01** — [2026-10-01-rival-webp-vs-avif-textures](passes/2026-10-01-rival-webp-vs-avif-textures.md) — *rival* — `289eacd` — `L15` open, `L16` open
 - **2026-09-26** — [2026-09-26-info](passes/2026-09-26-info.md) — `5c22f0b, manual, from the maintainer's machine` — `L12` fixed, `L13` fixed, `L14` fixed
 - **2026-09-26** — [2026-09-26-info-l4-mechanized](passes/2026-09-26-info-l4-mechanized.md) — `cdccee8, scheduled, cloud sandbox` — `L4` fixed
 - **2026-09-23** — [2026-09-23-live-check-branch-coupling](passes/2026-09-23-live-check-branch-coupling.md) — *auditor* — `manual, from the maintainer's machine` — `L9` fixed
