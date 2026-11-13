@@ -1,0 +1,15 @@
+{
+  "name": "@glbforge/worker",
+  "private": true,
+  "type": "module",
+  "description": "glbforge.dev edge API (auth, metered generation, Stripe credits). Deployed by wrangler from the repo root, never published to npm.",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "tsc --noEmit -p tsconfig.json && NODE_OPTIONS=--experimental-sqlite vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

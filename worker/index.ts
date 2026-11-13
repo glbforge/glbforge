@@ -28,19 +28,23 @@ interface Env {
   STRIPE_WEBHOOK_SECRET?: string;
 }
 
+interface D1Statement {
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  run(): Promise<{ meta: { changes: number } }>;
+  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
+}
+
 interface D1Database {
-  prepare(sql: string): {
-    bind(...args: unknown[]): {
-      first<T = Record<string, unknown>>(): Promise<T | null>;
-      run(): Promise<{ meta: { changes: number } }>;
-      all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
-    };
-  };
+  prepare(sql: string): { bind(...args: unknown[]): D1Statement };
+  /** Runs the statements in order inside one transaction: all commit or none do. */
+  batch(statements: D1Statement[]): Promise<{ meta: { changes: number } }[]>;
   exec(sql: string): Promise<unknown>;
 }
 
 const SIGNUP_CREDITS = 6;
 const MESHY_BALANCE_FLOOR = 100;
+// Stripe's own default: a signed webhook older than this is a replay.
+const STRIPE_TOLERANCE_SECONDS = 300;
 // Generation costs in GLBForge credits, tiered by provider + features.
 // Open models on GPU inference cost a fraction of Meshy upstream.
 const GEN_COST = { textured: 2, pbr: 3, hunyuan: 2, trellis: 1, triposr: 1 };
@@ -85,14 +89,35 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
   });
 
 // --- session cookies: uid.login.exp.hmac ---------------------------------
+const hmacKey = (secret: string) => crypto.subtle.importKey(
+  'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify'],
+);
+
 async function hmac(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  const sig = await crypto.subtle.sign('HMAC', await hmacKey(secret), new TextEncoder().encode(message));
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/[+/=]/g, (c) =>
     ({ '+': '-', '/': '_', '=': '' })[c]!,
   );
+}
+
+/**
+ * Check a MAC with crypto.subtle.verify, which compares in constant time.
+ * `===` on the encoded strings returns at the first differing character, and
+ * that timing is measurable from outside.
+ */
+async function hmacVerify(secret: string, message: string, signature: Uint8Array<ArrayBuffer>): Promise<boolean> {
+  return crypto.subtle.verify('HMAC', await hmacKey(secret), signature, new TextEncoder().encode(message));
+}
+
+function fromB64url(s: string): Uint8Array<ArrayBuffer> | null {
+  try {
+    return Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  } catch { return null; }
+}
+
+function fromHex(s: string): Uint8Array<ArrayBuffer> | null {
+  if (s.length === 0 || s.length % 2 !== 0 || /[^0-9a-f]/i.test(s)) return null;
+  return Uint8Array.from(s.match(/../g)!, (b) => parseInt(b, 16));
 }
 
 function b64url(s: string): string {
@@ -110,7 +135,8 @@ async function readSession(env: Env, request: Request): Promise<{ uid: string; l
   if (!match) return null;
   const [payload, sig] = match[1].split('.');
   if (!payload || !sig) return null;
-  if ((await hmac(env.SESSION_SECRET, payload)) !== sig) return null;
+  const sigBytes = fromB64url(sig);
+  if (!sigBytes || !(await hmacVerify(env.SESSION_SECRET, payload, sigBytes))) return null;
   try {
     const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as { uid: string; login: string; exp: number };
     if (data.exp < Date.now()) return null;
@@ -122,7 +148,20 @@ const sessionCookie = (value: string, maxAge: number) =>
   `gf_s=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 
 // --- storage ---------------------------------------------------------------
-async function ensureSchema(db: D1Database): Promise<void> {
+// One schema pass per isolate, not per request: this used to run five
+// statements (one of them a full-table copy) ahead of nearly every API call.
+const schemaReady = new WeakMap<D1Database, Promise<void>>();
+function ensureSchema(db: D1Database): Promise<void> {
+  let ready = schemaReady.get(db);
+  if (!ready) {
+    ready = createSchema(db);
+    ready.catch(() => schemaReady.delete(db)); // a failed pass is retried, not cached
+    schemaReady.set(db, ready);
+  }
+  return ready;
+}
+
+async function createSchema(db: D1Database): Promise<void> {
   // users_v2 keys are provider-scoped strings ('gh:123', 'gg:1042...') so
   // multiple identity providers can't collide. v1 rows migrate as GitHub.
   await db.exec(
@@ -132,7 +171,35 @@ async function ensureSchema(db: D1Database): Promise<void> {
     'CREATE TABLE IF NOT EXISTS tasks (task_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, created_at INTEGER NOT NULL);' +
     'CREATE TABLE IF NOT EXISTS purchases (session_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, credits INTEGER NOT NULL, created_at INTEGER NOT NULL);',
   );
+  // What a task cost, and whether that was given back. Tasks created before
+  // these columns existed have cost NULL and are never refunded: there is no
+  // record of what they were charged. SQLite has no ADD COLUMN IF NOT EXISTS,
+  // so "already there" arrives as an error.
+  for (const column of ['cost INTEGER', 'refunded INTEGER NOT NULL DEFAULT 0']) {
+    try {
+      await db.exec(`ALTER TABLE tasks ADD COLUMN ${column};`);
+    } catch (err) {
+      if (!/duplicate column/i.test(String(err instanceof Error ? err.message : err))) throw err;
+    }
+  }
 }
+
+/**
+ * Give a task's credits back, at most once. The credit and the `refunded`
+ * mark are one transaction; the first statement only pays out while the mark
+ * is still clear, so two polls racing on the same failed task refund once.
+ */
+async function refundTask(db: D1Database, taskId: string, uid: string): Promise<void> {
+  await db.batch([
+    db.prepare(
+      'UPDATE users_v2 SET credits = credits + (SELECT cost FROM tasks WHERE task_id = ?) ' +
+      'WHERE id = ? AND EXISTS (SELECT 1 FROM tasks WHERE task_id = ? AND user_id = ? AND refunded = 0 AND cost > 0)',
+    ).bind(taskId, uid, taskId, uid),
+    db.prepare('UPDATE tasks SET refunded = 1 WHERE task_id = ? AND user_id = ? AND refunded = 0').bind(taskId, uid),
+  ]);
+}
+
+const REFUNDED = 'generation failed — your credits were refunded';
 
 // --- meshy proxy -------------------------------------------------------------
 const MESHY = 'https://api.meshy.ai';
@@ -175,17 +242,25 @@ async function stripeCheckout(env: Env, uid: string, pack: string, origin: strin
 }
 
 async function verifyStripeSignature(env: Env, payload: string, header: string): Promise<boolean> {
-  const parts = Object.fromEntries(header.split(',').map((kv) => kv.split('=') as [string, string]));
-  if (!parts.t || !parts.v1) return false;
-  const expected = await (async () => {
-    const key = await crypto.subtle.importKey(
-      'raw', new TextEncoder().encode(env.STRIPE_WEBHOOK_SECRET!),
-      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'],
-    );
-    const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${parts.t}.${payload}`));
-    return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
-  })();
-  return expected === parts.v1;
+  // `t=<unix>,v1=<hex>[,v1=<hex>...]` — Stripe sends one v1 per active secret
+  // while a secret is being rolled, so every v1 is a candidate, not just one.
+  let timestamp = '';
+  const candidates: string[] = [];
+  for (const part of header.split(',')) {
+    const eq = part.indexOf('=');
+    if (eq < 0) continue;
+    const key = part.slice(0, eq).trim(), value = part.slice(eq + 1).trim();
+    if (key === 't') timestamp = value;
+    else if (key === 'v1') candidates.push(value);
+  }
+  if (!/^\d+$/.test(timestamp) || candidates.length === 0) return false;
+  // A captured webhook stays validly signed forever; only its age gives it away.
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > STRIPE_TOLERANCE_SECONDS) return false;
+  for (const candidate of candidates) {
+    const sig = fromHex(candidate);
+    if (sig && (await hmacVerify(env.STRIPE_WEBHOOK_SECRET!, `${timestamp}.${payload}`, sig))) return true;
+  }
+  return false;
 }
 
 /**
@@ -226,7 +301,7 @@ export default {
       // ---- auth (provider-aware: github | google) ----
       if (path === '/api/auth/providers') {
         return json({
-          rev: 'r3', // bump on worker changes to verify what's deployed
+          rev: 'r4', // bump on worker changes to verify what's deployed
           github: !!env.GITHUB_CLIENT_ID,
           google: !!env.GOOGLE_CLIENT_ID,
           generators: {
@@ -350,9 +425,12 @@ export default {
 
         if (provider === 'meshy') {
           // Upstream kill-switch: stop selling what we can't deliver.
+          // Fails closed: an error from the balance call has no `balance`, and
+          // `undefined < floor` is false — which used to read as "plenty".
           const balanceRes = await meshy(env, 'GET', '/openapi/v1/balance');
-          const { balance } = (await balanceRes.json()) as { balance: number };
-          if (balance < MESHY_BALANCE_FLOOR) {
+          const body = (await balanceRes.json().catch(() => null)) as { balance?: unknown } | null;
+          const balance = balanceRes.ok ? body?.balance : undefined;
+          if (typeof balance !== 'number' || !(balance >= MESHY_BALANCE_FLOOR)) {
             return json({ error: 'generation is temporarily unavailable — try again later' }, 503);
           }
         }
@@ -397,8 +475,8 @@ export default {
             taskId = submitted.request_id;
             kind = `fal:${model}`;
           }
-          await env.DB.prepare('INSERT INTO tasks (task_id, user_id, kind, created_at) VALUES (?, ?, ?, ?)')
-            .bind(taskId, session.uid, kind, Date.now()).run();
+          await env.DB.prepare('INSERT INTO tasks (task_id, user_id, kind, created_at, cost) VALUES (?, ?, ?, ?, ?)')
+            .bind(taskId, session.uid, kind, Date.now(), cost).run();
           return json({ taskId, kind, cost });
         } catch (err) {
           // Refund on any failure after the decrement.
@@ -421,9 +499,19 @@ export default {
       if (taskMatch) {
         const session = await readSession(env, request);
         if (!session || !env.DB) return json({ error: 'sign in required' }, 401);
-        const owned = await env.DB.prepare('SELECT kind FROM tasks WHERE task_id = ? AND user_id = ?')
-          .bind(taskMatch[1], session.uid).first<{ kind: string }>();
+        await ensureSchema(env.DB);
+        const taskId = taskMatch[1];
+        const owned = await env.DB.prepare('SELECT kind, refunded FROM tasks WHERE task_id = ? AND user_id = ?')
+          .bind(taskId, session.uid).first<{ kind: string; refunded: number }>();
         if (!owned) return json({ error: 'no such task' }, 404);
+        // A refunded task is closed: its model must not also be downloadable.
+        if (owned.refunded) {
+          return taskMatch[2] ? json({ error: REFUNDED }, 410) : json({ status: 'FAILED', progress: 100, error: REFUNDED });
+        }
+        const failed = async (): Promise<Response> => {
+          await refundTask(env.DB!, taskId, session.uid);
+          return taskMatch[2] ? json({ error: REFUNDED }, 410) : json({ status: 'FAILED', progress: 100, error: REFUNDED });
+        };
 
         if (owned.kind.startsWith('fal:')) {
           const model = owned.kind.slice(4).split('/').slice(0, 2).join('/');
@@ -438,24 +526,45 @@ export default {
                 error: `status check failed (HTTP ${statusRes.status})`,
               });
             }
-            const progress = st.status === 'COMPLETED' ? 100 : st.status === 'IN_PROGRESS' ? 50 : 8;
-            return json({
-              status: st.status === 'COMPLETED' ? 'SUCCEEDED' : 'IN_PROGRESS',
-              progress, error: null,
-            });
+            if (st.status !== 'COMPLETED') {
+              return json({ status: 'IN_PROGRESS', progress: st.status === 'IN_PROGRESS' ? 50 : 8, error: null });
+            }
           }
-          const result = (await (await fal(env, 'GET', `/${model}/requests/${taskMatch[1]}`)).json()) as unknown;
-          const glbUrl = findGlbUrl(result);
-          if (!glbUrl) return json({ error: 'no model in result yet' }, 409);
+          // The queue says COMPLETED for a run that failed too; only the
+          // result tells them apart. A 4xx, or a result with no model in it,
+          // is a failed generation. A 5xx is fal's problem, not the task's —
+          // refunding on it would hand out a model that may still arrive.
+          const resultRes = await fal(env, 'GET', `/${model}/requests/${taskId}`);
+          if (resultRes.status >= 500) {
+            return taskMatch[2]
+              ? json({ error: `result fetch failed (HTTP ${resultRes.status})` }, 502)
+              : json({ status: 'IN_PROGRESS', progress: 95, error: `result fetch failed (HTTP ${resultRes.status})` });
+          }
+          const glbUrl = resultRes.ok ? findGlbUrl(await resultRes.json().catch(() => null)) : null;
+          if (!glbUrl) {
+            // /file before the run has finished is "not yet", not "failed".
+            if (taskMatch[2]) {
+              const statusRes = await fal(env, 'GET', `/${model}/requests/${taskId}/status`);
+              const st = (await statusRes.json().catch(() => null)) as { status?: string } | null;
+              if (st?.status !== 'COMPLETED') return json({ error: 'no model in result yet' }, 409);
+            }
+            return failed();
+          }
+          if (!taskMatch[2]) return json({ status: 'SUCCEEDED', progress: 100, error: null });
           const glb = await fetch(glbUrl);
+          if (!glb.ok) return json({ error: `model download failed (HTTP ${glb.status})` }, 502);
           return new Response(glb.body, { headers: { 'content-type': 'model/gltf-binary' } });
         }
 
-        const taskRes = await meshy(env, 'GET', `/openapi/v1/${owned.kind}/${taskMatch[1]}`);
-        const task = (await taskRes.json()) as {
-          status: string; progress: number;
+        const taskRes = await meshy(env, 'GET', `/openapi/v1/${owned.kind}/${taskId}`);
+        const task = (await taskRes.json().catch(() => null)) as {
+          status?: string; progress?: number;
           task_error?: { message?: string }; model_urls?: { glb?: string };
-        };
+        } | null;
+        if (!taskRes.ok || !task?.status) {
+          return json({ error: `status check failed (HTTP ${taskRes.status})` }, 502);
+        }
+        if (task.status === 'FAILED' || task.status === 'CANCELED') return failed();
         if (!taskMatch[2]) {
           return json({
             status: task.status, progress: task.progress,
@@ -466,6 +575,7 @@ export default {
           return json({ error: `task is ${task.status}` }, 409);
         }
         const glb = await fetch(task.model_urls.glb);
+        if (!glb.ok) return json({ error: `model download failed (HTTP ${glb.status})` }, 502);
         return new Response(glb.body, {
           headers: { 'content-type': 'model/gltf-binary' },
         });
@@ -500,21 +610,31 @@ export default {
         }
         const event = JSON.parse(payload) as {
           type: string;
-          data: { object: { id: string; metadata?: { uid?: string; credits?: string } } };
+          data: { object: { id: string; payment_status?: string; metadata?: { uid?: string; credits?: string } } };
         };
-        if (event.type === 'checkout.session.completed') {
+        // `completed` with a delayed payment method arrives unpaid; the money
+        // lands later as async_payment_succeeded, carrying the same session.
+        const settled = event.type === 'checkout.session.completed'
+          || event.type === 'checkout.session.async_payment_succeeded';
+        if (settled && event.data.object.payment_status === 'paid') {
           const { id, metadata } = event.data.object;
           const uid = metadata?.uid ?? '', credits = Number(metadata?.credits);
-          if (uid && credits) {
+          if (uid && Number.isInteger(credits) && credits > 0) {
             await ensureSchema(env.DB);
-            // Idempotent: purchases.session_id is the primary key.
-            const inserted = await env.DB.prepare(
-              'INSERT OR IGNORE INTO purchases (session_id, user_id, credits, created_at) VALUES (?, ?, ?, ?)',
-            ).bind(id, uid, credits, Date.now()).run();
-            if (inserted.meta.changes === 1) {
-              await env.DB.prepare('UPDATE users_v2 SET credits = credits + ? WHERE id = ?')
-                .bind(credits, uid).run();
-            }
+            // One transaction, credit first: the purchase row is what makes a
+            // redelivery a no-op, so it must never exist without the credit.
+            // As two separate statements, a failure between them recorded the
+            // purchase, and Stripe's retry was then ignored as a duplicate —
+            // paid for, never credited. A failure here throws, the handler
+            // answers 500, and Stripe redelivers.
+            await env.DB.batch([
+              env.DB.prepare(
+                'UPDATE users_v2 SET credits = credits + ? WHERE id = ? AND NOT EXISTS (SELECT 1 FROM purchases WHERE session_id = ?)',
+              ).bind(credits, uid, id),
+              env.DB.prepare(
+                'INSERT OR IGNORE INTO purchases (session_id, user_id, credits, created_at) VALUES (?, ?, ?, ?)',
+              ).bind(id, uid, credits, Date.now()),
+            ]);
           }
         }
         return json({ received: true });
